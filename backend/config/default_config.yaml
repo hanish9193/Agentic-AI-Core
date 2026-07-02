@@ -1,0 +1,27 @@
+workflow:
+  mode: sequential         
+  human_review_enabled: true
+  evaluation_threshold: 0.90
+
+agents:
+  requirement: true
+  scenario: true
+  testcase: false
+  evaluation: false
+  playwright: false
+  execution: false
+  report: false
+
+llm:
+  provider: openai          
+  model: gpt-4o-mini
+  temperature: 0.2
+
+browser:
+  type: chromium            
+  headless: true
+
+rag:
+  enabled: false
+  vector_db_provider: chroma
+  vector_db_path: ./data/vector_store
