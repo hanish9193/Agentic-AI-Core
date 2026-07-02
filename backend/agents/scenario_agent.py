@@ -11,15 +11,15 @@ default is to look unscored, not falsely confident.
 """
 
 from backend.agents.base import BaseAgent
-from backend.models.scenario import Scenario, ScenarioPriority
+from backend.models.common import Priority
+from backend.models.scenario import Scenario
 from backend.models.state import WorkflowState
 
 _DUMMY_SCENARIOS = (
-    ("Valid Login", "User logs in with correct username and password", ScenarioPriority.HIGH),
-    ("Invalid Login", "User attempts login with an incorrect password", ScenarioPriority.MEDIUM),
-    ("Empty Password", "User submits the login form with an empty password field", ScenarioPriority.LOW),
+    ("Valid Login", "User logs in with correct username and password", Priority.HIGH),
+    ("Invalid Login", "User attempts login with an incorrect password", Priority.MEDIUM),
+    ("Empty Password", "User submits the login form with an empty password field", Priority.LOW),
 )
-
 
 class ScenarioAgent(BaseAgent):
     name = "Scenario Agent"

@@ -10,7 +10,7 @@ one; don't patch this one in place. That keeps every agent's reference to
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
-
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 
@@ -27,4 +27,6 @@ class Requirement(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1)
     source: RequirementSource = RequirementSource.MANUAL
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(
+    default_factory=lambda: datetime.now(timezone.utc)
+    )

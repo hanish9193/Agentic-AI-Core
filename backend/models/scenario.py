@@ -11,17 +11,13 @@ Scenario shouldn't need to know anything about Requirement's fields —
 just which one it came from.
 """
 
-from datetime import datetime
-from enum import Enum
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
-
-class ScenarioPriority(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+from backend.models.common import Priority
 
 
 class Scenario(BaseModel):
@@ -29,7 +25,9 @@ class Scenario(BaseModel):
     requirement_id: UUID
     scenario_name: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1)
-    priority: ScenarioPriority = ScenarioPriority.MEDIUM
+    priority: Priority = Priority.MEDIUM
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     approved: bool = False
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(
+    default_factory=lambda: datetime.now(timezone.utc)
+    )

@@ -2,8 +2,8 @@
 The graph answers exactly one question: who runs next. It never calls an
 LLM directly - that's each agent's job through BaseAgent.run().
 
-Today's graph is intentionally the smallest possible one:
-    START -> Scenario Agent -> END
+Today's graph, your first multi-agent workflow:
+    START -> Scenario Agent -> TestCase Agent -> END
 
 Note: graph.invoke() returns a plain dict, not a WorkflowState instance,
 even though WorkflowState is the state schema - verified against
@@ -14,21 +14,29 @@ nothing outside this file needs to know that detail.
 from langgraph.graph import END, START, StateGraph
 
 from backend.agents.scenario_agent import ScenarioAgent
+from backend.agents.test_case_agent import TestCaseAgent
 from backend.models.requirement import Requirement
 from backend.models.state import WorkflowState
 
 _scenario_agent = ScenarioAgent()
+_test_case_agent = TestCaseAgent()
 
 
 def _scenario_node(state: WorkflowState) -> WorkflowState:
     return _scenario_agent.run(state)
 
 
+def _test_case_node(state: WorkflowState) -> WorkflowState:
+    return _test_case_agent.run(state)
+
+
 def build_graph():
     builder = StateGraph(WorkflowState)
     builder.add_node("scenario_agent", _scenario_node)
+    builder.add_node("test_case_agent", _test_case_node)
     builder.add_edge(START, "scenario_agent")
-    builder.add_edge("scenario_agent", END)
+    builder.add_edge("scenario_agent", "test_case_agent")
+    builder.add_edge("test_case_agent", END)
     return builder.compile()
 
 
