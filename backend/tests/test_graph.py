@@ -1,21 +1,27 @@
 """
-Today's milestone, run directly - your first multi-agent workflow:
-    Requirement -> Scenario Agent -> TestCase Agent -> Updated State
+The two-node graph, run with a stubbed LLM underneath ScenarioAgent. The
+graph topology and TestCaseAgent run exactly as they would in production -
+only the LLM call itself is faked, via build_graph()'s agent injection.
+No API key needed, no real network call, and this test won't start
+failing the moment an API key expires or a provider rate-limits you.
 
-No API, no UI. Just the graph, watched end to end.
+Needs the stub_llm_service fixture from conftest.py, so - same as
+test_foundation.py - this runs under pytest only, not `python -m`.
 """
 
-from backend.graph.workflow import run_workflow
+from backend.agents.scenario_agent import ScenarioAgent
+from backend.graph.workflow import build_graph, run_workflow
 from backend.models.requirement import Requirement
 
 
-def test_graph_runs_scenario_then_testcase_agent():
+def test_graph_runs_scenario_then_testcase_agent(stub_llm_service):
     requirement = Requirement(
         title="Login flow",
         description="User can log in with valid credentials",
     )
 
-    final_state = run_workflow(requirement)
+    test_graph = build_graph(scenario_agent=ScenarioAgent(llm_service=stub_llm_service))
+    final_state = run_workflow(requirement, graph_instance=test_graph)
 
     assert len(final_state.generated_scenarios) == 3
     assert len(final_state.generated_test_cases) == 3
@@ -34,8 +40,3 @@ def test_graph_runs_scenario_then_testcase_agent():
     print("\nTest cases generated:")
     for tc in final_state.generated_test_cases:
         print(f"    - {tc.title} [{tc.priority.value}] status={tc.status.value}")
-
-
-if __name__ == "__main__":
-    test_graph_runs_scenario_then_testcase_agent()
-    print("\nFirst multi-agent LangGraph workflow: confirmed working.")

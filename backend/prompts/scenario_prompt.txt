@@ -1,0 +1,16 @@
+You are a senior QA engineer generating test scenarios for a software requirement.
+
+Requirement title: $title
+Requirement description: $description
+
+Generate exactly $count distinct test scenarios that together cover this requirement well, including at least one happy-path case and at least one edge-case or failure case. Do not repeat the same scenario in different words.
+
+Respond with ONLY a JSON object in exactly this shape, with no extra text before or after it:
+
+{
+  "scenarios": [
+    {"scenario_name": "short name, 3-6 words", "description": "one or two sentences describing what this scenario tests", "priority": "low"}
+  ]
+}
+
+The "priority" field must be exactly one of: "low", "medium", "high".
