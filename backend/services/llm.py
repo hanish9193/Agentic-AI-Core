@@ -28,6 +28,19 @@ _PROVIDER_PREFIXES: dict[str, str] = {
     "groq": "groq/",
 }
 
+# How each provider is told "respond with JSON". These are NOT
+# interchangeable: OpenAI (and OpenAI-compatible providers like Groq) use
+# response_format={"type": "json_object"}; Ollama's own JSON mode is a
+# different parameter (format="json") per litellm's Ollama docs. Passing
+# the wrong one for a provider doesn't error - it just gets ignored, and
+# you silently lose JSON enforcement while still passing tests that don't
+# actually hit that provider. Add a case here before using a new provider,
+# don't assume the OpenAI-style kwarg works everywhere.
+_JSON_MODE_KWARGS: dict[str, dict] = {
+    "ollama": {"format": "json"},
+}
+_DEFAULT_JSON_MODE_KWARGS = {"response_format": {"type": "json_object"}}
+
 DEFAULT_STRUCTURED_SYSTEM_PROMPT = (
     "You respond with a single valid JSON object and nothing else - "
     "no markdown fences, no commentary before or after it."
@@ -49,14 +62,29 @@ class LLMService:
         prefix = _PROVIDER_PREFIXES.get(self.config.provider, "")
         return f"{prefix}{self.config.model}"
 
+    def _json_mode_kwargs(self) -> dict:
+        return _JSON_MODE_KWARGS.get(self.config.provider, _DEFAULT_JSON_MODE_KWARGS)
+    
+    def _completion_kwargs(self) -> dict:
+        kwargs = {
+            "model": self._model_string(),
+            "temperature": self.config.temperature,
+        }
+
+        if self.config.api_base:
+            kwargs["api_base"] = self.config.api_base
+
+        if self.config.api_key:
+            kwargs["api_key"] = self.config.api_key
+
+        return kwargs
+
     def generate(self, *, system: str, user: str, **kwargs) -> str:
         """Plain text completion. Returns the raw response content."""
         try:
             response = completion(
                 model=self._model_string(),
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                temperature=self.config.temperature,
-                api_key=self.config.api_key,
                 **kwargs,
             )
         except Exception as exc:
@@ -82,9 +110,7 @@ class LLMService:
             response = completion(
                 model=self._model_string(),
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                temperature=self.config.temperature,
-                api_key=self.config.api_key,
-                response_format={"type": "json_object"},
+                **self._json_mode_kwargs(),
                 **kwargs,
             )
         except Exception as exc:

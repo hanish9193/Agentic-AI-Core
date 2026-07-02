@@ -31,6 +31,7 @@ class LLMConfig(BaseModel):
     model: str = "gpt-4o-mini"
     temperature: float = 0.2
     api_key: str | None = None
+    api_base: str | None = None  # required for ollama (e.g. http://localhost:11434); leave unset for cloud providers
 
 
 class WorkflowConfig(BaseModel):
@@ -83,6 +84,7 @@ class Settings(BaseSettings):
 
         # .env values win if set; LLM_API_KEY has no YAML equivalent on purpose.
         raw.setdefault("llm", {})["api_key"] = _env("LLM_API_KEY")
+        raw.setdefault("llm", {})["api_base"] = _env("LLM_API_BASE")
         _override(raw, "llm", "provider", "LLM_PROVIDER")
         _override(raw, "llm", "model", "LLM_MODEL")
         _override(raw, "workflow", "evaluation_threshold", "EVALUATION_THRESHOLD", cast=float)
