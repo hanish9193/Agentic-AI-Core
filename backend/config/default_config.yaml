@@ -6,8 +6,8 @@ workflow:
 agents:
   requirement: true
   scenario: true
-  testcase: false
-  evaluation: false
+  testcase: true
+  evaluation: true
   playwright: false
   execution: false
   report: false
@@ -28,3 +28,7 @@ rag:
 
 generation:
   scenario_count: 3
+
+evaluation:
+  duplicate_similarity_threshold: 0.75
+  relevance_rejection_threshold: 0.3

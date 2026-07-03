@@ -10,9 +10,8 @@ Selection is tracked as a list of ids, not by flipping `Scenario.approved`
 in place. That keeps "what's selected" answerable by looking at State
 alone, without scanning every scenario object for a mutated flag.
 
-Deliberately minimal for now — no evaluation_result, no playwright_script.
-Those get added as fields when the agents that produce them actually
-exist, not before.
+Deliberately minimal for now — no playwright_script. That gets added as
+a field when PlaywrightAgent actually exists, not before.
 """
 
 from datetime import datetime, timezone
@@ -22,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from backend.models.requirement import Requirement
 from backend.models.scenario import Scenario
-from backend.models.test_case import TestCase
+from backend.models.test_case import EvaluationStatus, TestCase
 
 
 class WorkflowState(BaseModel):
@@ -44,3 +43,11 @@ class WorkflowState(BaseModel):
 
     def selected_scenarios(self) -> list[Scenario]:
         return [s for s in self.generated_scenarios if s.id in self.selected_scenario_ids]
+
+    def approved_test_cases(self) -> list[TestCase]:
+        """Test cases EvaluationAgent approved, ranked by confidence
+        descending. This is a computed view, not a stored reordering -
+        generated_test_cases keeps its original generation order so the
+        raw record stays intact for auditing."""
+        approved = [tc for tc in self.generated_test_cases if tc.evaluation_status == EvaluationStatus.APPROVED]
+        return sorted(approved, key=lambda tc: tc.confidence, reverse=True)

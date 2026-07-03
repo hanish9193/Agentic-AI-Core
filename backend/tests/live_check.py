@@ -8,9 +8,10 @@ belongs in a suite that should run free and offline on every commit.
 Requires LLM_API_KEY (and, for Ollama, LLM_API_BASE) in .env set for
 whatever LLM_PROVIDER / LLM_MODEL are configured to.
 
-Two real LLM calls happen now (Scenario Agent, then TestCase Agent) - on
-local Ollama this can easily take 2-4 minutes total. That's expected,
-not a hang.
+Three real LLM calls happen now (Scenario Agent, TestCase Agent, then
+Evaluation Agent) - on local Ollama this can easily take 3-6 minutes
+total, though subsequent runs are faster once the model's warm. That's
+expected, not a hang.
 
 Run with:
     python -m backend.live_check
@@ -57,18 +58,23 @@ def main():
     for s in final_state.generated_scenarios:
         print(f"    - {s.scenario_name} [{s.priority.value}]: {s.description}")
 
-    print("\nTest cases generated:")
+    print("\nTest cases after evaluation:")
     for tc in final_state.generated_test_cases:
         print(f"    - {tc.title} [{tc.priority.value}]")
         print(f"        preconditions: {tc.preconditions}")
         print(f"        steps: {tc.steps}")
         print(f"        expected: {tc.expected_result}")
+        print(f"        confidence: {tc.confidence:.2f}  status: {tc.evaluation_status.value}")
+        print(f"        reason: {tc.evaluation_reason}")
+
+    print(f"\n{len(final_state.approved_test_cases())} of {len(final_state.generated_test_cases)} test cases approved.")
 
     print(
         "\nIf the scenarios above are specifically about file size, format "
         "validation, and rejection (not generic login scenarios), the live "
         "LLM integration is genuinely working end to end - not just passing "
-        "mocked tests."
+        "mocked tests. Confidence scores and reasons should look like genuine "
+        "judgment (e.g. differing between test cases), not identical placeholder values."
     )
 
 

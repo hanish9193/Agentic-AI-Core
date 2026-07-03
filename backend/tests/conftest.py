@@ -6,6 +6,7 @@ belongs here, not copy-pasted into each one.
 
 import pytest
 
+from backend.agents.evaluation_agent import _EvaluationBatch, _TestCaseEvaluation
 from backend.agents.scenario_agent import _GeneratedScenario, _GeneratedScenarioBatch
 from backend.agents.test_case_agent import TestCaseListResponse, TestCaseResponse
 
@@ -68,13 +69,25 @@ def canned_test_case_batch(canned_scenario_batch: _GeneratedScenarioBatch) -> Te
 
 
 @pytest.fixture
+def canned_evaluation_batch(canned_test_case_batch: TestCaseListResponse) -> _EvaluationBatch:
+    return _EvaluationBatch(
+        evaluations=[
+            _TestCaseEvaluation(test_case_number=i, relevance=0.9, completeness=0.9, reason="Looks solid")
+            for i in range(1, len(canned_test_case_batch.test_cases) + 1)
+        ]
+    )
+
+
+@pytest.fixture
 def stub_llm_service(
     canned_scenario_batch: _GeneratedScenarioBatch,
     canned_test_case_batch: TestCaseListResponse,
+    canned_evaluation_batch: _EvaluationBatch,
 ) -> StubLLMService:
     return StubLLMService(
         {
             _GeneratedScenarioBatch: canned_scenario_batch,
             TestCaseListResponse: canned_test_case_batch,
+            _EvaluationBatch: canned_evaluation_batch,
         }
     )

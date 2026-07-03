@@ -3,8 +3,16 @@ TestCase model.
 
 References its parent Scenario by id, same pattern as Scenario -> Requirement.
 Mutable, because `status` moves from PENDING to PASSED/FAILED/BLOCKED once
-an Execution Agent exists - not today, but the field earns its place now
-so that agent doesn't need a schema change to write to it.
+an Execution Agent exists, and `evaluation_status`/`confidence` are written
+by EvaluationAgent after generation.
+
+`status` and `evaluation_status` are deliberately separate fields, not one
+combined one: `status` is about *execution outcome* (did it pass when run
+through Playwright - doesn't exist yet), `evaluation_status` is about
+*quality approval* (was this test case good enough to proceed at all).
+A test case can be evaluation-approved and never executed yet, or
+rejected at evaluation and therefore never reach execution - conflating
+them would make it impossible to represent either state cleanly.
 """
 
 from datetime import datetime, timezone
@@ -23,6 +31,13 @@ class TestCaseStatus(str, Enum):
     BLOCKED = "blocked"
 
 
+class EvaluationStatus(str, Enum):
+    PENDING = "pending"          # not yet evaluated
+    APPROVED = "approved"        # confidence >= threshold
+    NEEDS_REVIEW = "needs_review"  # below threshold, not obviously broken
+    REJECTED = "rejected"        # duplicate, or evaluation judged it unusable
+
+
 class TestCase(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     scenario_id: UUID
@@ -32,4 +47,7 @@ class TestCase(BaseModel):
     expected_result: str = Field(min_length=1)
     priority: Priority = Priority.MEDIUM
     status: TestCaseStatus = TestCaseStatus.PENDING
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    evaluation_status: EvaluationStatus = EvaluationStatus.PENDING
+    evaluation_reason: str | None = None
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

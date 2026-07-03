@@ -65,6 +65,19 @@ class GenerationConfig(BaseModel):
     scenario_count: int = 3
 
 
+class EvaluationConfig(BaseModel):
+    # Word-overlap (Jaccard) on title+expected_result combined, not title
+    # alone - title-only similarity can't distinguish "correct password"
+    # from "incorrect password" (near-identical text, opposite meaning).
+    # Calibrated against real examples, not guessed - see evaluation_agent.py.
+    duplicate_similarity_threshold: float = 0.75
+    # Below this relevance score, a test case is rejected outright rather
+    # than sent for human review - e.g. a "Forgot Password" test case
+    # generated for a "Profile Picture Upload" requirement isn't a
+    # borderline call, it's just wrong.
+    relevance_rejection_threshold: float = 0.3
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__", extra="ignore")
 
@@ -77,6 +90,7 @@ class Settings(BaseSettings):
     browser: BrowserConfig = BrowserConfig()
     rag: RAGConfig = RAGConfig()
     generation: GenerationConfig = GenerationConfig()
+    evaluation: EvaluationConfig = EvaluationConfig()
 
     @classmethod
     def from_yaml(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Settings":

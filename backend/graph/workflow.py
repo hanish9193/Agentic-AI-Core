@@ -2,15 +2,14 @@
 The graph answers exactly one question: who runs next. It never calls an
 LLM directly - that's each agent's job through BaseAgent.run().
 
-Today's graph, unchanged in shape since the last milestone:
-    START -> Scenario Agent -> TestCase Agent -> END
+Today's graph, one node longer than last milestone:
+    START -> Scenario Agent -> TestCase Agent -> Evaluation Agent -> END
 
 build_graph() takes optional agent instances instead of hardcoding them at
-module level. That's new as of this change, and it's specifically because
-ScenarioAgent now calls a real LLM: tests need to build this exact graph
-with a ScenarioAgent wired to a mocked LLMService, without a real API key
-and without changing the graph's shape. Nothing about the topology moved -
-only how the nodes get their agent instances.
+module level. Needed since ScenarioAgent, TestCaseAgent, and now
+EvaluationAgent all call a real LLM: tests build this exact graph with
+agents wired to mocked LLMServices, without a real API key. Nothing about
+the topology moves - only how the nodes get their agent instances.
 
 Note: graph.invoke() returns a plain dict, not a WorkflowState instance,
 even though WorkflowState is the state schema - verified against
@@ -21,15 +20,21 @@ nothing outside this file needs to know that detail.
 from langgraph.graph import END, START, StateGraph
 
 from backend.agents.base import BaseAgent
+from backend.agents.evaluation_agent import EvaluationAgent
 from backend.agents.scenario_agent import ScenarioAgent
 from backend.agents.test_case_agent import TestCaseAgent
 from backend.models.requirement import Requirement
 from backend.models.state import WorkflowState
 
 
-def build_graph(scenario_agent: BaseAgent | None = None, test_case_agent: BaseAgent | None = None):
+def build_graph(
+    scenario_agent: BaseAgent | None = None,
+    test_case_agent: BaseAgent | None = None,
+    evaluation_agent: BaseAgent | None = None,
+):
     scenario_agent = scenario_agent or ScenarioAgent()
     test_case_agent = test_case_agent or TestCaseAgent()
+    evaluation_agent = evaluation_agent or EvaluationAgent()
 
     def _scenario_node(state: WorkflowState) -> WorkflowState:
         return scenario_agent.run(state)
@@ -37,12 +42,17 @@ def build_graph(scenario_agent: BaseAgent | None = None, test_case_agent: BaseAg
     def _test_case_node(state: WorkflowState) -> WorkflowState:
         return test_case_agent.run(state)
 
+    def _evaluation_node(state: WorkflowState) -> WorkflowState:
+        return evaluation_agent.run(state)
+
     builder = StateGraph(WorkflowState)
     builder.add_node("scenario_agent", _scenario_node)
     builder.add_node("test_case_agent", _test_case_node)
+    builder.add_node("evaluation_agent", _evaluation_node)
     builder.add_edge(START, "scenario_agent")
     builder.add_edge("scenario_agent", "test_case_agent")
-    builder.add_edge("test_case_agent", END)
+    builder.add_edge("test_case_agent", "evaluation_agent")
+    builder.add_edge("evaluation_agent", END)
     return builder.compile()
 
 
