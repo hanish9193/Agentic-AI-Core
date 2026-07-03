@@ -7,18 +7,25 @@ belongs here, not copy-pasted into each one.
 import pytest
 
 from backend.agents.scenario_agent import _GeneratedScenario, _GeneratedScenarioBatch
+from backend.agents.test_case_agent import TestCaseListResponse, TestCaseResponse
 
 
 class StubLLMService:
-    """Test double for LLMService - never touches litellm. Lets agent and
-    graph tests run with zero network calls and no API key, by satisfying
-    the same structured_generate(...) signature with a canned answer."""
+    """Test double for LLMService - never touches litellm. Keyed by
+    response_model so one stub instance can serve multiple agents in a
+    single graph-level test, each expecting a different schema back."""
 
-    def __init__(self, batch: _GeneratedScenarioBatch):
-        self._batch = batch
+    def __init__(self, responses: dict[type, object]):
+        self._responses = responses
 
     def structured_generate(self, *, user, response_model, **kwargs):
-        return self._batch
+        try:
+            return self._responses[response_model]
+        except KeyError:
+            raise AssertionError(
+                f"StubLLMService has no canned response for {response_model.__name__} - "
+                f"add one when constructing the stub for this test"
+            )
 
 
 @pytest.fixture
@@ -45,5 +52,29 @@ def canned_scenario_batch() -> _GeneratedScenarioBatch:
 
 
 @pytest.fixture
-def stub_llm_service(canned_scenario_batch: _GeneratedScenarioBatch) -> StubLLMService:
-    return StubLLMService(canned_scenario_batch)
+def canned_test_case_batch(canned_scenario_batch: _GeneratedScenarioBatch) -> TestCaseListResponse:
+    return TestCaseListResponse(
+        test_cases=[
+            TestCaseResponse(
+                scenario_name=s.scenario_name,
+                title=f"Verify: {s.scenario_name}",
+                preconditions=["Application is running"],
+                steps=["Navigate to the login page", f"Execute scenario: {s.description}"],
+                expected_result=f"System behaves correctly for '{s.scenario_name}'",
+            )
+            for s in canned_scenario_batch.scenarios
+        ]
+    )
+
+
+@pytest.fixture
+def stub_llm_service(
+    canned_scenario_batch: _GeneratedScenarioBatch,
+    canned_test_case_batch: TestCaseListResponse,
+) -> StubLLMService:
+    return StubLLMService(
+        {
+            _GeneratedScenarioBatch: canned_scenario_batch,
+            TestCaseListResponse: canned_test_case_batch,
+        }
+    )

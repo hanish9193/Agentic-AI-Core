@@ -10,6 +10,7 @@ test_foundation.py - this runs under pytest only, not `python -m`.
 """
 
 from backend.agents.scenario_agent import ScenarioAgent
+from backend.agents.test_case_agent import TestCaseAgent
 from backend.graph.workflow import build_graph, run_workflow
 from backend.models.requirement import Requirement
 
@@ -20,7 +21,10 @@ def test_graph_runs_scenario_then_testcase_agent(stub_llm_service):
         description="User can log in with valid credentials",
     )
 
-    test_graph = build_graph(scenario_agent=ScenarioAgent(llm_service=stub_llm_service))
+    test_graph = build_graph(
+        scenario_agent=ScenarioAgent(llm_service=stub_llm_service),
+        test_case_agent=TestCaseAgent(llm_service=stub_llm_service),
+    )
     final_state = run_workflow(requirement, graph_instance=test_graph)
 
     assert len(final_state.generated_scenarios) == 3
