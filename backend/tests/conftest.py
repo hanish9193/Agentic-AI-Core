@@ -10,14 +10,34 @@ from backend.agents.evaluation_agent import _EvaluationBatch, _TestCaseEvaluatio
 from backend.agents.scenario_agent import _GeneratedScenario, _GeneratedScenarioBatch
 from backend.agents.test_case_agent import TestCaseListResponse, TestCaseResponse
 
+_CANNED_PLAYWRIGHT_CODE = """import { test, expect } from "@playwright/test";
+
+test("Verify: Valid Login", async ({ page }) => {
+  // Step 1: Navigate to the login page
+  await page.goto("/login");
+  // Step 2: Enter valid credentials - locator is a best guess, no real page to inspect yet
+  await page.getByLabel("Username").fill("testuser");
+  await page.getByLabel("Password").fill("correct-password");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByText("Welcome")).toBeVisible();
+});
+"""
+
 
 class StubLLMService:
-    """Test double for LLMService - never touches litellm. Keyed by
-    response_model so one stub instance can serve multiple agents in a
-    single graph-level test, each expecting a different schema back."""
+    """Test double for LLMService - never touches litellm.
 
-    def __init__(self, responses: dict[type, object]):
-        self._responses = responses
+    structured_generate() is keyed by response_model, so one stub can
+    serve multiple JSON-based agents in a single graph-level test, each
+    expecting a different schema back.
+
+    generate() has no response_model to key off (PlaywrightAgent's output
+    is plain code, not a validated schema) - it just returns a single
+    canned string, since only one agent currently uses this method."""
+
+    def __init__(self, responses: dict[type, object] | None = None, generate_response: str | None = None):
+        self._responses = responses or {}
+        self._generate_response = generate_response if generate_response is not None else _CANNED_PLAYWRIGHT_CODE
 
     def structured_generate(self, *, user, response_model, **kwargs):
         try:
@@ -27,6 +47,9 @@ class StubLLMService:
                 f"StubLLMService has no canned response for {response_model.__name__} - "
                 f"add one when constructing the stub for this test"
             )
+
+    def generate(self, *, system, user, **kwargs) -> str:
+        return self._generate_response
 
 
 @pytest.fixture
@@ -89,5 +112,6 @@ def stub_llm_service(
             _GeneratedScenarioBatch: canned_scenario_batch,
             TestCaseListResponse: canned_test_case_batch,
             _EvaluationBatch: canned_evaluation_batch,
-        }
+        },
+        generate_response=_CANNED_PLAYWRIGHT_CODE,
     )

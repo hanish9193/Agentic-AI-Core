@@ -50,4 +50,5 @@ class TestCase(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     evaluation_status: EvaluationStatus = EvaluationStatus.PENDING
     evaluation_reason: str | None = None
+    playwright_script: str | None = None
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
