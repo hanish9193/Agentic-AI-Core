@@ -3,13 +3,18 @@ The graph answers exactly one question: who runs next. It never calls an
 LLM directly - that's each agent's job through BaseAgent.run().
 
 Today's graph, one node longer than last milestone:
-    START -> Scenario Agent -> TestCase Agent -> Evaluation Agent -> END
+    START -> Scenario -> TestCase -> Evaluation -> HumanApproval -> END
 
-build_graph() takes optional agent instances instead of hardcoding them at
-module level. Needed since ScenarioAgent, TestCaseAgent, and now
-EvaluationAgent all call a real LLM: tests build this exact graph with
-agents wired to mocked LLMServices, without a real API key. Nothing about
-the topology moves - only how the nodes get their agent instances.
+HumanApprovalAgent needs no LLM and no config, so it's the first agent
+without a constructor override - build_graph() still accepts it as an
+optional param for consistency and future flexibility, even though no
+test currently needs to inject anything special into it.
+
+build_graph() takes optional agent instances instead of hardcoding them
+at module level, needed since three of these four agents call a real
+LLM: tests build this exact graph with agents wired to mocked
+LLMServices, without a real API key. Nothing about the topology moves -
+only how the nodes get their agent instances.
 
 Note: graph.invoke() returns a plain dict, not a WorkflowState instance,
 even though WorkflowState is the state schema - verified against
@@ -21,6 +26,7 @@ from langgraph.graph import END, START, StateGraph
 
 from backend.agents.base import BaseAgent
 from backend.agents.evaluation_agent import EvaluationAgent
+from backend.agents.human_approval_agent import HumanApprovalAgent
 from backend.agents.scenario_agent import ScenarioAgent
 from backend.agents.test_case_agent import TestCaseAgent
 from backend.models.requirement import Requirement
@@ -31,10 +37,12 @@ def build_graph(
     scenario_agent: BaseAgent | None = None,
     test_case_agent: BaseAgent | None = None,
     evaluation_agent: BaseAgent | None = None,
+    human_approval_agent: BaseAgent | None = None,
 ):
     scenario_agent = scenario_agent or ScenarioAgent()
     test_case_agent = test_case_agent or TestCaseAgent()
     evaluation_agent = evaluation_agent or EvaluationAgent()
+    human_approval_agent = human_approval_agent or HumanApprovalAgent()
 
     def _scenario_node(state: WorkflowState) -> WorkflowState:
         return scenario_agent.run(state)
@@ -45,14 +53,19 @@ def build_graph(
     def _evaluation_node(state: WorkflowState) -> WorkflowState:
         return evaluation_agent.run(state)
 
+    def _human_approval_node(state: WorkflowState) -> WorkflowState:
+        return human_approval_agent.run(state)
+
     builder = StateGraph(WorkflowState)
     builder.add_node("scenario_agent", _scenario_node)
     builder.add_node("test_case_agent", _test_case_node)
     builder.add_node("evaluation_agent", _evaluation_node)
+    builder.add_node("human_approval_agent", _human_approval_node)
     builder.add_edge(START, "scenario_agent")
     builder.add_edge("scenario_agent", "test_case_agent")
     builder.add_edge("test_case_agent", "evaluation_agent")
-    builder.add_edge("evaluation_agent", END)
+    builder.add_edge("evaluation_agent", "human_approval_agent")
+    builder.add_edge("human_approval_agent", END)
     return builder.compile()
 
 

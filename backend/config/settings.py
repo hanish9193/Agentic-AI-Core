@@ -43,8 +43,9 @@ class WorkflowConfig(BaseModel):
 class AgentsConfig(BaseModel):
     requirement: bool = True
     scenario: bool = True
-    testcase: bool = False
-    evaluation: bool = False
+    testcase: bool = True
+    evaluation: bool = True
+    human_approval: bool = True
     playwright: bool = False
     execution: bool = False
     report: bool = False

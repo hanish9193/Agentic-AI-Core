@@ -8,7 +8,14 @@ Scenario Agent appends to `generated_scenarios`, it does not touch
 
 Selection is tracked as a list of ids, not by flipping `Scenario.approved`
 in place. That keeps "what's selected" answerable by looking at State
-alone, without scanning every scenario object for a mutated flag.
+alone, without scanning every scenario object for a mutated flag. The
+same pattern applies to human approval: `human_approved_test_case_ids`
+is a separate list, not a mutation of `TestCase.evaluation_status`.
+That's deliberate - evaluation_status is EvaluationAgent's permanent
+record of what the AI judged; a human approving a NEEDS_REVIEW item adds
+a second, independent decision on top of it rather than rewriting
+history. You can always tell "AI was confident" apart from "AI was
+uncertain but a human said yes anyway" by checking both fields.
 
 Deliberately minimal for now — no playwright_script. That gets added as
 a field when PlaywrightAgent actually exists, not before.
@@ -29,6 +36,8 @@ class WorkflowState(BaseModel):
     generated_scenarios: list[Scenario] = Field(default_factory=list)
     selected_scenario_ids: list[UUID] = Field(default_factory=list)
     generated_test_cases: list[TestCase] = Field(default_factory=list)
+    pending_approval_ids: list[UUID] = Field(default_factory=list)
+    human_approved_test_case_ids: list[UUID] = Field(default_factory=list)
     logs: list[str] = Field(default_factory=list)
 
     def add_log(self, message: str) -> None:
@@ -44,10 +53,32 @@ class WorkflowState(BaseModel):
     def selected_scenarios(self) -> list[Scenario]:
         return [s for s in self.generated_scenarios if s.id in self.selected_scenario_ids]
 
+    def request_test_case_approval(self, test_case_id: UUID) -> None:
+        """Records that a human wants to approve this test case. Only
+        captures intent - doesn't check whether approval actually makes
+        sense (e.g. the test case was already rejected as a duplicate).
+        That business-rule check belongs to HumanApprovalAgent, not here;
+        this method's only job, same as select_scenario()'s, is checking
+        the id actually exists."""
+        known_ids = {tc.id for tc in self.generated_test_cases}
+        if test_case_id not in known_ids:
+            raise ValueError(f"TestCase {test_case_id} is not in generated_test_cases")
+        if test_case_id not in self.pending_approval_ids:
+            self.pending_approval_ids.append(test_case_id)
+
     def approved_test_cases(self) -> list[TestCase]:
-        """Test cases EvaluationAgent approved, ranked by confidence
-        descending. This is a computed view, not a stored reordering -
-        generated_test_cases keeps its original generation order so the
-        raw record stays intact for auditing."""
-        approved = [tc for tc in self.generated_test_cases if tc.evaluation_status == EvaluationStatus.APPROVED]
+        """Test cases ready for PlaywrightAgent: either EvaluationAgent
+        approved them automatically, or a human approved them despite the
+        AI flagging them for review. Rejected test cases never appear
+        here regardless of any human action - HumanApprovalAgent enforces
+        that a rejected test case can't be approved through this path.
+
+        Ranked by confidence descending. This is a computed view, not a
+        stored reordering - generated_test_cases keeps its original
+        generation order so the raw record stays intact for auditing."""
+        approved = [
+            tc
+            for tc in self.generated_test_cases
+            if tc.evaluation_status == EvaluationStatus.APPROVED or tc.id in self.human_approved_test_case_ids
+        ]
         return sorted(approved, key=lambda tc: tc.confidence, reverse=True)

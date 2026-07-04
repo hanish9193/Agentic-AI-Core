@@ -8,17 +8,29 @@ belongs in a suite that should run free and offline on every commit.
 Requires LLM_API_KEY (and, for Ollama, LLM_API_BASE) in .env set for
 whatever LLM_PROVIDER / LLM_MODEL are configured to.
 
-Three real LLM calls happen now (Scenario Agent, TestCase Agent, then
+Three real LLM calls happen now (Scenario Agent, TestCase Agent,
 Evaluation Agent) - on local Ollama this can easily take 3-6 minutes
 total, though subsequent runs are faster once the model's warm. That's
 expected, not a hang.
+
+HumanApprovalAgent needs no LLM, but it also can't do anything useful on
+a fresh single-pass run - a human can't act on confidence scores that
+don't exist yet when the graph starts. So after the normal run, this
+script checks for any NEEDS_REVIEW test case and, if one exists,
+simulates a human approving it as a SEPARATE second step - calling
+HumanApprovalAgent directly on the already-finished state, exactly the
+shape a future API endpoint would use to resume where the graph left off.
+This is clearly a simulation, not the real interactive flow (which needs
+persistence and a pause/resume graph, neither built yet).
 
 Run with:
     python -m backend.live_check
 """
 
+from backend.agents.human_approval_agent import HumanApprovalAgent
 from backend.graph.workflow import run_workflow
 from backend.models.requirement import Requirement
+from backend.models.test_case import EvaluationStatus
 from backend.services.llm import LLMServiceError
 
 # Deliberately NOT login-related. The old dummy data used "Valid Login" /
@@ -76,6 +88,26 @@ def main():
         "mocked tests. Confidence scores and reasons should look like genuine "
         "judgment (e.g. differing between test cases), not identical placeholder values."
     )
+
+    needs_review = [tc for tc in final_state.generated_test_cases if tc.evaluation_status == EvaluationStatus.NEEDS_REVIEW]
+    print("\n--- Human approval simulation (a separate step, not part of the graph above) ---")
+    if not needs_review:
+        print(
+            "Nothing landed in NEEDS_REVIEW this run - every test case was either "
+            "confidently approved or rejected outright. That's fine; it just means "
+            "there's nothing to demonstrate this time. The mechanism itself is "
+            "verified regardless by test_human_approval_agent.py."
+        )
+    else:
+        candidate = needs_review[0]
+        print(f"Simulating a human approving: '{candidate.title}' (confidence {candidate.confidence:.2f})")
+        print(f"  approved_test_cases() before: {[tc.title for tc in final_state.approved_test_cases()]}")
+
+        final_state.request_test_case_approval(candidate.id)
+        final_state = HumanApprovalAgent().run(final_state)
+
+        print(f"  approved_test_cases() after:  {[tc.title for tc in final_state.approved_test_cases()]}")
+        print(f"  {final_state.logs[-1]}")
 
 
 if __name__ == "__main__":

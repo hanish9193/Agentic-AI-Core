@@ -8,6 +8,7 @@ agents:
   scenario: true
   testcase: true
   evaluation: true
+  human_approval: true
   playwright: false
   execution: false
   report: false
