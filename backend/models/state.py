@@ -17,8 +17,11 @@ a second, independent decision on top of it rather than rewriting
 history. You can always tell "AI was confident" apart from "AI was
 uncertain but a human said yes anyway" by checking both fields.
 
-Deliberately minimal for now — no playwright_script. That gets added as
-a field when PlaywrightAgent actually exists, not before.
+`execution_results` is a separate list on State, not a field on TestCase,
+unlike playwright_script - one test case can be run more than once
+(retries, re-runs after a fix), so its execution history is a list of
+independent events, not a single overwritable field. Look up a test
+case's results by matching `execution_result.test_case_id`.
 """
 
 from datetime import datetime, timezone
@@ -28,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from backend.models.requirement import Requirement
 from backend.models.scenario import Scenario
+from backend.models.execution_result import ExecutionResult
 from backend.models.test_case import EvaluationStatus, TestCase
 
 
@@ -38,6 +42,7 @@ class WorkflowState(BaseModel):
     generated_test_cases: list[TestCase] = Field(default_factory=list)
     pending_approval_ids: list[UUID] = Field(default_factory=list)
     human_approved_test_case_ids: list[UUID] = Field(default_factory=list)
+    execution_results: list[ExecutionResult] = Field(default_factory=list)
     logs: list[str] = Field(default_factory=list)
 
     def add_log(self, message: str) -> None:

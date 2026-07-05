@@ -9,6 +9,7 @@ import pytest
 from backend.agents.evaluation_agent import _EvaluationBatch, _TestCaseEvaluation
 from backend.agents.scenario_agent import _GeneratedScenario, _GeneratedScenarioBatch
 from backend.agents.test_case_agent import TestCaseListResponse, TestCaseResponse
+from backend.services.playwright_runner import PlaywrightRunResult
 
 _CANNED_PLAYWRIGHT_CODE = """import { test, expect } from "@playwright/test";
 
@@ -50,6 +51,20 @@ class StubLLMService:
 
     def generate(self, *, system, user, **kwargs) -> str:
         return self._generate_response
+
+
+class FakePlaywrightRunner:
+    """Test double for PlaywrightRunner - never touches npx/subprocess.
+    Returns the same canned result for every call by default; construct
+    with result_map={run_id: PlaywrightRunResult} for per-test-case
+    control when a test needs different outcomes for different scripts."""
+
+    def __init__(self, default_result: PlaywrightRunResult | None = None, result_map: dict[str, PlaywrightRunResult] | None = None):
+        self._default = default_result or PlaywrightRunResult(status="passed", duration_seconds=1.5)
+        self._result_map = result_map or {}
+
+    def run(self, script: str, run_id: str) -> PlaywrightRunResult:
+        return self._result_map.get(run_id, self._default)
 
 
 @pytest.fixture
@@ -115,3 +130,8 @@ def stub_llm_service(
         },
         generate_response=_CANNED_PLAYWRIGHT_CODE,
     )
+
+
+@pytest.fixture
+def fake_playwright_runner() -> FakePlaywrightRunner:
+    return FakePlaywrightRunner()

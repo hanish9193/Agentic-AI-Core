@@ -2,15 +2,16 @@
 The graph answers exactly one question: who runs next. It never calls an
 LLM directly - that's each agent's job through BaseAgent.run().
 
-Today's graph, one node longer than last milestone:
+Today's graph, the full pipeline from requirement to executed test:
     START -> Scenario -> TestCase -> Evaluation -> HumanApproval
-           -> Playwright -> END
+           -> Playwright -> Execution -> END
 
 build_graph() takes optional agent instances instead of hardcoding them
-at module level, needed since four of these five agents call a real LLM:
-tests build this exact graph with agents wired to mocked LLMServices,
-without a real API key. Nothing about the topology moves - only how the
-nodes get their agent instances.
+at module level, needed since these agents call either a real LLM or a
+real subprocess (Playwright CLI): tests build this exact graph with
+agents wired to fakes, without a real API key or Node.js installed.
+Nothing about the topology moves - only how the nodes get their agent
+instances.
 
 Note: graph.invoke() returns a plain dict, not a WorkflowState instance,
 even though WorkflowState is the state schema - verified against
@@ -22,6 +23,7 @@ from langgraph.graph import END, START, StateGraph
 
 from backend.agents.base import BaseAgent
 from backend.agents.evaluation_agent import EvaluationAgent
+from backend.agents.execution_agent import ExecutionAgent
 from backend.agents.human_approval_agent import HumanApprovalAgent
 from backend.agents.playwright_agent import PlaywrightAgent
 from backend.agents.scenario_agent import ScenarioAgent
@@ -36,12 +38,14 @@ def build_graph(
     evaluation_agent: BaseAgent | None = None,
     human_approval_agent: BaseAgent | None = None,
     playwright_agent: BaseAgent | None = None,
+    execution_agent: BaseAgent | None = None,
 ):
     scenario_agent = scenario_agent or ScenarioAgent()
     test_case_agent = test_case_agent or TestCaseAgent()
     evaluation_agent = evaluation_agent or EvaluationAgent()
     human_approval_agent = human_approval_agent or HumanApprovalAgent()
     playwright_agent = playwright_agent or PlaywrightAgent()
+    execution_agent = execution_agent or ExecutionAgent()
 
     def _scenario_node(state: WorkflowState) -> WorkflowState:
         return scenario_agent.run(state)
@@ -58,18 +62,23 @@ def build_graph(
     def _playwright_node(state: WorkflowState) -> WorkflowState:
         return playwright_agent.run(state)
 
+    def _execution_node(state: WorkflowState) -> WorkflowState:
+        return execution_agent.run(state)
+
     builder = StateGraph(WorkflowState)
     builder.add_node("scenario_agent", _scenario_node)
     builder.add_node("test_case_agent", _test_case_node)
     builder.add_node("evaluation_agent", _evaluation_node)
     builder.add_node("human_approval_agent", _human_approval_node)
     builder.add_node("playwright_agent", _playwright_node)
+    builder.add_node("execution_agent", _execution_node)
     builder.add_edge(START, "scenario_agent")
     builder.add_edge("scenario_agent", "test_case_agent")
     builder.add_edge("test_case_agent", "evaluation_agent")
     builder.add_edge("evaluation_agent", "human_approval_agent")
     builder.add_edge("human_approval_agent", "playwright_agent")
-    builder.add_edge("playwright_agent", END)
+    builder.add_edge("playwright_agent", "execution_agent")
+    builder.add_edge("execution_agent", END)
     return builder.compile()
 
 

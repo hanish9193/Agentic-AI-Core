@@ -3,16 +3,21 @@ TestCase model.
 
 References its parent Scenario by id, same pattern as Scenario -> Requirement.
 Mutable, because `status` moves from PENDING to PASSED/FAILED/BLOCKED once
-an Execution Agent exists, and `evaluation_status`/`confidence` are written
-by EvaluationAgent after generation.
+ExecutionAgent actually runs it, and `evaluation_status`/`confidence` are
+written by EvaluationAgent after generation.
 
 `status` and `evaluation_status` are deliberately separate fields, not one
-combined one: `status` is about *execution outcome* (did it pass when run
-through Playwright - doesn't exist yet), `evaluation_status` is about
-*quality approval* (was this test case good enough to proceed at all).
-A test case can be evaluation-approved and never executed yet, or
-rejected at evaluation and therefore never reach execution - conflating
-them would make it impossible to represent either state cleanly.
+combined one: `status` is about *execution outcome* (did it pass when
+actually run through Playwright), `evaluation_status` is about *quality
+approval* (was this test case good enough to proceed at all). A test
+case can be evaluation-approved and never executed yet, or rejected at
+evaluation and therefore never reach execution - conflating them would
+make it impossible to represent either state cleanly.
+
+`status` reflects only the most recent execution. Full execution history
+(a test case can be run more than once) lives in
+WorkflowState.execution_results, matched by test_case_id - this field is
+just a convenient at-a-glance summary, not the source of truth.
 """
 
 from datetime import datetime, timezone
