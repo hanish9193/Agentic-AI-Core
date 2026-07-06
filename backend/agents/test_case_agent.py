@@ -3,12 +3,15 @@ Generates test cases via LLM instead of hardcoded data. Same shape as
 ScenarioAgent's conversion: graph and BaseAgent interface untouched, only
 what's inside run() changed.
 
-TestCaseResponse / TestCaseListResponse are the LLM's output contract.
-Unlike ScenarioAgent, this agent has a correlation problem ScenarioAgent
-never had: with multiple scenarios going in, each generated test case
-needs to map back to the *correct* scenario. Rather than trust the LLM to
-preserve list order (not guaranteed), each TestCaseResponse echoes back
-scenario_name, and the agent matches on that explicitly.
+Correlates by scenario_number (a 1-based index into the numbered list
+already shown in the prompt), not by echoing scenario_name back. This
+used to be name-based, and it failed in a real live run: the LLM
+returned "Upload exceeds Limit" for a scenario actually named "Upload
+exceeds Limit (5.1MB PNG)" - a paraphrase, despite the prompt explicitly
+saying not to. Numbers don't get paraphrased the same way text does,
+and this exact pattern (numbered correlation, validate we got back
+exactly {1..N}) has never failed once in EvaluationAgent, which used it
+from the start. This should have been built the same way from day one.
 
 priority is deliberately NOT part of the LLM's output contract - it's
 inherited from the parent Scenario. The LLM only invents new content
@@ -23,12 +26,12 @@ from backend.agents.base import BaseAgent
 from backend.models.scenario import Scenario
 from backend.models.state import WorkflowState
 from backend.models.test_case import TestCase
-from backend.services.llm import LLMService
+from backend.services.llm import LLMService, LLMServiceError
 from backend.utils.prompts import load_prompt
 
 
 class TestCaseResponse(BaseModel):
-    scenario_name: str = Field(min_length=1)
+    scenario_number: int = Field(ge=1)
     title: str = Field(min_length=1, max_length=200)
     preconditions: list[str] = Field(default_factory=list)
     steps: list[str] = Field(min_length=1)
@@ -73,24 +76,24 @@ class TestCaseAgent(BaseAgent):
             response_model=TestCaseListResponse,
         )
 
-        scenarios_by_name = {s.scenario_name: s for s in state.generated_scenarios}
+        expected_numbers = set(range(1, len(state.generated_scenarios) + 1))
+        returned_numbers = {item.scenario_number for item in batch.test_cases}
+        if returned_numbers != expected_numbers:
+            raise LLMServiceError(
+                f"{self.name}: LLM returned test cases for scenario numbers {sorted(returned_numbers)}, "
+                f"expected exactly {sorted(expected_numbers)}"
+            )
 
         for item in batch.test_cases:
-            matching_scenario = scenarios_by_name.get(item.scenario_name)
-            if matching_scenario is None:
-                raise ValueError(
-                    f"{self.name}: LLM returned a test case for unrecognized scenario "
-                    f"'{item.scenario_name}'; expected one of {list(scenarios_by_name)}"
-                )
-
+            scenario = state.generated_scenarios[item.scenario_number - 1]
             state.generated_test_cases.append(
                 TestCase(
-                    scenario_id=matching_scenario.id,
+                    scenario_id=scenario.id,
                     title=item.title,
                     preconditions=item.preconditions,
                     steps=item.steps,
                     expected_result=item.expected_result,
-                    priority=matching_scenario.priority,
+                    priority=scenario.priority,
                 )
             )
 

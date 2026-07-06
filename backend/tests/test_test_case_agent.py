@@ -5,9 +5,14 @@ Same two-layer approach as test_scenario_agent.py:
    is genuinely generic (works for TestCaseListResponse, not just the
    schema ScenarioAgent happens to use).
 2. TestCaseAgent <-> LLMService, using StubLLMService (conftest.py) -
-   verifies the agent's own logic: scenario-name correlation, priority
+   verifies the agent's own logic: scenario-number correlation, priority
    inheritance, and the failure mode unique to this agent (an LLM
-   response referencing a scenario that doesn't exist).
+   response with scenario numbers that don't match what was sent).
+
+Correlation is number-based, not name-based - see test_case_agent.py's
+docstring for why: this used to echo scenario_name back, and it broke in
+a real live run when a model paraphrased a name instead of copying it
+exactly. Numbers don't get paraphrased the same way.
 """
 
 import pytest
@@ -31,20 +36,20 @@ def test_llm_service_structured_generate_parses_test_case_mock_response():
         user="irrelevant - mock_response short-circuits the call",
         response_model=TestCaseListResponse,
         mock_response=(
-            '{"test_cases": [{"scenario_name": "Valid Login", "title": "Verify login", '
+            '{"test_cases": [{"scenario_number": 1, "title": "Verify login", '
             '"preconditions": ["App running"], "steps": ["Go to login", "Enter creds"], '
             '"expected_result": "User is logged in"}]}'
         ),
     )
 
     assert len(result.test_cases) == 1
-    assert result.test_cases[0].scenario_name == "Valid Login"
+    assert result.test_cases[0].scenario_number == 1
 
 
 def _state_with_scenarios() -> WorkflowState:
     """Matches canned_scenario_batch in conftest.py exactly - the shared
     stub_llm_service fixture's canned test cases are keyed to these three
-    scenario names, so this state must use the same ones."""
+    scenarios, in this order, since correlation is now by position."""
     requirement = Requirement(title="Login flow", description="User can log in with valid credentials")
     state = WorkflowState(requirement=requirement)
     state.generated_scenarios = [
@@ -55,7 +60,7 @@ def _state_with_scenarios() -> WorkflowState:
     return state
 
 
-def test_test_case_agent_correlates_by_scenario_name_and_inherits_priority(stub_llm_service):
+def test_test_case_agent_correlates_by_scenario_number_and_inherits_priority(stub_llm_service):
     agent = TestCaseAgent(llm_service=stub_llm_service)
     state = _state_with_scenarios()
 
@@ -68,22 +73,18 @@ def test_test_case_agent_correlates_by_scenario_name_and_inherits_priority(stub_
     assert "TestCase Agent generated 3 test cases" in result.logs[-1]
 
 
-def test_test_case_agent_rejects_unrecognized_scenario_name():
-    """The failure mode unique to this agent: LLM echoes back a
-    scenario_name that doesn't match anything we sent it. Must fail
-    loudly - silently dropping the test case would hide a real problem."""
+def test_test_case_agent_rejects_mismatched_scenario_numbers():
+    """The failure mode that actually happened in a real live run: the
+    LLM's response doesn't correlate with what was sent (there, a
+    paraphrased name; here, a number outside the valid range). Must fail
+    loudly, and as LLMServiceError specifically - live_check.py catches
+    that type to show a clean message instead of a raw traceback."""
     from backend.tests.conftest import StubLLMService
 
     bad_batch = TestCaseListResponse.model_validate(
         {
             "test_cases": [
-                {
-                    "scenario_name": "Some Scenario That Does Not Exist",
-                    "title": "x",
-                    "preconditions": [],
-                    "steps": ["step"],
-                    "expected_result": "y",
-                }
+                {"scenario_number": 99, "title": "x", "preconditions": [], "steps": ["step"], "expected_result": "y"}
             ]
         }
     )
@@ -91,7 +92,7 @@ def test_test_case_agent_rejects_unrecognized_scenario_name():
     agent = TestCaseAgent(llm_service=stub)
     state = _state_with_scenarios()
 
-    with pytest.raises(ValueError, match="unrecognized scenario"):
+    with pytest.raises(LLMServiceError, match="expected exactly"):
         agent.run(state)
 
 

@@ -8,7 +8,7 @@ import pytest
 
 from backend.agents.evaluation_agent import _EvaluationBatch, _TestCaseEvaluation
 from backend.agents.scenario_agent import _GeneratedScenario, _GeneratedScenarioBatch
-from backend.agents.test_case_agent import TestCaseListResponse, TestCaseResponse
+from backend.agents.test_case_agent import TestCaseResponse
 from backend.services.playwright_runner import PlaywrightRunResult
 
 _CANNED_PLAYWRIGHT_CODE = """import { test, expect } from "@playwright/test";
@@ -90,28 +90,30 @@ def canned_scenario_batch() -> _GeneratedScenarioBatch:
     )
 
 
-@pytest.fixture
-def canned_test_case_batch(canned_scenario_batch: _GeneratedScenarioBatch) -> TestCaseListResponse:
-    return TestCaseListResponse(
-        test_cases=[
-            TestCaseResponse(
-                scenario_name=s.scenario_name,
-                title=f"Verify: {s.scenario_name}",
+def _varying_test_case_response(user: str) -> TestCaseResponse:
+    """Real LLMs naturally vary wording per scenario, since each prompt
+    describes a different one. A stub returning identical content for
+    every call made EvaluationAgent's duplicate detector correctly
+    reject two of three test cases as duplicates of each other - not a
+    code bug, just an unrealistic stub. Vary by matching which scenario
+    name appears in the prompt instead."""
+    for scenario_name in ("Valid Login", "Invalid Login", "Empty Password"):
+        if scenario_name in user:
+            return TestCaseResponse(
+                title=f"Verify: {scenario_name}",
                 preconditions=["Application is running"],
-                steps=["Navigate to the login page", f"Execute scenario: {s.description}"],
-                expected_result=f"System behaves correctly for '{s.scenario_name}'",
+                steps=[f"Execute scenario: {scenario_name}"],
+                expected_result=f"System behaves correctly for '{scenario_name}'",
             )
-            for s in canned_scenario_batch.scenarios
-        ]
-    )
+    return TestCaseResponse(title="Verify scenario behavior", steps=["Perform the action"], expected_result="Works correctly")
 
 
 @pytest.fixture
-def canned_evaluation_batch(canned_test_case_batch: TestCaseListResponse) -> _EvaluationBatch:
+def canned_evaluation_batch(canned_scenario_batch: _GeneratedScenarioBatch) -> _EvaluationBatch:
     return _EvaluationBatch(
         evaluations=[
             _TestCaseEvaluation(test_case_number=i, relevance=0.9, completeness=0.9, reason="Looks solid")
-            for i in range(1, len(canned_test_case_batch.test_cases) + 1)
+            for i in range(1, len(canned_scenario_batch.scenarios) + 1)
         ]
     )
 
@@ -119,13 +121,12 @@ def canned_evaluation_batch(canned_test_case_batch: TestCaseListResponse) -> _Ev
 @pytest.fixture
 def stub_llm_service(
     canned_scenario_batch: _GeneratedScenarioBatch,
-    canned_test_case_batch: TestCaseListResponse,
     canned_evaluation_batch: _EvaluationBatch,
 ) -> StubLLMService:
     return StubLLMService(
         {
             _GeneratedScenarioBatch: canned_scenario_batch,
-            TestCaseListResponse: canned_test_case_batch,
+            TestCaseResponse: _varying_test_case_response,
             _EvaluationBatch: canned_evaluation_batch,
         },
         generate_response=_CANNED_PLAYWRIGHT_CODE,

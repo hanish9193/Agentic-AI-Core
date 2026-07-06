@@ -22,9 +22,12 @@ since the two outcomes described actually differ. Calibrated against
 real examples, not guessed.
 
 LLM correlation is by test_case_number (a 1-based index assigned just for
-this prompt), not by echoing text back like TestCaseAgent's scenario_name
-approach. Index-based is stricter here: we can validate we got back
-exactly {1..N} with no gaps or duplicates, rather than fuzzy-matching text.
+this prompt). Index-based is stricter than echoing text back: we can
+validate we got back exactly {1..N} with no gaps or duplicates, rather
+than fuzzy-matching text a model might paraphrase. TestCaseAgent
+originally used name-echoing instead of this pattern, and it broke in a
+real live run (a model paraphrased a scenario name); it was retrofitted
+to match this approach afterward.
 
 Three possible outcomes per test case, not two:
 - REJECTED - a duplicate, or relevance below relevance_rejection_threshold
@@ -33,13 +36,13 @@ Three possible outcomes per test case, not two:
 - NEEDS_REVIEW - everything else (plausible but not confident enough)
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.agents.base import BaseAgent
 from backend.config.settings import get_settings
 from backend.models.state import WorkflowState
 from backend.models.test_case import EvaluationStatus, TestCase
-from backend.services.llm import LLMService
+from backend.services.llm import LLMService, LLMServiceError
 from backend.utils.prompts import load_prompt
 
 
@@ -48,6 +51,21 @@ class _TestCaseEvaluation(BaseModel):
     relevance: float = Field(ge=0.0, le=1.0)
     completeness: float = Field(ge=0.0, le=1.0)
     reason: str = Field(min_length=1)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _default_when_blank(cls, value):
+        # Confirmed in a real live run: models sometimes leave this blank
+        # specifically when both scores are high and there's nothing
+        # critical to flag - not model malfunction, just nothing to say.
+        # A blank reason on ONE item doesn't cast any doubt on the actual
+        # relevance/completeness numbers for THIS item or the other two
+        # in the same batch, so it shouldn't cost the whole batch its
+        # results the way a number correlation mismatch legitimately
+        # should. Substitute rather than fail.
+        if isinstance(value, str) and not value.strip():
+            return "No specific concerns noted."
+        return value
 
 
 class _EvaluationBatch(BaseModel):
@@ -148,7 +166,7 @@ class EvaluationAgent(BaseAgent):
         expected_numbers = set(range(1, len(candidates) + 1))
         returned_numbers = {e.test_case_number for e in batch.evaluations}
         if returned_numbers != expected_numbers:
-            raise ValueError(
+            raise LLMServiceError(
                 f"{self.name}: LLM returned evaluations for {sorted(returned_numbers)}, "
                 f"expected exactly {sorted(expected_numbers)}"
             )

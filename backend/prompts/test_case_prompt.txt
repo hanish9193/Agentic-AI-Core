@@ -3,18 +3,18 @@ You are a senior QA engineer writing detailed test cases from already-approved t
 Requirement title: $title
 Requirement description: $description
 
-Below are the scenarios to write test cases for. Write exactly one test case per scenario listed, in any order.
+Below are the numbered scenarios to write test cases for. Write exactly one test case per scenario listed, in any order.
 
 $scenarios
 
-For each test case, write realistic preconditions, a clear ordered list of concrete steps, and one specific expected result. The "scenario_name" you return for each test case must exactly match one of the scenario names given above, so it can be matched back correctly - do not paraphrase or shorten it.
+For each test case, write realistic preconditions, a clear ordered list of concrete steps, and one specific expected result. The "scenario_number" you return for each test case must be the exact number shown next to the scenario above.
 
 Respond with ONLY a JSON object in exactly this shape, with no extra text before or after it:
 
 {
   "test_cases": [
     {
-      "scenario_name": "must exactly match one of the scenario names given above",
+      "scenario_number": 1,
       "title": "short title, 3-8 words",
       "preconditions": ["precondition 1", "precondition 2"],
       "steps": ["step 1", "step 2", "step 3"],
@@ -23,4 +23,4 @@ Respond with ONLY a JSON object in exactly this shape, with no extra text before
   ]
 }
 
-Generate exactly $count test cases.
+You must return exactly one test case per scenario listed above, using the exact number shown, with no duplicates and none skipped.

@@ -93,10 +93,13 @@ def main():
     try:
         final_state = run_workflow(_REQUIREMENT)
     except LLMServiceError as exc:
-        print("Live LLM call failed. Usual causes, in order of likelihood:")
+        print("Live LLM call failed or its response didn't correlate correctly. Usual causes:")
         print("  1. LLM_API_KEY in .env is missing, empty, or invalid")
         print("  2. The account behind that key has no billing/quota set up")
         print("  3. LLM_PROVIDER / LLM_MODEL in .env don't match a real, available model")
+        print("  4. The model's response didn't match what was sent (e.g. wrong scenario/test")
+        print("     case number) - this is usually transient model inconsistency, not a setup")
+        print("     problem; try running again before assuming something's broken")
         print(f"\nUnderlying error: {exc}")
         return
     except PlaywrightRunnerError as exc:

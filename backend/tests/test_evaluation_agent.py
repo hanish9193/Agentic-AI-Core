@@ -18,7 +18,7 @@ from backend.models.requirement import Requirement
 from backend.models.scenario import Scenario
 from backend.models.state import WorkflowState
 from backend.models.test_case import EvaluationStatus, TestCase
-from backend.services.llm import LLMService
+from backend.services.llm import LLMService, LLMServiceError
 from backend.tests.conftest import StubLLMService
 
 _TEST_LLM_CONFIG = LLMConfig(provider="openai", model="gpt-4o-mini", api_key="fake-key-for-test")
@@ -35,6 +35,30 @@ def test_llm_service_structured_generate_parses_evaluation_mock_response():
 
     assert len(result.evaluations) == 1
     assert result.evaluations[0].test_case_number == 1
+
+
+def test_blank_reason_gets_a_default_instead_of_failing_the_whole_batch():
+    """The actual failure from a real live run: a model left reason=""
+    for one high-scoring evaluation (nothing critical to flag), and the
+    whole 3-item batch was rejected over it. A blank reason on one item
+    doesn't cast doubt on the scores for that item OR the other two -
+    it should get a sensible default, not sink everything."""
+    service = LLMService(config=_TEST_LLM_CONFIG)
+
+    result = service.structured_generate(
+        user="irrelevant",
+        response_model=_EvaluationBatch,
+        mock_response=(
+            '{"evaluations": ['
+            '{"test_case_number": 1, "relevance": 0.8, "completeness": 0.7, "reason": "Missing an edge case"}, '
+            '{"test_case_number": 2, "relevance": 0.9, "completeness": 1.0, "reason": ""}, '
+            '{"test_case_number": 3, "relevance": 0.6, "completeness": 0.8, "reason": "Wrong extension used"}'
+            "]}"
+        ),
+    )
+
+    assert len(result.evaluations) == 3  # nothing lost
+    assert result.evaluations[1].reason == "No specific concerns noted."
 
 
 def _state_with_test_cases(test_cases: list[TestCase]) -> WorkflowState:
@@ -111,7 +135,7 @@ def test_rejects_when_llm_returns_mismatched_numbers():
     # test_case_number=2 doesn't exist - only 1 candidate was sent to the LLM
     stub = _stub_for([_TestCaseEvaluation(test_case_number=2, relevance=0.9, completeness=0.9, reason="x")])
 
-    with pytest.raises(ValueError, match="expected exactly"):
+    with pytest.raises(LLMServiceError, match="expected exactly"):
         EvaluationAgent(llm_service=stub).run(state)
 
 
