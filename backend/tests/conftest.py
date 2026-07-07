@@ -8,7 +8,7 @@ import pytest
 
 from backend.agents.evaluation_agent import _EvaluationBatch, _TestCaseEvaluation
 from backend.agents.scenario_agent import _GeneratedScenario, _GeneratedScenarioBatch
-from backend.agents.test_case_agent import TestCaseResponse
+from backend.agents.test_case_agent import TestCaseListResponse, TestCaseResponse
 from backend.services.playwright_runner import PlaywrightRunResult
 
 _CANNED_PLAYWRIGHT_CODE = """import { test, expect } from "@playwright/test";
@@ -90,23 +90,32 @@ def canned_scenario_batch() -> _GeneratedScenarioBatch:
     )
 
 
-def _varying_test_case_response(user: str) -> TestCaseResponse:
-    """Real LLMs naturally vary wording per scenario, since each prompt
-    describes a different one. A stub returning identical content for
-    every call made EvaluationAgent's duplicate detector correctly
-    reject two of three test cases as duplicates of each other - not a
-    code bug, just an unrealistic stub. Vary by matching which scenario
-    name appears in the prompt instead."""
-    for scenario_name in ("Valid Login", "Invalid Login", "Empty Password"):
-        if scenario_name in user:
-            return TestCaseResponse(
-                title=f"Verify: {scenario_name}",
+def _canned_test_case_batch() -> TestCaseListResponse:
+    return TestCaseListResponse(
+        test_cases=[
+            TestCaseResponse(
+                scenario_number=1,
+                title="Verify: Valid Login",
                 preconditions=["Application is running"],
-                steps=[f"Execute scenario: {scenario_name}"],
-                expected_result=f"System behaves correctly for '{scenario_name}'",
-            )
-    return TestCaseResponse(title="Verify scenario behavior", steps=["Perform the action"], expected_result="Works correctly")
-
+                steps=["Execute scenario: Valid Login"],
+                expected_result="System behaves correctly for 'Valid Login'",
+            ),
+            TestCaseResponse(
+                scenario_number=2,
+                title="Verify: Invalid Login",
+                preconditions=["Application is running"],
+                steps=["Execute scenario: Invalid Login"],
+                expected_result="System behaves correctly for 'Invalid Login'",
+            ),
+            TestCaseResponse(
+                scenario_number=3,
+                title="Verify: Empty Password",
+                preconditions=["Application is running"],
+                steps=["Execute scenario: Empty Password"],
+                expected_result="System behaves correctly for 'Empty Password'",
+            ),
+        ]
+    )
 
 @pytest.fixture
 def canned_evaluation_batch(canned_scenario_batch: _GeneratedScenarioBatch) -> _EvaluationBatch:
@@ -124,9 +133,9 @@ def stub_llm_service(
     canned_evaluation_batch: _EvaluationBatch,
 ) -> StubLLMService:
     return StubLLMService(
-        {
+        responses={
             _GeneratedScenarioBatch: canned_scenario_batch,
-            TestCaseResponse: _varying_test_case_response,
+            TestCaseListResponse: _canned_test_case_batch(),
             _EvaluationBatch: canned_evaluation_batch,
         },
         generate_response=_CANNED_PLAYWRIGHT_CODE,
