@@ -28,5 +28,8 @@ class Requirement(BaseModel):
     description: str = Field(min_length=1)
     source: RequirementSource = RequirementSource.MANUAL
     uploaded_at: datetime = Field(
-    default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(timezone.utc)
     )
+    original_filename: str | None = None
+    requirement_id: str | None = None
+    requirement_title: str | None = None

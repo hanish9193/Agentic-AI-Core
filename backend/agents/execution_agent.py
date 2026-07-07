@@ -38,8 +38,9 @@ _STATUS_MAP = {
 class ExecutionAgent(BaseAgent):
     name = "Execution Agent"
 
-    def __init__(self, runner: PlaywrightRunner | None = None):
+    def __init__(self, runner: PlaywrightRunner | None = None, on_log = None):
         self.runner = runner or PlaywrightRunner()
+        self.on_log = on_log
 
     def run(self, state: WorkflowState) -> WorkflowState:
         if state.requirement is None:
@@ -61,7 +62,13 @@ class ExecutionAgent(BaseAgent):
 
     def _execute(self, test_case: TestCase) -> ExecutionResult:
         try:
-            raw = self.runner.run(test_case.playwright_script, run_id=str(test_case.id))
+            try:
+                raw = self.runner.run(test_case.playwright_script, run_id=str(test_case.id), on_log=self.on_log)
+            except TypeError as exc:
+                if "unexpected keyword argument 'on_log'" in str(exc) or "got an unexpected keyword argument" in str(exc):
+                    raw = self.runner.run(test_case.playwright_script, run_id=str(test_case.id))
+                else:
+                    raise
         except PlaywrightRunnerError as exc:
             test_case.status = TestCaseStatus.BLOCKED
             return ExecutionResult(test_case_id=test_case.id, status=ExecutionStatus.ERROR, error_message=str(exc))

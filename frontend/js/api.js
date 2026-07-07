@@ -6,6 +6,11 @@ async function request(url, options = {}) {
     ...(options.headers || {})
   };
 
+  // If body is FormData, do not set Content-Type header manually
+  if (options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+
   const response = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers
@@ -39,17 +44,17 @@ export const API = {
     return request(`/projects/${id}`);
   },
 
-  async createProject(name, description) {
+  async createProject(name, description, lineOfBusiness) {
     return request('/projects', {
       method: 'POST',
-      body: JSON.stringify({ name, description })
+      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness })
     });
   },
 
-  async updateProject(id, name, description) {
+  async updateProject(id, name, description, lineOfBusiness) {
     return request(`/projects/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, description })
+      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness })
     });
   },
 
@@ -76,15 +81,25 @@ export const API = {
     });
   },
 
+  // Import Requirements File
+  async importRequirements(projectId, fileObj) {
+    const formData = new FormData();
+    formData.append('file', fileObj);
+    return request(`/projects/${projectId}/requirements/import`, {
+      method: 'POST',
+      body: formData
+    });
+  },
+
   // Scenarios
   async getScenarios(projectId) {
     return request(`/projects/${projectId}/scenarios`);
   },
 
-  async generateScenarios(projectId, requirementId, count) {
+  async generateScenarios(projectId, requirementId, count, mode = 'append') {
     return request(`/projects/${projectId}/requirements/${requirementId}/generate-scenarios`, {
       method: 'POST',
-      body: JSON.stringify({ count })
+      body: JSON.stringify({ count, mode })
     });
   },
 
@@ -104,6 +119,18 @@ export const API = {
   async duplicateScenario(projectId, scenarioId) {
     return request(`/projects/${projectId}/scenarios/duplicate/${scenarioId}`, {
       method: 'POST'
+    });
+  },
+
+  // Scenario Notes
+  async getScenarioNotes(scenarioId) {
+    return request(`/scenarios/${scenarioId}/notes`);
+  },
+
+  async addScenarioNote(scenarioId, note) {
+    return request(`/scenarios/${scenarioId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
     });
   },
 
@@ -131,10 +158,29 @@ export const API = {
     });
   },
 
+  // Test Case Notes
+  async getTestCaseNotes(testCaseId) {
+    return request(`/testcases/${testCaseId}/notes`);
+  },
+
+  async addTestCaseNote(testCaseId, note) {
+    return request(`/testcases/${testCaseId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  },
+
   // Playwright Code Generation
   async generatePlaywrightScript(projectId, testCaseId) {
     return request(`/projects/${projectId}/testcases/${testCaseId}/generate-script`, {
       method: 'POST'
+    });
+  },
+
+  async saveTestCaseScript(projectId, testCaseId, script) {
+    return request(`/projects/${projectId}/testcases/${testCaseId}/script`, {
+      method: 'PUT',
+      body: JSON.stringify({ script })
     });
   },
 
@@ -148,6 +194,10 @@ export const API = {
   // Execution Results history
   async getExecutionResults(projectId) {
     return request(`/projects/${projectId}/executions`);
+  },
+
+  async getExecutionDetail(projectId, executionId) {
+    return request(`/projects/${projectId}/executions/${executionId}`);
   },
 
   // Knowledge Base documents

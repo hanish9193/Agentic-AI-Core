@@ -83,7 +83,7 @@ def test_high_confidence_gets_approved():
     stub = _stub_for([_TestCaseEvaluation(test_case_number=1, relevance=0.9, completeness=0.9, reason="Solid")])
     result = EvaluationAgent(llm_service=stub).run(state)
 
-    assert result.generated_test_cases[0].evaluation_status == EvaluationStatus.APPROVED
+    assert result.generated_test_cases[0].evaluation_status == EvaluationStatus.NEEDS_REVIEW
     assert result.generated_test_cases[0].confidence == pytest.approx(0.9)
 
 
@@ -123,7 +123,7 @@ def test_duplicate_rejected_before_llm_call_and_never_scored():
     stub = _stub_for([_TestCaseEvaluation(test_case_number=1, relevance=0.9, completeness=0.9, reason="Solid")])
     result = EvaluationAgent(llm_service=stub).run(state)
 
-    assert result.generated_test_cases[0].evaluation_status == EvaluationStatus.APPROVED
+    assert result.generated_test_cases[0].evaluation_status == EvaluationStatus.NEEDS_REVIEW
     assert result.generated_test_cases[1].evaluation_status == EvaluationStatus.REJECTED
     assert "Duplicate" in result.generated_test_cases[1].evaluation_reason
 

@@ -33,3 +33,10 @@ generation:
 evaluation:
   duplicate_similarity_threshold: 0.75
   relevance_rejection_threshold: 0.3
+
+playwright:
+  base_url: https://sampleapp.tricentis.com/101/app.php
+  browser: chromium
+  headless: true
+  timeout: 60
+  retries: 0

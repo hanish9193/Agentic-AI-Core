@@ -19,6 +19,17 @@ from backend.models.test_case import TestCaseStatus
 
 
 def test_graph_runs_all_seven_agents(stub_llm_service, fake_playwright_runner):
+    from backend.models.test_case import EvaluationStatus
+    from backend.agents.base import BaseAgent
+
+    class AutoApproveHumanAgent(BaseAgent):
+        name = "Auto Approve Human Agent"
+        def run(self, state):
+            for tc in state.generated_test_cases:
+                if tc.evaluation_status != EvaluationStatus.REJECTED:
+                    tc.evaluation_status = EvaluationStatus.APPROVED
+            return state
+
     requirement = Requirement(
         title="Login flow",
         description="User can log in with valid credentials",
@@ -28,8 +39,7 @@ def test_graph_runs_all_seven_agents(stub_llm_service, fake_playwright_runner):
         scenario_agent=ScenarioAgent(llm_service=stub_llm_service),
         test_case_agent=TestCaseAgent(llm_service=stub_llm_service),
         evaluation_agent=EvaluationAgent(llm_service=stub_llm_service),
-        # human_approval_agent and report_agent omitted - neither needs an
-        # LLM or subprocess to stub, real instances are fine here
+        human_approval_agent=AutoApproveHumanAgent(),
         playwright_agent=PlaywrightAgent(llm_service=stub_llm_service),
         execution_agent=ExecutionAgent(runner=fake_playwright_runner),
     )

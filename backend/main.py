@@ -1,10 +1,16 @@
 import yaml
+import re
 from pathlib import Path
 from uuid import UUID
 import json
 import asyncio
-from fastapi import FastAPI, HTTPException, Body, status, BackgroundTasks
-from fastapi.responses import StreamingResponse
+import io
+import zipfile
+import xml.etree.ElementTree as ET
+import pandas as pd
+import fitz
+from fastapi import FastAPI, HTTPException, Body, status, BackgroundTasks, UploadFile, File
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -14,7 +20,7 @@ from backend.services.workflow_service import WorkflowService
 from backend.schemas.project_dto import ProjectCreate, ProjectResponse
 from backend.schemas.requirement_dto import RequirementCreate, RequirementResponse
 from backend.schemas.scenario_dto import ScenarioUpdate, ScenarioResponse
-from backend.schemas.testcase_dto import TestCaseUpdate, TestCaseResponse
+from backend.schemas.testcase_dto import TestCaseUpdate, TestCaseResponse, ScriptUpdatePayload
 from backend.models.document import Document
 from backend.models.execution_result import ExecutionResult
 
@@ -47,6 +53,7 @@ def list_projects():
             id=p.id,
             name=p.name,
             description=p.description,
+            line_of_business=p.line_of_business,
             created_at=p.created_at,
             requirements=p.requirements
         )
@@ -56,11 +63,12 @@ def list_projects():
 
 @app.post("/api/v1/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(data: ProjectCreate):
-    p = project_service.create_project(name=data.name, description=data.description)
+    p = project_service.create_project(name=data.name, description=data.description, line_of_business=data.line_of_business)
     return ProjectResponse(
         id=p.id,
         name=p.name,
         description=p.description,
+        line_of_business=p.line_of_business,
         created_at=p.created_at,
         requirements=p.requirements
     )
@@ -75,6 +83,7 @@ def get_project(project_id: UUID):
         id=p.id,
         name=p.name,
         description=p.description,
+        line_of_business=p.line_of_business,
         created_at=p.created_at,
         requirements=p.requirements
     )
@@ -106,7 +115,10 @@ def get_requirements(project_id: UUID):
                 uploaded_at=r.uploaded_at,
                 priority=raw_metadata.get("priority", "medium"),
                 business_domain=raw_metadata.get("business_domain", "general"),
-                attachments=raw_metadata.get("attachments", [])
+                attachments=raw_metadata.get("attachments", []),
+                original_filename=r.original_filename,
+                requirement_id=r.requirement_id,
+                requirement_title=r.requirement_title
             )
         )
     return result
@@ -125,7 +137,10 @@ def create_requirement(project_id: UUID, data: RequirementCreate):
             description=data.description,
             priority=data.priority,
             business_domain=data.business_domain,
-            attachments=[]
+            attachments=[],
+            original_filename=None,
+            requirement_id="REQ-MANUAL",
+            requirement_title=data.title
         )
         return RequirementResponse(
             id=r.id,
@@ -135,17 +150,233 @@ def create_requirement(project_id: UUID, data: RequirementCreate):
             uploaded_at=r.uploaded_at,
             priority=data.priority,
             business_domain=data.business_domain,
-            attachments=[]
+            attachments=[],
+            original_filename=r.original_filename,
+            requirement_id=r.requirement_id,
+            requirement_title=r.requirement_title
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+def parse_requirements_from_text(project_id: UUID, text: str, filename: str):
+    # Regex split to look for pattern blocks like REQ-001 or Requirement 1
+    pattern = r'(REQ-\d+|Requirement\s+\d+|[A-Z]+-\d+):'
+    parts = re.split(pattern, text)
+    
+    imported = []
+    if len(parts) > 1:
+        i = 1
+        while i < len(parts):
+            req_id = parts[i].strip()
+            content = parts[i+1].strip() if i+1 < len(parts) else ""
+            description = content
+            
+            # Guess priority
+            priority = "medium"
+            if any(k in description.lower() for k in ["high", "critical", "urgent", "must"]):
+                priority = "high"
+            elif any(k in description.lower() for k in ["low", "minor", "nice to have"]):
+                priority = "low"
+                
+            # Guess line of business / domain
+            business_domain = "general"
+            for k in ["banking", "finance", "auth", "login", "profile", "billing", "payment", "checkout", "search", "upload", "insurance", "retail", "healthcare"]:
+                if k in description.lower():
+                    business_domain = k.capitalize()
+                    break
+                    
+            # Try to extract a clean requirement title from description
+            req_title = "Requirement Block"
+            title_match = re.search(r'Title\s*\n\s*([^\n]+)', description, re.IGNORECASE)
+            if title_match:
+                req_title = title_match.group(1).strip()
+            else:
+                first_line = description.split('\n')[0].strip()
+                if first_line:
+                    req_title = first_line[:50].strip()
+                    
+            title = f"{req_id}: {req_title}"
+            
+            req = project_service.create_requirement(
+                project_id=project_id,
+                title=title,
+                description=description,
+                priority=priority,
+                business_domain=business_domain,
+                attachments=[filename],
+                original_filename=filename,
+                requirement_id=req_id,
+                requirement_title=req_title
+            )
+            imported.append(req)
+            i += 2
+    else:
+        # Split by double newline (paragraph blocks)
+        blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+        for idx, block in enumerate(blocks):
+            if len(block) < 25:
+                continue
+                
+            req_id = f"REQ-{idx+1:03d}"
+            priority = "medium"
+            if any(k in block.lower() for k in ["high", "critical", "urgent"]):
+                priority = "high"
+            elif any(k in block.lower() for k in ["low", "minor"]):
+                priority = "low"
+                
+            business_domain = "general"
+            for k in ["banking", "finance", "auth", "login", "profile", "billing", "payment", "checkout", "search", "upload", "insurance", "retail", "healthcare"]:
+                if k in block.lower():
+                    business_domain = k.capitalize()
+                    break
+                    
+            req_title = block[:50].strip() + "..."
+            title = f"{req_id}: {req_title}"
+            
+            req = project_service.create_requirement(
+                project_id=project_id,
+                title=title,
+                description=block,
+                priority=priority,
+                business_domain=business_domain,
+                attachments=[filename],
+                original_filename=filename,
+                requirement_id=req_id,
+                requirement_title=req_title
+            )
+            imported.append(req)
+            
+    if not imported:
+        # Create a single default block
+        req = project_service.create_requirement(
+            project_id=project_id,
+            title=filename,
+            description=text or "Empty file content",
+            priority="medium",
+            business_domain="general",
+            attachments=[filename],
+            original_filename=filename,
+            requirement_id="REQ-001",
+            requirement_title=filename
+        )
+        imported.append(req)
+        
+    return imported
+
+
+@app.post("/api/v1/projects/{project_id}/requirements/import", response_model=list[RequirementResponse])
+async def import_requirements(project_id: UUID, file: UploadFile = File(...)):
+    p = project_service.get_project(project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    file_bytes = await file.read()
+    filename = file.filename
+    ext = Path(filename).suffix.lower()
+
+    imported = []
+    try:
+        if ext in [".xlsx", ".xls"]:
+            df = pd.read_excel(io.BytesIO(file_bytes))
+            cols = {col.lower().replace(" ", "").replace("_", ""): col for col in df.columns}
+            
+            id_col = cols.get("requirementid") or cols.get("id")
+            desc_col = cols.get("requirement") or cols.get("description") or cols.get("title")
+            priority_col = cols.get("priority")
+            module_col = cols.get("module") or cols.get("businessdomain") or cols.get("domain")
+
+            if not desc_col:
+                desc_col = df.columns[0]
+
+            for idx, row in df.iterrows():
+                req_id_val = str(row[id_col]) if (id_col and id_col in df.columns) else f"REQ-{idx+1:03d}"
+                desc_val = str(row[desc_col]) if (desc_col and desc_col in df.columns) else ""
+                priority_val = str(row[priority_col]).lower() if (priority_col and priority_col in df.columns) else "medium"
+                module_val = str(row[module_col]) if (module_col and module_col in df.columns) else "general"
+
+                if not desc_val.strip() or pd.isna(row[desc_col]):
+                    continue
+
+                if priority_val not in ["low", "medium", "high"]:
+                    priority_val = "medium"
+
+                req = project_service.create_requirement(
+                    project_id=project_id,
+                    title=f"{req_id_val}: {desc_val[:50]}...",
+                    description=desc_val,
+                    priority=priority_val,
+                    business_domain=module_val,
+                    attachments=[filename],
+                    original_filename=filename,
+                    requirement_id=req_id_val,
+                    requirement_title=desc_val[:50]
+                )
+                imported.append(req)
+        elif ext == ".pdf":
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            text = ""
+            for page in doc:
+                text += page.get_text()
+            imported = parse_requirements_from_text(project_id, text, filename)
+        elif ext in [".docx", ".doc"]:
+            try:
+                with zipfile.ZipFile(io.BytesIO(file_bytes)) as docx_zip:
+                    xml_content = docx_zip.read('word/document.xml')
+                    root = ET.fromstring(xml_content)
+                    
+                    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                    paragraphs = []
+                    for para in root.findall('.//w:p', namespaces):
+                        text_elems = para.findall('.//w:t', namespaces)
+                        text = "".join([t.text for t in text_elems if t.text])
+                        if text.strip():
+                            paragraphs.append(text)
+                    full_text = "\n\n".join(paragraphs)
+            except Exception:
+                full_text = "Failed to parse Word document XML structure."
+            imported = parse_requirements_from_text(project_id, full_text, filename)
+        else:
+            text = file_bytes.decode("utf-8", errors="ignore")
+            imported = parse_requirements_from_text(project_id, text, filename)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"File import failed: {exc}")
+
+    repo = project_service.repo
+    raw_db = repo._read_raw()
+    reqs_raw = raw_db.get("requirements", {})
+
+    res = []
+    for r in imported:
+        r_str = str(r.id)
+        raw_metadata = reqs_raw.get(r_str, {})
+        res.append(
+            RequirementResponse(
+                id=r.id,
+                title=r.title,
+                description=r.description,
+                source=r.source,
+                uploaded_at=r.uploaded_at,
+                priority=raw_metadata.get("priority", "medium"),
+                business_domain=raw_metadata.get("business_domain", "general"),
+                attachments=raw_metadata.get("attachments", []),
+                original_filename=r.original_filename,
+                requirement_id=r.requirement_id,
+                requirement_title=r.requirement_title
+            )
+        )
+    return res
+
+
+
+
+
 @app.post("/api/v1/projects/{project_id}/requirements/{requirement_id}/generate-scenarios", response_model=list[ScenarioResponse])
 def generate_scenarios(project_id: UUID, requirement_id: UUID, payload: dict = Body(...)):
     count = payload.get("count", 3)
+    mode = payload.get("mode", "append")
     try:
-        scenarios = workflow_service.generate_scenarios(project_id, requirement_id, count)
+        scenarios = workflow_service.generate_scenarios(project_id, requirement_id, count, mode)
         return [
             ScenarioResponse(
                 id=s.id,
@@ -329,6 +560,28 @@ def delete_test_case(project_id: UUID, test_case_id: UUID):
     return {"detail": "Test case deleted successfully"}
 
 
+@app.put("/api/v1/projects/{project_id}/testcases/{test_case_id}/script", response_model=TestCaseResponse)
+def update_test_case_script(project_id: UUID, test_case_id: UUID, payload: ScriptUpdatePayload):
+    updated = project_service.update_test_case_script(test_case_id, payload.script)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Test case not found")
+    return TestCaseResponse(
+        id=updated.id,
+        scenario_id=updated.scenario_id,
+        title=updated.title,
+        preconditions=updated.preconditions,
+        steps=updated.steps,
+        expected_result=updated.expected_result,
+        priority=updated.priority,
+        status=updated.status,
+        confidence=updated.confidence,
+        evaluation_status=updated.evaluation_status,
+        evaluation_reason=updated.evaluation_reason,
+        playwright_script=updated.playwright_script,
+        generated_at=updated.generated_at
+    )
+
+
 @app.get("/api/v1/settings")
 def read_settings():
     settings = get_settings()
@@ -360,6 +613,13 @@ def read_settings():
         "evaluation": {
             "duplicate_similarity_threshold": settings.evaluation.duplicate_similarity_threshold,
             "relevance_rejection_threshold": settings.evaluation.relevance_rejection_threshold,
+        },
+        "playwright": {
+            "base_url": settings.playwright.base_url,
+            "browser": settings.playwright.browser,
+            "headless": settings.playwright.headless,
+            "timeout": settings.playwright.timeout,
+            "retries": settings.playwright.retries
         }
     }
 
@@ -368,17 +628,14 @@ def read_settings():
 def write_settings(payload: dict = Body(...)):
     override_path = Path(__file__).parent / "config" / "override.yaml"
     try:
-        # Standardize structure in overrides dictionary
         overrides = {}
-        for section in ["llm", "workflow", "browser", "rag", "generation", "evaluation"]:
+        for section in ["llm", "workflow", "browser", "rag", "generation", "evaluation", "playwright"]:
             if section in payload:
                 overrides[section] = payload[section]
 
-        # Write to override.yaml
         with open(override_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(overrides, f)
 
-        # Clear settings LRU cache to force reloading next time get_settings() is called
         get_settings.cache_clear()
         
         return {"status": "success", "settings": read_settings()}
@@ -389,13 +646,14 @@ def write_settings(payload: dict = Body(...)):
 
 @app.put("/api/v1/projects/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: UUID, data: ProjectCreate):
-    updated = project_service.update_project(project_id, name=data.name, description=data.description)
+    updated = project_service.update_project(project_id, name=data.name, description=data.description, line_of_business=data.line_of_business)
     if not updated:
         raise HTTPException(status_code=404, detail="Project not found")
     return ProjectResponse(
         id=updated.id,
         name=updated.name,
         description=updated.description,
+        line_of_business=updated.line_of_business,
         created_at=updated.created_at,
         requirements=updated.requirements
     )
@@ -477,9 +735,11 @@ def execute_test_case(project_id: UUID, test_case_id: UUID, background_tasks: Ba
     if str(test_case_id) not in raw.get("test_cases", {}):
         raise HTTPException(status_code=404, detail="Test case not found")
         
+    import uuid
+    execution_id = uuid.uuid4()
     from backend.services.workflow_service import run_execution_and_stream
-    background_tasks.add_task(run_execution_and_stream, workflow_service, project_id, test_case_id)
-    return {"status": "started"}
+    background_tasks.add_task(run_execution_and_stream, workflow_service, project_id, test_case_id, execution_id)
+    return {"status": "started", "execution_id": str(execution_id)}
 
 
 @app.get("/api/v1/projects/{project_id}/testcases/{test_case_id}/execution-stream")
@@ -509,6 +769,153 @@ def get_execution_stream(project_id: UUID, test_case_id: UUID):
 @app.get("/api/v1/projects/{project_id}/executions", response_model=list[ExecutionResult])
 def list_execution_results(project_id: UUID):
     return project_service.get_execution_results(project_id)
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}")
+def get_execution_detail(project_id: UUID, execution_id: UUID):
+    result = project_service.get_execution_result(project_id, execution_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    tc_id_str = str(result.test_case_id)
+    from backend.services.workflow_service import active_execution_events
+    events = active_execution_events.get(tc_id_str, [])
+
+    timeline = []
+    logs = []
+    
+    if events:
+        for ev in events:
+            if ev.get("timeline"):
+                timeline.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "event": ev["timeline"],
+                    "type": "success" if ev["status"] == "Completed" else "info",
+                    "details": ev.get("log", "")
+                })
+            if ev.get("log"):
+                logs.append(ev["log"])
+    else:
+        timeline.append({
+            "timestamp": result.executed_at.isoformat(),
+            "event": "Completed",
+            "type": "success" if result.status.value == "passed" else "error",
+            "details": result.error_message or "All steps completed successfully."
+        })
+        logs.append(result.error_message or "Execution completed successfully.")
+
+    # Query report from DB repo
+    repo = project_service.repo
+    raw = repo._read_raw()
+    reports_raw = raw.get("reports", {})
+    report_data = {}
+    for r_id, r_info in reports_raw.items():
+        if r_info.get("execution_id") == str(execution_id):
+            report_data = r_info
+            break
+
+    return {
+        "execution": {
+            "id": str(result.id),
+            "test_case_id": str(result.test_case_id),
+            "status": result.status.value,
+            "duration_seconds": result.duration_seconds,
+            "error_message": result.error_message,
+            "screenshot_path": result.screenshot_path,
+            "video_path": result.video_path,
+            "trace_path": result.trace_path,
+            "executed_at": result.executed_at.isoformat()
+        },
+        "timeline": timeline,
+        "logs": logs,
+        "artifacts": {
+            "screenshot": result.screenshot_path,
+            "video": result.video_path,
+            "trace": result.trace_path
+        },
+        "report": report_data
+    }
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/screenshot")
+def get_execution_screenshot(project_id: UUID, execution_id: UUID, path: str = None):
+    if not path:
+        result = project_service.get_execution_result(project_id, execution_id)
+        if not result or not result.screenshot_path:
+            raise HTTPException(status_code=404, detail="Screenshot not found")
+        path = result.screenshot_path
+    
+    file_path = Path(path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+    return FileResponse(file_path)
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/video")
+def get_execution_video(project_id: UUID, execution_id: UUID, path: str = None):
+    if not path:
+        result = project_service.get_execution_result(project_id, execution_id)
+        if not result or not result.video_path:
+            raise HTTPException(status_code=404, detail="Video not found")
+        path = result.video_path
+        
+    file_path = Path(path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+    return FileResponse(file_path)
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/trace")
+def get_execution_trace(project_id: UUID, execution_id: UUID, path: str = None):
+    if not path:
+        result = project_service.get_execution_result(project_id, execution_id)
+        if not result or not result.trace_path:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        path = result.trace_path
+        
+    file_path = Path(path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+    return FileResponse(file_path, filename=file_path.name)
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/pdf")
+def get_execution_pdf(project_id: UUID, execution_id: UUID):
+    repo = project_service.repo
+    raw = repo._read_raw()
+    reports_raw = raw.get("reports", {})
+    for r_id, r_info in reports_raw.items():
+        if r_info.get("execution_id") == str(execution_id):
+            pdf_path = r_info.get("pdf_path")
+            if pdf_path and Path(pdf_path).exists():
+                return FileResponse(pdf_path, filename=Path(pdf_path).name)
+    raise HTTPException(status_code=404, detail="PDF report not found")
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/html")
+def get_execution_html(project_id: UUID, execution_id: UUID):
+    repo = project_service.repo
+    raw = repo._read_raw()
+    reports_raw = raw.get("reports", {})
+    for r_id, r_info in reports_raw.items():
+        if r_info.get("execution_id") == str(execution_id):
+            html_path = r_info.get("html_path")
+            if html_path and Path(html_path).exists():
+                return FileResponse(html_path)
+    raise HTTPException(status_code=404, detail="HTML report not found")
+
+
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/junit")
+def get_execution_junit(project_id: UUID, execution_id: UUID):
+    repo = project_service.repo
+    raw = repo._read_raw()
+    reports_raw = raw.get("reports", {})
+    for r_id, r_info in reports_raw.items():
+        if r_info.get("execution_id") == str(execution_id):
+            junit_path = r_info.get("junit_path")
+            if junit_path and Path(junit_path).exists():
+                return FileResponse(junit_path, filename=Path(junit_path).name)
+    raise HTTPException(status_code=404, detail="JUnit XML report not found")
 
 
 @app.get("/api/v1/projects/{project_id}/traces")
@@ -554,6 +961,34 @@ def get_activity_traces(project_id: UUID):
             }
         ]
     }
+
+
+@app.get("/api/v1/scenarios/{scenario_id}/notes")
+def get_scenario_notes(scenario_id: UUID):
+    return project_service.get_scenario_notes(scenario_id)
+
+
+@app.post("/api/v1/scenarios/{scenario_id}/notes")
+def add_scenario_note(scenario_id: UUID, payload: dict = Body(...)):
+    note = payload.get("note")
+    if not note:
+        raise HTTPException(status_code=400, detail="Note content is required")
+    project_service.add_scenario_note(scenario_id, note)
+    return {"status": "success"}
+
+
+@app.get("/api/v1/testcases/{test_case_id}/notes")
+def get_test_case_notes(test_case_id: UUID):
+    return project_service.get_test_case_notes(test_case_id)
+
+
+@app.post("/api/v1/testcases/{test_case_id}/notes")
+def add_test_case_note(test_case_id: UUID, payload: dict = Body(...)):
+    note = payload.get("note")
+    if not note:
+        raise HTTPException(status_code=400, detail="Note content is required")
+    project_service.add_test_case_note(test_case_id, note)
+    return {"status": "success"}
 
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="static")

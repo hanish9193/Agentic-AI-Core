@@ -28,6 +28,7 @@ slow local model, but each result is isolated and self-contained.
 from backend.agents.base import BaseAgent
 from backend.models.state import WorkflowState
 from backend.models.test_case import TestCase
+from backend.config.settings import get_settings
 from backend.services.llm import LLMService
 from backend.utils.prompts import load_prompt
 
@@ -92,12 +93,16 @@ class PlaywrightAgent(BaseAgent):
         return state
 
     def _generate_script(self, test_case: TestCase) -> str:
+        settings = get_settings()
+        base_url = settings.playwright.base_url
+
         prompt = load_prompt(
             "playwright_prompt.txt",
             title=test_case.title,
             preconditions=_format_preconditions(test_case.preconditions),
             steps=_format_steps(test_case.steps),
             expected_result=test_case.expected_result,
+            base_url=base_url
         )
 
         raw_output = self.llm_service.generate(system=_SYSTEM_PROMPT, user=prompt)

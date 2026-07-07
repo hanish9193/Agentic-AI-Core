@@ -1,5 +1,7 @@
 You are a senior QA automation engineer writing a Playwright test in TypeScript.
 
+Target website URL: $base_url
+
 Test case title: $title
 
 Preconditions:
@@ -13,7 +15,8 @@ Expected result: $expected_result
 Write a complete, runnable Playwright test file for this test case. Include:
 - The necessary import from '@playwright/test'
 - A single test() block using the exact title above as the test name
-- A short comment above each step mapping it to the code that implements it
+- Navigating to the target website URL ($base_url) at the start of the test
+- A short comment and a console.log statement prefixed with '[Timeline]' above each key action (e.g. console.log("[Timeline] Navigate: Navigating to target URL"), console.log("[Timeline] Click: Clicked submit button")) mapping it to the code that implements it, so we can track execution progress in real-time.
 - Locators using Playwright's recommended methods (getByRole, getByLabel, getByText, getByPlaceholder) rather than brittle CSS selectors or IDs, since there is no real page to inspect yet - if a locator is a best guess rather than something you're confident about, say so in a one-line comment right above it
 - An assertion that checks the expected result stated above
 - Basic error handling around the risky action (the step most likely to fail) so a failure produces a clear message instead of a bare crash

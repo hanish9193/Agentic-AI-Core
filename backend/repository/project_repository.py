@@ -24,7 +24,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def create_project(self, name: str, description: str) -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general") -> Project:
         pass
 
     @abstractmethod
@@ -47,7 +47,10 @@ class ProjectRepository(ABC):
         description: str,
         priority: str,
         business_domain: str,
-        attachments: list[str] | None = None
+        attachments: list[str] | None = None,
+        original_filename: str | None = None,
+        requirement_id: str | None = None,
+        requirement_title: str | None = None
     ) -> Requirement:
         pass
 
@@ -68,6 +71,10 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
+    def clear_scenarios_for_requirement(self, requirement_id: UUID) -> None:
+        pass
+
+    @abstractmethod
     def get_test_cases(self, scenario_id: UUID) -> list[TestCase]:
         pass
 
@@ -81,6 +88,10 @@ class ProjectRepository(ABC):
 
     @abstractmethod
     def delete_test_case(self, test_case_id: UUID) -> bool:
+        pass
+
+    @abstractmethod
+    def delete_test_cases_for_scenario(self, scenario_id: UUID) -> None:
         pass
 
     @abstractmethod
@@ -100,7 +111,27 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
+    def get_execution_result(self, project_id: UUID, execution_id: UUID) -> ExecutionResult | None:
+        pass
+
+    @abstractmethod
     def save_execution_result(self, project_id: UUID, result: ExecutionResult) -> None:
+        pass
+
+    @abstractmethod
+    def get_scenario_notes(self, scenario_id: UUID) -> list[str]:
+        pass
+
+    @abstractmethod
+    def add_scenario_note(self, scenario_id: UUID, note: str) -> None:
+        pass
+
+    @abstractmethod
+    def get_test_case_notes(self, test_case_id: UUID) -> list[str]:
+        pass
+
+    @abstractmethod
+    def add_test_case_note(self, test_case_id: UUID, note: str) -> None:
         pass
 
 
@@ -118,7 +149,9 @@ class JSONProjectRepository(ProjectRepository):
                 "scenarios": {},
                 "test_cases": {},
                 "documents": {},
-                "execution_results": {}
+                "execution_results": {},
+                "scenario_notes": {},
+                "test_case_notes": {}
             })
 
     def _read_raw(self) -> dict:
@@ -132,7 +165,9 @@ class JSONProjectRepository(ProjectRepository):
                 "scenarios": {},
                 "test_cases": {},
                 "documents": {},
-                "execution_results": {}
+                "execution_results": {},
+                "scenario_notes": {},
+                "test_case_notes": {}
             }
 
     def _write_raw(self, data: dict) -> None:
@@ -150,12 +185,13 @@ class JSONProjectRepository(ProjectRepository):
                 return p
         return None
 
-    def create_project(self, name: str, description: str) -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general") -> Project:
         raw = self._read_raw()
         project = Project(
             id=uuid4(),
             name=name,
             description=description,
+            line_of_business=line_of_business,
             created_at=datetime.now(timezone.utc),
             requirements=[]
         )
@@ -248,7 +284,10 @@ class JSONProjectRepository(ProjectRepository):
         description: str,
         priority: str,
         business_domain: str,
-        attachments: list[str] | None = None
+        attachments: list[str] | None = None,
+        original_filename: str | None = None,
+        requirement_id: str | None = None,
+        requirement_title: str | None = None
     ) -> Requirement:
         raw = self._read_raw()
         projects = raw.setdefault("projects", [])
@@ -267,7 +306,10 @@ class JSONProjectRepository(ProjectRepository):
             title=title,
             description=description,
             source=RequirementSource.MANUAL,
-            uploaded_at=datetime.now(timezone.utc)
+            uploaded_at=datetime.now(timezone.utc),
+            original_filename=original_filename,
+            requirement_id=requirement_id,
+            requirement_title=requirement_title
         )
         
         req_dump = req.model_dump(mode="json")
@@ -321,6 +363,24 @@ class JSONProjectRepository(ProjectRepository):
             return True
         return False
 
+    def clear_scenarios_for_requirement(self, requirement_id: UUID) -> None:
+        raw = self._read_raw()
+        scenarios_raw = raw.setdefault("scenarios", {})
+        tcs_raw = raw.setdefault("test_cases", {})
+        
+        req_id_str = str(requirement_id)
+        # Find all scenario IDs linked to this requirement
+        scenario_ids_to_del = [s_id for s_id, s_data in scenarios_raw.items() if s_data.get("requirement_id") == req_id_str]
+        
+        for s_id in scenario_ids_to_del:
+            del scenarios_raw[s_id]
+            # Delete corresponding child test cases
+            tc_ids_to_del = [tc_id for tc_id, tc_data in tcs_raw.items() if tc_data.get("scenario_id") == s_id]
+            for tc_id in tc_ids_to_del:
+                del tcs_raw[tc_id]
+                
+        self._write_raw(raw)
+
     def get_test_cases(self, scenario_id: UUID) -> list[TestCase]:
         raw = self._read_raw()
         tcs_raw = raw.get("test_cases", {})
@@ -356,6 +416,15 @@ class JSONProjectRepository(ProjectRepository):
             self._write_raw(raw)
             return True
         return False
+
+    def delete_test_cases_for_scenario(self, scenario_id: UUID) -> None:
+        raw = self._read_raw()
+        tcs_raw = raw.setdefault("test_cases", {})
+        s_id_str = str(scenario_id)
+        to_delete = [tc_id for tc_id, tc_data in tcs_raw.items() if tc_data.get("scenario_id") == s_id_str]
+        for tc_id in to_delete:
+            del tcs_raw[tc_id]
+        self._write_raw(raw)
 
     def get_documents(self, project_id: UUID) -> list[Document]:
         raw = self._read_raw()
@@ -397,12 +466,44 @@ class JSONProjectRepository(ProjectRepository):
                 result.append(ExecutionResult.model_validate(cleaned))
         return result
 
+    def get_execution_result(self, project_id: UUID, execution_id: UUID) -> ExecutionResult | None:
+        raw = self._read_raw()
+        execs_raw = raw.get("execution_results", {})
+        ex_id_str = str(execution_id)
+        if ex_id_str in execs_raw and execs_raw[ex_id_str].get("project_id") == str(project_id):
+            cleaned = dict(execs_raw[ex_id_str])
+            cleaned.pop("project_id", None)
+            return ExecutionResult.model_validate(cleaned)
+        return None
+
     def save_execution_result(self, project_id: UUID, result: ExecutionResult) -> None:
         raw = self._read_raw()
         execs_raw = raw.setdefault("execution_results", {})
         dump = result.model_dump(mode="json")
         dump["project_id"] = str(project_id)
         execs_raw[str(result.id)] = dump
+        self._write_raw(raw)
+
+    def get_scenario_notes(self, scenario_id: UUID) -> list[str]:
+        raw = self._read_raw()
+        notes_raw = raw.get("scenario_notes", {})
+        return notes_raw.get(str(scenario_id), [])
+
+    def add_scenario_note(self, scenario_id: UUID, note: str) -> None:
+        raw = self._read_raw()
+        notes_raw = raw.setdefault("scenario_notes", {})
+        notes_raw.setdefault(str(scenario_id), []).append(note)
+        self._write_raw(raw)
+
+    def get_test_case_notes(self, test_case_id: UUID) -> list[str]:
+        raw = self._read_raw()
+        notes_raw = raw.get("test_case_notes", {})
+        return notes_raw.get(str(test_case_id), [])
+
+    def add_test_case_note(self, test_case_id: UUID, note: str) -> None:
+        raw = self._read_raw()
+        notes_raw = raw.setdefault("test_case_notes", {})
+        notes_raw.setdefault(str(test_case_id), []).append(note)
         self._write_raw(raw)
 
 

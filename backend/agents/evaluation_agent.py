@@ -164,17 +164,17 @@ class EvaluationAgent(BaseAgent):
         )
 
         expected_numbers = set(range(1, len(candidates) + 1))
-        returned_numbers = {e.test_case_number for e in batch.evaluations}
+        valid_evaluations = [e for e in batch.evaluations if e.test_case_number in expected_numbers]
+        returned_numbers = {e.test_case_number for e in valid_evaluations}
         if returned_numbers != expected_numbers:
             raise LLMServiceError(
                 f"{self.name}: LLM returned evaluations for {sorted(returned_numbers)}, "
                 f"expected exactly {sorted(expected_numbers)}"
             )
 
-        approved_count = 0
         review_count = 0
         irrelevant_count = 0
-        for evaluation in batch.evaluations:
+        for evaluation in valid_evaluations:
             test_case = candidates[evaluation.test_case_number - 1]
             confidence = (evaluation.relevance + evaluation.completeness) / 2
             test_case.confidence = confidence
@@ -183,15 +183,14 @@ class EvaluationAgent(BaseAgent):
             if evaluation.relevance < self.relevance_rejection_threshold:
                 test_case.evaluation_status = EvaluationStatus.REJECTED
                 irrelevant_count += 1
-            elif confidence >= self.confidence_threshold:
-                test_case.evaluation_status = EvaluationStatus.APPROVED
-                approved_count += 1
             else:
+                # EvaluationAgent never auto-approves. Non-duplicate, relevant test cases always need review.
                 test_case.evaluation_status = EvaluationStatus.NEEDS_REVIEW
                 review_count += 1
 
         state.add_log(
-            f"{self.name} finished: {approved_count} approved, {review_count} need review, "
+            f"{self.name} finished: {review_count} need review, "
             f"{duplicate_count + irrelevant_count} rejected ({duplicate_count} duplicates, {irrelevant_count} irrelevant)"
         )
         return state
+

@@ -8,6 +8,7 @@ from backend.models.test_case import TestCase
 from backend.agents.playwright_agent import PlaywrightAgent
 from backend.agents.execution_agent import ExecutionAgent
 from backend.models.execution_result import ExecutionResult
+from backend.models.requirement import Requirement
 from backend.repository.project_repository import get_project_repository
 
 
@@ -18,7 +19,7 @@ class WorkflowService:
         return get_project_repository()
 
 
-    def generate_scenarios(self, project_id: UUID, requirement_id: UUID, count: int) -> list[Scenario]:
+    def generate_scenarios(self, project_id: UUID, requirement_id: UUID, count: int, mode: str = "append") -> list[Scenario]:
         project = self.repo.get_project(project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
@@ -27,6 +28,9 @@ class WorkflowService:
         requirement = next((r for r in requirements if r.id == requirement_id), None)
         if not requirement:
             raise ValueError(f"Requirement {requirement_id} not found in project {project_id}")
+
+        if mode == "replace":
+            self.repo.clear_scenarios_for_requirement(requirement_id)
 
         # Instantiate ScenarioAgent with the requested custom scenario count
         agent = ScenarioAgent(scenario_count=count)
@@ -57,6 +61,10 @@ class WorkflowService:
         approved_scenarios = [s for s in scenarios if s.approved]
         if not approved_scenarios:
             raise ValueError("Cannot generate test cases: no approved scenarios exist for this requirement")
+
+        # Clear existing test cases for these approved scenarios first to prevent stale records
+        for s in approved_scenarios:
+            self.repo.delete_test_cases_for_scenario(s.id)
 
         # Setup state with approved scenarios
         state = WorkflowState(requirement=requirement, generated_scenarios=approved_scenarios)
@@ -90,14 +98,14 @@ class WorkflowService:
             raise ValueError(f"Requirement {scenario.requirement_id} not found for Scenario {scenario.id}")
         requirement = Requirement.model_validate(req_data)
 
-        human_approved = []
+        # Human approval gate: PlaywrightAgent must reject requests for unapproved test cases.
         if test_case.evaluation_status != "approved":
-            human_approved.append(test_case.id)
+            raise ValueError("Playwright script generation rejected: Test case is not approved")
 
         state = WorkflowState(
             requirement=requirement,
             generated_test_cases=[test_case],
-            human_approved_test_case_ids=human_approved
+            human_approved_test_case_ids=[test_case.id]
         )
         state.add_log("Generating Playwright script from service")
 
@@ -113,7 +121,7 @@ class WorkflowService:
 active_execution_events = {}
 
 
-def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID, test_case_id: UUID) -> None:
+def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID, test_case_id: UUID, execution_id: UUID = None) -> None:
     tc_id_str = str(test_case_id)
     events = []
     active_execution_events[tc_id_str] = events
@@ -158,14 +166,51 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
             human_approved_test_case_ids=human_approved
         )
         
-        agent = ExecutionAgent()
+        import re
+        from backend.services.playwright_runner import ARTIFACTS_ROOT
+        
+        known_screenshots = set()
+
+        def on_log_callback(log_line: str):
+            timeline_msg = None
+            timeline_match = re.search(r"\[Timeline\]\s*([^:\n]+)(?::\s*(.+))?", log_line, re.IGNORECASE)
+            if timeline_match:
+                title = timeline_match.group(1).strip()
+                desc = timeline_match.group(2).strip() if timeline_match.group(2) else ""
+                timeline_msg = f"{title}: {desc}" if desc else title
+            
+            # Scan for newly created screenshots
+            screenshot_file = None
+            try:
+                run_dir = ARTIFACTS_ROOT / tc_id_str
+                if run_dir.exists():
+                    pngs = list(run_dir.glob("*.png")) + list(run_dir.glob("**/*.png"))
+                    for png in pngs:
+                        png_str = str(png)
+                        if png_str not in known_screenshots:
+                            known_screenshots.add(png_str)
+                            screenshot_file = png_str
+                            break
+            except Exception:
+                pass
+
+            log_event("Running", timeline_msg, log_line, screenshot=screenshot_file)
+
+        agent = ExecutionAgent(on_log=on_log_callback)
         state = agent.run(state)
         
         result = state.execution_results[0]
+        if execution_id:
+            result.id = execution_id
         
         # Save updated test case status and execution result in repo
         workflow_service.repo.update_test_case(test_case)
         workflow_service.repo.save_execution_result(project_id, result)
+        
+        # Compile reports automatically via ReportService
+        from backend.services.report_service import ReportService
+        report_service = ReportService(workflow_service.repo)
+        report_service.compile_reports(project_id, result)
         
         log_event("Capturing Screenshots", "Capturing run artifacts", "Collecting trace.zip and screenshot logs...")
         log_event("Collecting Trace", "Finalizing execution report", "Exporting JUnit XML and JSON report format...")

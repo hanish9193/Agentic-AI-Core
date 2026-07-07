@@ -25,8 +25,8 @@ class ProjectService:
     def get_project(self, project_id: UUID) -> Project | None:
         return self.repo.get_project(project_id)
 
-    def create_project(self, name: str, description: str) -> Project:
-        return self.repo.create_project(name, description)
+    def create_project(self, name: str, description: str, line_of_business: str = "general") -> Project:
+        return self.repo.create_project(name, description, line_of_business)
 
     def get_requirements(self, project_id: UUID) -> list[Requirement]:
         return self.repo.get_requirements(project_id)
@@ -38,10 +38,14 @@ class ProjectService:
         description: str,
         priority: str,
         business_domain: str,
-        attachments: list[str] | None = None
+        attachments: list[str] | None = None,
+        original_filename: str | None = None,
+        requirement_id: str | None = None,
+        requirement_title: str | None = None
     ) -> Requirement:
         return self.repo.create_requirement(
-            project_id, title, description, priority, business_domain, attachments
+            project_id, title, description, priority, business_domain, attachments,
+            original_filename, requirement_id, requirement_title
         )
 
     def get_scenarios_for_requirement(self, requirement_id: UUID) -> list[Scenario]:
@@ -83,6 +87,8 @@ class ProjectService:
             scenario.priority = priority
         if approved is not None:
             scenario.approved = approved
+            if not approved:
+                self.repo.delete_test_cases_for_scenario(scenario_id)
 
         return self.repo.update_scenario(scenario)
 
@@ -162,12 +168,13 @@ class ProjectService:
     def delete_test_case(self, test_case_id: UUID) -> bool:
         return self.repo.delete_test_case(test_case_id)
 
-    def update_project(self, project_id: UUID, name: str, description: str) -> Project | None:
+    def update_project(self, project_id: UUID, name: str, description: str, line_of_business: str = "general") -> Project | None:
         proj = self.repo.get_project(project_id)
         if not proj:
             return None
         proj.name = name
         proj.description = description
+        proj.line_of_business = line_of_business
         return self.repo.update_project(proj)
 
     def delete_project(self, project_id: UUID) -> bool:
@@ -208,3 +215,28 @@ class ProjectService:
 
     def save_execution_result(self, project_id: UUID, result: ExecutionResult) -> None:
         self.repo.save_execution_result(project_id, result)
+
+    def get_scenario_notes(self, scenario_id: UUID) -> list[str]:
+        return self.repo.get_scenario_notes(scenario_id)
+
+    def add_scenario_note(self, scenario_id: UUID, note: str) -> None:
+        self.repo.add_scenario_note(scenario_id, note)
+
+    def get_test_case_notes(self, test_case_id: UUID) -> list[str]:
+        return self.repo.get_test_case_notes(test_case_id)
+
+    def add_test_case_note(self, test_case_id: UUID, note: str) -> None:
+        self.repo.add_test_case_note(test_case_id, note)
+
+    def update_test_case_script(self, test_case_id: UUID, script: str) -> TestCase | None:
+        raw_data = self.repo._read_raw()
+        tc_data = raw_data.get("test_cases", {}).get(str(test_case_id))
+        if not tc_data:
+            return None
+        tc = TestCase.model_validate(tc_data)
+        tc.playwright_script = script
+        return self.repo.update_test_case(tc)
+
+    def get_execution_result(self, project_id: UUID, execution_id: UUID) -> ExecutionResult | None:
+        return self.repo.get_execution_result(project_id, execution_id)
+

@@ -31,3 +31,7 @@ class TestCaseResponse(BaseModel):
     evaluation_reason: str | None
     playwright_script: str | None
     generated_at: datetime
+
+
+class ScriptUpdatePayload(BaseModel):
+    script: str

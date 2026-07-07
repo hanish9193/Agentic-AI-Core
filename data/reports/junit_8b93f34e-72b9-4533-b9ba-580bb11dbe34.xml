@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Test Suite" tests="1" failures="0" errors="1" time="0.0"><testcase name="TestCase_29431664-76ea-4652-a5c2-c7dffae371d2" classname="PlaywrightTests" time="0.0"><error message="Execution Error">Playwright did not produce report.json. Last output: 'C:\\Users\\Hanish\\AppData\\Local\\npm-cache\\_npx\\e41f203b7505f1fb\\node_modules\\playwright\\lib\\cli\\testActions.js',
+'C:\\Users\\Hanish\\AppData\\Local\\npm-cache\\_npx\\e41f203b7505f1fb\\node_modules\\playwright\\lib\\program.js',
+'C:\\Users\\Hanish\\AppData\\Local\\npm-cache\\_npx\\e41f203b7505f1fb\\node_modules\\playwright\\cli.js'
+]
+}</error></testcase></testsuite></testsuites>

@@ -39,10 +39,14 @@ shouldn't take down an entire batch's results.
 import json
 import os
 import platform
+import queue
 import re
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
+from typing import Callable
 
 from pydantic import BaseModel
 
@@ -118,7 +122,7 @@ class PlaywrightRunner:
     def __init__(self, timeout_seconds: int = 60):
         self.timeout_seconds = timeout_seconds
 
-    def run(self, script: str, run_id: str) -> PlaywrightRunResult:
+    def run(self, script: str, run_id: str, on_log: Callable[[str], None] | None = None) -> PlaywrightRunResult:
         npx = shutil.which("npx")
         if npx is None:
             raise PlaywrightRunnerError(
@@ -130,6 +134,13 @@ class PlaywrightRunner:
         run_dir = ARTIFACTS_ROOT / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 
+        report_path = run_dir / "report.json"
+        if report_path.exists():
+            try:
+                report_path.unlink()
+            except OSError:
+                pass
+
         (run_dir / "test.spec.ts").write_text(script)
         config_path = run_dir / "playwright.config.ts"
         config_path.write_text(
@@ -137,10 +148,8 @@ class PlaywrightRunner:
         )
 
         hard_timeout = self.timeout_seconds + 15
-        args = [npx, "playwright", "test", "--config", str(config_path), "--reporter=json", "--trace=on"]
-        popen_kwargs = {"cwd": run_dir, "stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "text": True}
-        # Put the child in its own process group/job so a timeout kill
-        # can reach every descendant, not just the direct child.
+        args = [npx, "playwright", "test", "--config", str(config_path), "--reporter=line,json=report.json", "--trace=on"]
+        popen_kwargs = {"cwd": run_dir, "stdout": subprocess.PIPE, "stderr": subprocess.STDOUT, "text": True}
         if _IS_WINDOWS:
             popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
@@ -148,34 +157,67 @@ class PlaywrightRunner:
 
         process = subprocess.Popen(args, **popen_kwargs)
 
-        try:
-            stdout, stderr = process.communicate(timeout=hard_timeout)
-        except subprocess.TimeoutExpired:
-            _kill_process_tree(process.pid)
+        q = queue.Queue()
+        def enqueue_output(out, q):
+            for line in iter(out.readline, ''):
+                q.put(line)
+            out.close()
+
+        t = threading.Thread(target=enqueue_output, args=(process.stdout, q))
+        t.daemon = True
+        t.start()
+
+        start_time = time.time()
+        stdout_lines = []
+
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed > hard_timeout:
+                _kill_process_tree(process.pid)
+                return PlaywrightRunResult(
+                    status="error",
+                    duration_seconds=float(hard_timeout),
+                    error_message=f"Playwright did not finish within {hard_timeout}s and was force-killed.",
+                )
+
             try:
-                # Bounded drain, NOT another indefinite wait - if this
-                # also times out, give up rather than repeat the bug.
-                stdout, stderr = process.communicate(timeout=10)
-            except subprocess.TimeoutExpired:
-                stdout, stderr = "", ""
+                line = q.get_nowait()
+            except queue.Empty:
+                if process.poll() is not None:
+                    break
+                time.sleep(0.05)
+                continue
+
+            line_str = line.strip()
+            if line_str:
+                stdout_lines.append(line_str)
+                if on_log:
+                    on_log(line_str)
+
+        while not q.empty():
+            try:
+                line = q.get_nowait()
+                line_str = line.strip()
+                if line_str:
+                    stdout_lines.append(line_str)
+                    if on_log:
+                        on_log(line_str)
+            except queue.Empty:
+                break
+
+        if not report_path.exists():
+            err_msg = "\n".join(stdout_lines[-5:]) if stdout_lines else "No output"
             return PlaywrightRunResult(
                 status="error",
-                duration_seconds=float(hard_timeout),
-                error_message=f"Playwright did not finish within {hard_timeout}s and was force-killed.",
+                error_message=f"Playwright did not produce report.json. Last output: {err_msg}",
             )
-        except Exception as exc:  # noqa: BLE001 - deliberately broad, see module docstring
-            _kill_process_tree(process.pid)
-            return PlaywrightRunResult(status="error", error_message=f"Unexpected runner failure: {exc}")
 
         try:
-            report = json.loads(stdout)
-        except json.JSONDecodeError as exc:
+            report = json.loads(report_path.read_text())
+        except Exception as exc:
             return PlaywrightRunResult(
                 status="error",
-                error_message=(
-                    f"Playwright output wasn't valid JSON: {exc}. "
-                    f"stdout: {stdout[:300]!r} stderr: {stderr[:300]!r}"
-                ),
+                error_message=f"Failed to read report.json: {exc}",
             )
 
         return self._parse_report(report)

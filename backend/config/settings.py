@@ -79,6 +79,14 @@ class EvaluationConfig(BaseModel):
     relevance_rejection_threshold: float = 0.3
 
 
+class PlaywrightConfig(BaseModel):
+    base_url: str = "https://sampleapp.tricentis.com/101/app.php"
+    browser: str = "chromium"
+    headless: bool = True
+    timeout: int = 60
+    retries: int = 0
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__", extra="ignore")
 
@@ -92,6 +100,7 @@ class Settings(BaseSettings):
     rag: RAGConfig = RAGConfig()
     generation: GenerationConfig = GenerationConfig()
     evaluation: EvaluationConfig = EvaluationConfig()
+    playwright: PlaywrightConfig = PlaywrightConfig()
 
     @classmethod
     def from_yaml(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Settings":

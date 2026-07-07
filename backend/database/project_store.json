@@ -6,7 +6,9 @@
       "description": "Desc",
       "created_at": "2026-07-07T08:09:32.829394Z",
       "requirements": [
-        "be20626a-1c9e-46f8-84f2-2926ead2fc07"
+        "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+        "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+        "232bfcfb-44a3-40a0-a0d8-baf916d1a315"
       ]
     },
     {
@@ -40,6 +42,26 @@
       "description": "",
       "created_at": "2026-07-07T08:32:28.912346Z",
       "requirements": []
+    },
+    {
+      "id": "96df0910-1af6-4bb2-b5c3-04f74bf399e9",
+      "name": "Accenture QA Workspace",
+      "description": "",
+      "line_of_business": "Retail",
+      "created_at": "2026-07-07T08:47:57.954043Z",
+      "requirements": [
+        "4ea324d0-b753-4a7f-b6bb-143a561b8105"
+      ]
+    },
+    {
+      "id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6",
+      "name": "BANK",
+      "description": "",
+      "line_of_business": "general",
+      "created_at": "2026-07-07T10:31:24.673016Z",
+      "requirements": [
+        "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1"
+      ]
     }
   ],
   "requirements": {
@@ -72,6 +94,52 @@
       "priority": "medium",
       "business_domain": "general",
       "attachments": []
+    },
+    "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336": {
+      "id": "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+      "title": "Imported PDF: wdsxz.pdf",
+      "description": "Software Requirement Speci\ufb01cation \nBanking Login Module \n \nModule \nAuthentication \n \nBusiness Priority \nHigh \n \nFunctional Requirements \n \nREQ-001 \nThe application shall allow a registered customer to log in using a valid username and \npassword. \n \nREQ-002 \nIf invalid credentials are entered, an appropriate error message shall be displayed. \n \nREQ-003 \nThe application shall lock the account after \ufb01ve consecutive failed login attempts. \n \nREQ-004 \nUsers shall be able to reset forgotten passwords using registered email. \n \nREQ-005 \nThe Remember Me option shall preserve login for 30 days. \n \nREQ-006 \nSession shall expire after 15 minutes of inactivity. \n \nREQ-007 \nPasswords shall be masked. \n \nREQ-008 \nUsername is mandatory. \n \nREQ-009 \nPassword is mandatory. \n \nREQ-010 \nSuccessful login redirects user to Dashboard. \n",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T09:02:31.496496Z",
+      "priority": "medium",
+      "business_domain": "general",
+      "attachments": [
+        "wdsxz.pdf"
+      ]
+    },
+    "4ea324d0-b753-4a7f-b6bb-143a561b8105": {
+      "id": "4ea324d0-b753-4a7f-b6bb-143a561b8105",
+      "title": "REQ-1",
+      "description": "This is a test requirement",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T09:24:50.042201Z",
+      "priority": "medium",
+      "business_domain": "Test",
+      "attachments": []
+    },
+    "232bfcfb-44a3-40a0-a0d8-baf916d1a315": {
+      "id": "232bfcfb-44a3-40a0-a0d8-baf916d1a315",
+      "title": "REQ-001: Banking Login Module Requirements \nProject: Banking Portal Q...",
+      "description": "Banking Login Module Requirements \nProject: Banking Portal QA Automation \nModule: Authentication \nTarget Application: https://sampleapp.tricentis.com/101/app.php \n \nRequirement REQ-001 \nTitle \nUser Login \nPriority \nHigh \nDescription \nThe system shall allow registered users to log into the banking portal using a valid username \nand password. \nAcceptance Criteria: \n\uf0b7 \nUsername is mandatory.  \n\uf0b7 \nPassword is mandatory.  \n\uf0b7 \nValid credentials navigate to Dashboard.  \n\uf0b7 \nInvalid credentials display an error.  \n\uf0b7 \nPassword is masked.  \n\uf0b7 \nLogin activity is recorded.  \n \nRequirement REQ-002 \nTitle \nAccount Lockout \nPriority \nHigh \nDescription \nThe application shall lock a user account after \ufb01ve consecutive failed login attempts. \nAcceptance Criteria \n\uf0b7 \nCounter resets after successful login.  \n\uf0b7 \nLockout message displayed.  \n\uf0b7 \nLocked users cannot authenticate.  \n\uf0b7 \nAdministrator can unlock account.  \n \nRequirement REQ-003 \nTitle \nForgot Password \nPriority \nMedium \nDescription \nUsers shall reset passwords through registered email veri\ufb01cation. \nAcceptance Criteria \n\uf0b7 \nRegistered email required.  \n\uf0b7 \nOTP expires after 5 minutes.  \n\uf0b7 \nPassword policy enforced.  \n\uf0b7 \nSuccess con\ufb01rmation displayed.  \n \nRequirement REQ-004 \nTitle \nRemember Me \nPriority \nLow \nDescription \nUsers may remain logged in using Remember Me. \nAcceptance Criteria \n\uf0b7 \nSession persists for 30 days.  \n\uf0b7 \nUser may logout anytime.  \n\uf0b7 \nCookies are encrypted.  \n\uf0b7 \nRemember Me can be disabled.  \n \nRequirement REQ-005 \nTitle \nSession Timeout \nPriority \nMedium \nDescription \nInactive sessions shall automatically expire after 15 minutes. \nAcceptance Criteria \n\uf0b7 \nWarning appears 60 seconds before timeout.  \n\uf0b7 \nSession expires automatically.  \n\uf0b7 \nRedirect to Login page.  \n\uf0b7 \nUnsaved work warning displayed.",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T10:30:55.371401Z",
+      "priority": "high",
+      "business_domain": "Banking",
+      "attachments": [
+        "bankk.pdf"
+      ]
+    },
+    "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1": {
+      "id": "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+      "title": "REQ-001: Banking Login Module Requirements \nProject: Banking Portal Q...",
+      "description": "Banking Login Module Requirements \nProject: Banking Portal QA Automation \nModule: Authentication \nTarget Application: https://sampleapp.tricentis.com/101/app.php \n \nRequirement REQ-001 \nTitle \nUser Login \nPriority \nHigh \nDescription \nThe system shall allow registered users to log into the banking portal using a valid username \nand password. \nAcceptance Criteria: \n\uf0b7 \nUsername is mandatory.  \n\uf0b7 \nPassword is mandatory.  \n\uf0b7 \nValid credentials navigate to Dashboard.  \n\uf0b7 \nInvalid credentials display an error.  \n\uf0b7 \nPassword is masked.  \n\uf0b7 \nLogin activity is recorded.  \n \nRequirement REQ-002 \nTitle \nAccount Lockout \nPriority \nHigh \nDescription \nThe application shall lock a user account after \ufb01ve consecutive failed login attempts. \nAcceptance Criteria \n\uf0b7 \nCounter resets after successful login.  \n\uf0b7 \nLockout message displayed.  \n\uf0b7 \nLocked users cannot authenticate.  \n\uf0b7 \nAdministrator can unlock account.  \n \nRequirement REQ-003 \nTitle \nForgot Password \nPriority \nMedium \nDescription \nUsers shall reset passwords through registered email veri\ufb01cation. \nAcceptance Criteria \n\uf0b7 \nRegistered email required.  \n\uf0b7 \nOTP expires after 5 minutes.  \n\uf0b7 \nPassword policy enforced.  \n\uf0b7 \nSuccess con\ufb01rmation displayed.  \n \nRequirement REQ-004 \nTitle \nRemember Me \nPriority \nLow \nDescription \nUsers may remain logged in using Remember Me. \nAcceptance Criteria \n\uf0b7 \nSession persists for 30 days.  \n\uf0b7 \nUser may logout anytime.  \n\uf0b7 \nCookies are encrypted.  \n\uf0b7 \nRemember Me can be disabled.  \n \nRequirement REQ-005 \nTitle \nSession Timeout \nPriority \nMedium \nDescription \nInactive sessions shall automatically expire after 15 minutes. \nAcceptance Criteria \n\uf0b7 \nWarning appears 60 seconds before timeout.  \n\uf0b7 \nSession expires automatically.  \n\uf0b7 \nRedirect to Login page.  \n\uf0b7 \nUnsaved work warning displayed.",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T10:31:30.667755Z",
+      "priority": "high",
+      "business_domain": "Banking",
+      "attachments": [
+        "bankk.pdf"
+      ]
     }
   },
   "scenarios": {
@@ -82,7 +150,7 @@
       "description": "User successfully deploys ASD with valid inputs and receives confirmation.",
       "priority": "high",
       "confidence": 0.0,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-07-07T08:28:04.850056Z"
     },
     "f57c45aa-bb23-4356-af4c-07631ccc6739": {
@@ -124,7 +192,282 @@
       "confidence": 0.0,
       "approved": false,
       "generated_at": "2026-07-07T08:28:04.850081Z"
+    },
+    "2463fe31-8357-4b5f-b784-b679a961d6ce": {
+      "id": "2463fe31-8357-4b5f-b784-b679a961d6ce",
+      "requirement_id": "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+      "scenario_name": "Valid Credentials Login",
+      "description": "Test logging in with valid username and password, verifying successful redirect to Dashboard.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": true,
+      "generated_at": "2026-07-07T09:28:20.787565Z"
+    },
+    "436e9abc-2a92-4e1d-b907-ab64045b7ab5": {
+      "id": "436e9abc-2a92-4e1d-b907-ab64045b7ab5",
+      "requirement_id": "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+      "scenario_name": "Invalid Username",
+      "description": "Attempt login with invalid username, verify error message is displayed.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T09:28:20.787594Z"
+    },
+    "511d59ab-31d1-4b6a-b125-b05f1aa20d26": {
+      "id": "511d59ab-31d1-4b6a-b125-b05f1aa20d26",
+      "requirement_id": "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+      "scenario_name": "Forgot Password Flow",
+      "description": "Test resetting forgotten password via registered email, verify new password can be used for login.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T09:28:20.787601Z"
+    },
+    "1de6a178-b699-4641-8cc6-410799544f93": {
+      "id": "1de6a178-b699-4641-8cc6-410799544f93",
+      "requirement_id": "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+      "scenario_name": "Consecutive Failed Login Attempts Lockout",
+      "description": "Attempt 5 consecutive failed logins, verify account is locked and error message is displayed.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T09:28:20.787607Z"
+    },
+    "0ca38dd5-5d2c-49de-a0cc-21b3bdb461df": {
+      "id": "0ca38dd5-5d2c-49de-a0cc-21b3bdb461df",
+      "requirement_id": "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
+      "scenario_name": "Remember Me Functionality",
+      "description": "Log in with valid credentials, enable 'Remember Me', test if login remains successful after 30 days without re-login.",
+      "priority": "low",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T09:28:20.787613Z"
+    },
+    "71c1407c-98c1-4108-8999-ff4e4343f903": {
+      "id": "71c1407c-98c1-4108-8999-ff4e4343f903",
+      "requirement_id": "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+      "scenario_name": "Valid User Login",
+      "description": "Test successful login with valid username and password.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T10:50:42.417291Z"
+    },
+    "08cf1f56-8521-4354-a187-c703c97bc756": {
+      "id": "08cf1f56-8521-4354-a187-c703c97bc756",
+      "requirement_id": "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+      "scenario_name": "Invalid Username and Password",
+      "description": "Verify error display for invalid credentials.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": true,
+      "generated_at": "2026-07-07T10:50:42.417314Z"
+    },
+    "24c164fd-351f-42a6-8960-7270c371cf2d": {
+      "id": "24c164fd-351f-42a6-8960-7270c371cf2d",
+      "requirement_id": "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+      "scenario_name": "Forgot Password - Registered Email Required",
+      "description": "Test forgot password flow with registered email only.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": true,
+      "generated_at": "2026-07-07T10:50:42.417321Z"
+    },
+    "0741ee14-5a3d-4881-8855-902b04fdc659": {
+      "id": "0741ee14-5a3d-4881-8855-902b04fdc659",
+      "requirement_id": "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+      "scenario_name": "Remember Me Disabled and No Cookies",
+      "description": "Verify that remember me feature is disabled and no cookies are set.",
+      "priority": "low",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T10:50:42.417328Z"
+    },
+    "a3ffa7fe-333b-4fb6-a609-dcd2d5ea795c": {
+      "id": "a3ffa7fe-333b-4fb6-a609-dcd2d5ea795c",
+      "requirement_id": "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+      "scenario_name": "Session Timeout - Inactive for 15 Minutes",
+      "description": "Test automatic session expiration after 15 minutes of inactivity.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T10:50:42.417335Z"
     }
   },
-  "test_cases": {}
+  "test_cases": {
+    "2595ad5a-8b02-41fd-846f-5ee7376b1513": {
+      "id": "2595ad5a-8b02-41fd-846f-5ee7376b1513",
+      "scenario_id": "2463fe31-8357-4b5f-b784-b679a961d6ce",
+      "title": "Valid Credentials Login to Dashboard",
+      "preconditions": [
+        "User account is registered",
+        "Username and password are correct"
+      ],
+      "steps": [
+        "Navigate to the login page of the Banking Login Module",
+        "Enter valid username and password",
+        "Click on the login button"
+      ],
+      "expected_result": "The application successfully redirects the user to the Dashboard with no errors displayed.",
+      "priority": "high",
+      "status": "pending",
+      "confidence": 0.8500000000000001,
+      "evaluation_status": "approved",
+      "evaluation_reason": "clear steps but doesn't test password masking or account locking",
+      "playwright_script": null,
+      "generated_at": "2026-07-07T09:31:52.731208Z"
+    },
+    "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5": {
+      "id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
+      "scenario_id": "08cf1f56-8521-4354-a187-c703c97bc756",
+      "title": "Invalid Username and Password",
+      "preconditions": [
+        "Login to the Banking Portal using a guest account",
+        "Invalid username and password credentials"
+      ],
+      "steps": [
+        "Enter an invalid username in the login form",
+        "Enter an invalid password in the password field",
+        "Click on the Login button"
+      ],
+      "expected_result": "The system displays an error message indicating invalid credentials.",
+      "priority": "high",
+      "status": "blocked",
+      "confidence": 0.8500000000000001,
+      "evaluation_status": "approved",
+      "evaluation_reason": "tests invalid credentials but doesn't check for error message specifics or account lockout behavior",
+      "playwright_script": "import { test, expect } from '@playwright/test';\n\ntest('Invalid Username and Password', async ({ page }) => {\n  console.log('[Timeline] Navigate: Navigating to target URL');\n  await page.goto('https://sampleapp.tricentis.com/101/app.php');\n\n  // Login button\n  const loginButton = page.getByRole('button', { name: 'Login' });\n  console.log('[Timeline] Click: Clicked login button');\n  await loginButton.click();\n\n  // Username field (best guess)\n  const usernameField = page.getByPlaceholder('User Name');\n  console.log('[Timeline] Fill: Entering invalid username');\n  await usernameField.fill('invalid-username');\n\n  // Password field\n  const passwordField = page.getByPlaceholder('Password');\n  console.log('[Timeline] Fill: Entering invalid password');\n  await passwordField.fill('invalid-password');\n\n  // Submit button\n  const submitButton = page.getByRole('button', { name: 'Login' });\n  console.log('[Timeline] Click: Clicked submit button');\n  try {\n    await submitButton.click();\n    const errorMessage = page.locator('text=Invalid User ID or Password').first();\n    expect(await errorMessage.innerText()).toBe('Invalid User ID or Password');\n  } catch (error) {\n    console.error(error);\n    throw error;\n  }\n});",
+      "generated_at": "2026-07-07T10:51:46.076144Z"
+    },
+    "29431664-76ea-4652-a5c2-c7dffae371d2": {
+      "id": "29431664-76ea-4652-a5c2-c7dffae371d2",
+      "scenario_id": "24c164fd-351f-42a6-8960-7270c371cf2d",
+      "title": "Forgot Password - Registered Email Required",
+      "preconditions": [
+        "User has a registered email address associated with their account"
+      ],
+      "steps": [
+        "Click on the Forgot Password link in the login form",
+        "Enter a valid registered email address in the email field",
+        "Submit the forgot password request"
+      ],
+      "expected_result": "The system sends an OTP to the registered email address and displays a success message.",
+      "priority": "medium",
+      "status": "pending",
+      "confidence": 0.85,
+      "evaluation_status": "approved",
+      "evaluation_reason": "clear steps but expected result is too vague regarding password reset process",
+      "playwright_script": "import { test, expect } from '@playwright/test';\n\ntest('Forgot Password - Registered Email Required', async ({ page }) => {\n  console.log('[Timeline] Navigate: Navigating to target URL');\n  await page.goto('https://sampleapp.tricentis.com/101/app.php');\n\n  console.log('[Timeline] Click: Clicking Forgot Password link');\n  const forgotPasswordLink = page.getByRole('link', { name: 'Forgot your password?' });\n  await forgotPasswordLink.click();\n\n  console.log('[Timeline] Enter Email: Entering registered email address in the email field');\n  const emailField = page.getByPlaceholder('Email Address');\n  await emailField.type('test@sampleapp.com');\n\n  console.log('[Timeline] Submit: Submitting the forgot password request');\n  const submitButton = page.getByRole('button', { name: 'Submit' });\n  try {\n    await submitButton.click();\n    await page.waitForLoadState('networkidle2');\n    expect(await page.getByText('An email with a verification link has been sent to your email address')).toBeVisible();\n  } catch (error) {\n    console.error(error);\n    throw new Error('Forgot password request failed');\n  }\n});\n// comment",
+      "generated_at": "2026-07-07T10:51:46.076159Z"
+    }
+  },
+  "execution_results": {
+    "86133886-ea18-4b5a-8f3c-8b070d139138": {
+      "id": "86133886-ea18-4b5a-8f3c-8b070d139138",
+      "test_case_id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-07T11:37:09.027985Z",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6"
+    },
+    "5e431f91-9ac7-4385-9813-ab98d47460e2": {
+      "id": "5e431f91-9ac7-4385-9813-ab98d47460e2",
+      "test_case_id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-07T11:40:33.143890Z",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6"
+    },
+    "2d8294cf-a0cf-470d-abcf-f3c329433408": {
+      "id": "2d8294cf-a0cf-470d-abcf-f3c329433408",
+      "test_case_id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-07T11:44:03.974147Z",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6"
+    },
+    "7cff35d1-5ebc-4096-94d0-25f49fccbead": {
+      "id": "7cff35d1-5ebc-4096-94d0-25f49fccbead",
+      "test_case_id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-07T11:53:02.999765Z",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6"
+    },
+    "a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a": {
+      "id": "a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a",
+      "test_case_id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-07T12:13:33.013198Z",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6"
+    }
+  },
+  "reports": {
+    "a5dec3e7-aa91-467d-952d-bb16af72f63c": {
+      "id": "a5dec3e7-aa91-467d-952d-bb16af72f63c",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6",
+      "execution_id": "86133886-ea18-4b5a-8f3c-8b070d139138",
+      "junit_path": "data\\reports\\junit_86133886-ea18-4b5a-8f3c-8b070d139138.xml",
+      "html_path": "data\\reports\\report_86133886-ea18-4b5a-8f3c-8b070d139138.html",
+      "pdf_path": "data\\reports\\report_86133886-ea18-4b5a-8f3c-8b070d139138.pdf",
+      "created_at": "2026-07-07T11:37:09.416688+00:00"
+    },
+    "a26b70d4-bf77-46f7-9a9f-d43bcf6046d0": {
+      "id": "a26b70d4-bf77-46f7-9a9f-d43bcf6046d0",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6",
+      "execution_id": "5e431f91-9ac7-4385-9813-ab98d47460e2",
+      "junit_path": "data\\reports\\junit_5e431f91-9ac7-4385-9813-ab98d47460e2.xml",
+      "html_path": "data\\reports\\report_5e431f91-9ac7-4385-9813-ab98d47460e2.html",
+      "pdf_path": "data\\reports\\report_5e431f91-9ac7-4385-9813-ab98d47460e2.pdf",
+      "created_at": "2026-07-07T11:40:33.271362+00:00"
+    },
+    "3acffc32-647e-4376-ac6f-6580a10c4453": {
+      "id": "3acffc32-647e-4376-ac6f-6580a10c4453",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6",
+      "execution_id": "2d8294cf-a0cf-470d-abcf-f3c329433408",
+      "junit_path": "data\\reports\\junit_2d8294cf-a0cf-470d-abcf-f3c329433408.xml",
+      "html_path": "data\\reports\\report_2d8294cf-a0cf-470d-abcf-f3c329433408.html",
+      "pdf_path": "data\\reports\\report_2d8294cf-a0cf-470d-abcf-f3c329433408.pdf",
+      "created_at": "2026-07-07T11:44:04.085135+00:00"
+    },
+    "0395fdcb-4ffd-40c5-98b5-b29314c31cf8": {
+      "id": "0395fdcb-4ffd-40c5-98b5-b29314c31cf8",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6",
+      "execution_id": "7cff35d1-5ebc-4096-94d0-25f49fccbead",
+      "junit_path": "data\\reports\\junit_7cff35d1-5ebc-4096-94d0-25f49fccbead.xml",
+      "html_path": "data\\reports\\report_7cff35d1-5ebc-4096-94d0-25f49fccbead.html",
+      "pdf_path": "data\\reports\\report_7cff35d1-5ebc-4096-94d0-25f49fccbead.pdf",
+      "created_at": "2026-07-07T11:53:03.077418+00:00"
+    },
+    "8f65919a-c250-47ac-8b95-99bcdd74007e": {
+      "id": "8f65919a-c250-47ac-8b95-99bcdd74007e",
+      "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6",
+      "execution_id": "a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a",
+      "junit_path": "data\\reports\\junit_a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a.xml",
+      "html_path": "data\\reports\\report_a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a.html",
+      "pdf_path": "data\\reports\\report_a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a.pdf",
+      "created_at": "2026-07-07T12:13:33.150515+00:00"
+    }
+  }
 }

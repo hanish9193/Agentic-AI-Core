@@ -6,11 +6,14 @@ from pydantic import BaseModel
 class ProjectCreate(BaseModel):
     name: str
     description: str = ""
+    line_of_business: str = "general"
 
 
 class ProjectResponse(BaseModel):
     id: UUID
     name: str
     description: str
+    line_of_business: str
     created_at: datetime
     requirements: list[UUID]
+

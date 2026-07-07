@@ -20,3 +20,6 @@ class RequirementResponse(BaseModel):
     priority: str
     business_domain: str
     attachments: list[str]
+    original_filename: str | None = None
+    requirement_id: str | None = None
+    requirement_title: str | None = None
