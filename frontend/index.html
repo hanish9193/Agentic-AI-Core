@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Automation Platform</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar" id="sidebar-container" style="display: none;">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px; color: var(--accent-primary);">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+        </svg>
+        <span>Platform</span>.ai
+      </div>
+    </div>
+    
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-view="dashboard">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
+        </svg>
+        Dashboard
+      </div>
+      
+      <div class="nav-item" data-view="requirements">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Requirements
+      </div>
+
+      <div class="nav-item" data-view="scenarios">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        Scenarios
+      </div>
+
+      <div class="nav-item" data-view="testcases">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+        Test Cases
+      </div>
+
+      <div class="nav-item" data-view="executions">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Executions History
+      </div>
+
+      <div class="nav-item" data-view="reports">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Reports
+      </div>
+
+      <div class="nav-item" data-view="knowledgebase">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+        </svg>
+        Knowledge Base
+      </div>
+
+      <div class="nav-item" data-view="langsmith">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </svg>
+        LangSmith
+      </div>
+
+      <div class="nav-item" data-view="settings" style="margin-top: auto;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Settings
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Layout -->
+  <main class="main-content">
+    
+    <!-- Top Navbar -->
+    <header class="top-nav" id="project-select-wrapper" style="display: none;">
+      <div class="project-selector-container">
+        <select id="project-select" class="project-dropdown">
+          <option value="" disabled selected>▼ Select Project</option>
+        </select>
+      </div>
+      
+      <div class="top-nav-actions">
+        <button class="btn btn-primary" id="btn-create-requirement">+ Create Requirement</button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="workspace" id="workspace-container">
+      
+      <!-- VIEW: Dashboard -->
+      <div class="view-panel active" id="dashboard-view">
+        <div class="page-header">
+          <h1>Dashboard</h1>
+        </div>
+        <div class="dashboard-grid" id="dashboard-metrics-grid">
+          <!-- Metrics cards loaded dynamically -->
+        </div>
+        
+        <div class="sections-grid">
+          <div class="section-card">
+            <h2>Workflow Progress Timeline</h2>
+            <div class="timeline">
+              <div class="timeline-item completed">
+                <div class="timeline-icon">✓</div>
+                <div class="timeline-content">
+                  <div class="timeline-title">Requirement Setup</div>
+                  <div class="timeline-desc">Input requirements and specify priority/business domain.</div>
+                </div>
+              </div>
+              <div class="timeline-item active">
+                <div class="timeline-icon">➔</div>
+                <div class="timeline-content">
+                  <div class="timeline-title">Scenario Drafting</div>
+                  <div class="timeline-desc">Orchestrate ScenarioAgent to suggest customized high-level test coverages.</div>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-icon">3</div>
+                <div class="timeline-content">
+                  <div class="timeline-title">Human Verification & Approvals</div>
+                  <div class="timeline-desc">Edit, approve, and finalize test scenarios before writing detail paths.</div>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-icon">4</div>
+                <div class="timeline-content">
+                  <div class="timeline-title">Test Case Generation & Automated Scoring</div>
+                  <div class="timeline-desc">Execute TestCaseAgent and EvaluationAgent for approved scenarios only.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="section-card">
+            <h2>Recent Activity Logs</h2>
+            <div class="activities-list" id="recent-activity-list">
+              <!-- Logs populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: Requirements -->
+      <div class="view-panel" id="requirements-view">
+        <div class="page-header">
+          <h1>Requirements</h1>
+        </div>
+        <p class="page-description">Specify requirements below. Scenarios are drafted automatically using requirement scopes.</p>
+        <div id="requirements-list-container">
+          <!-- Table loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- VIEW: Scenarios -->
+      <div class="view-panel" id="scenarios-view">
+        <div class="page-header">
+          <h1>Scenario Generation</h1>
+          <div id="scenarios-actions-toolbar" class="gap-12" style="display: none;">
+            <button class="btn btn-secondary" id="btn-bulk-approve">Bulk Approve</button>
+            <button class="btn btn-secondary" id="btn-bulk-reject">Bulk Reject</button>
+            <input type="number" id="sc-generate-count" class="form-control" value="5" min="1" max="50" style="width: 80px;" title="Scenario count" />
+            <button class="btn btn-primary" id="btn-generate-scenarios">Generate Scenarios</button>
+          </div>
+        </div>
+        
+        <div class="form-group" style="max-width: 400px; margin-bottom: 24px;">
+          <label for="scenario-req-select">Select Active Requirement</label>
+          <select id="scenario-req-select" class="form-control">
+            <option value="" disabled selected>▼ Choose Requirement</option>
+          </select>
+        </div>
+
+        <div id="scenarios-list-container">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- VIEW: Test Cases -->
+      <div class="view-panel" id="testcases-view">
+        <div class="page-header">
+          <h1>Test Cases Workspace</h1>
+          <div id="testcases-actions-toolbar" class="gap-12" style="display: none;">
+            <button class="btn btn-secondary" id="btn-bulk-tc-approve">Bulk Approve</button>
+            <button class="btn btn-secondary" id="btn-bulk-tc-reject">Bulk Reject</button>
+            <span id="tc-generation-warning" style="color: var(--color-warning); font-size: 0.8rem; align-self: center; display: none;"></span>
+            <button class="btn btn-primary" id="btn-generate-testcases">Generate & Evaluate Test Cases</button>
+          </div>
+        </div>
+
+        <div class="form-group" style="max-width: 400px; margin-bottom: 24px;">
+          <label for="tc-req-select">Select Active Requirement</label>
+          <select id="tc-req-select" class="form-control">
+            <option value="" disabled selected>▼ Choose Requirement</option>
+          </select>
+        </div>
+
+        <div id="testcases-list-container">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- VIEW: Executions History -->
+      <div class="view-panel" id="executions-view">
+        <div class="page-header">
+          <h1>Executions History</h1>
+        </div>
+        <p class="page-description">Chronological log of Playwright automation executions, statuses, timing parameters, and test replays.</p>
+        <div id="executions-list-container">
+          <!-- Table loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- VIEW: Reports -->
+      <div class="view-panel" id="reports-view">
+        <div class="page-header">
+          <h1>Execution Reports</h1>
+        </div>
+        <p class="page-description">Aggregated status indicators and JUnit XML document logs generated automatically post execution run.</p>
+        <div id="reports-workspace-container">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- VIEW: Knowledge Base -->
+      <div class="view-panel" id="knowledgebase-view">
+        <div class="page-header">
+          <h1>Knowledge Base</h1>
+        </div>
+        <p class="page-description">RAG parsing pipeline files database. Upload files to process context references.</p>
+        
+        <div class="form-group" style="margin-bottom: 32px;">
+          <label>Drag & Drop Document Upload</label>
+          <div id="kb-dropzone" style="border: 2px dashed var(--border-color); padding: 40px; border-radius: var(--border-radius-lg); text-align: center; color: var(--text-muted); cursor: pointer; transition: all var(--transition-fast);">
+            Drag and drop target files here to parse (PDF, DOCX, XLSX, CSV, TXT)
+            <div style="margin-top: 8px; font-size: 0.75rem; background-color: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid var(--border-color);">RAG Extraction Active</div>
+          </div>
+        </div>
+
+        <div id="documents-list-container">
+          <!-- Document metadata table -->
+        </div>
+      </div>
+
+      <!-- VIEW: LangSmith -->
+      <div class="view-panel" id="langsmith-view">
+        <div class="page-header">
+          <h1>LangSmith Traces</h1>
+        </div>
+        <p class="page-description">Trace latency, costs, prompt logs, and retry behaviors on LLM agent calls.</p>
+        <div id="langsmith-traces-container">
+          <!-- Tracks loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- VIEW: Settings -->
+      <div class="view-panel" id="settings-view">
+        <div class="page-header">
+          <h1>Master Settings</h1>
+        </div>
+        <p class="page-description">Configure the global platform parameters below. Overrides are persisted directly inside override.yaml.</p>
+        
+        <form id="settings-form">
+          <div class="settings-grid">
+            <div>
+              <div class="settings-section">
+                <div class="settings-section-title">Large Language Model Settings</div>
+                <div class="form-group">
+                  <label for="settings-llm-provider">LLM Provider</label>
+                  <select id="settings-llm-provider" class="form-control">
+                    <option value="openai">OpenAI</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="groq">Groq</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="settings-llm-model">Model Name</label>
+                  <input type="text" id="settings-llm-model" class="form-control" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-llm-temp">Temperature (0.0 - 1.0)</label>
+                  <input type="number" step="0.1" min="0" max="1" id="settings-llm-temp" class="form-control" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-llm-key">API Key (Optional)</label>
+                  <input type="password" id="settings-llm-key" class="form-control" placeholder="••••••••" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-llm-base">API Base URL (Ollama / Local Only)</label>
+                  <input type="text" id="settings-llm-base" class="form-control" placeholder="http://localhost:11434" />
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <div class="settings-section-title">Workflow & Review Settings</div>
+                <div class="form-group">
+                  <label for="settings-wf-mode">Workflow Mode</label>
+                  <select id="settings-wf-mode" class="form-control">
+                    <option value="sequential">Sequential Graph</option>
+                    <option value="supervisor">Supervisor Mode</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="settings-wf-review">Enable Human Review</label>
+                  <select id="settings-wf-review" class="form-control">
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="settings-wf-eval-threshold">Evaluation Quality Threshold</label>
+                  <input type="number" step="0.05" min="0" max="1" id="settings-wf-eval-threshold" class="form-control" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="settings-section">
+                <div class="settings-section-title">Automation Generation Settings</div>
+                <div class="form-group">
+                  <label for="settings-gen-count">Default Scenario Count</label>
+                  <input type="number" id="settings-gen-count" class="form-control" min="1" max="100" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-eval-dup">Duplicate Word Overlap (Jaccard) Threshold</label>
+                  <input type="number" step="0.05" min="0" max="1" id="settings-eval-dup" class="form-control" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-eval-rej">Relevance Rejection Floor</label>
+                  <input type="number" step="0.05" min="0" max="1" id="settings-eval-rej" class="form-control" />
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <div class="settings-section-title">Playwright Browser Settings</div>
+                <div class="form-group">
+                  <label for="settings-browser-type">Browser Target</label>
+                  <select id="settings-browser-type" class="form-control">
+                    <option value="chromium">Chromium</option>
+                    <option value="firefox">Firefox</option>
+                    <option value="webkit">WebKit (Safari)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="settings-browser-headless">Headless execution</label>
+                  <select id="settings-browser-headless" class="form-control">
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100" style="padding: 12px;">Save Global Master Settings</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- MODAL: Create Project -->
+  <div class="modal-overlay" id="create-project-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Create New Project</h3>
+        <button class="modal-close" onclick="closeModal('create-project-modal')">✕</button>
+      </div>
+      <form id="create-project-form">
+        <div class="form-group">
+          <label for="new-proj-name">Project Name</label>
+          <input type="text" id="new-proj-name" class="form-control" placeholder="e.g. Healthcare Portal" required />
+        </div>
+        <div class="form-group">
+          <label for="new-proj-desc">Description</label>
+          <textarea id="new-proj-desc" class="form-control" placeholder="Brief workspace description..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('create-project-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Workspace</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Requirement -->
+  <div class="modal-overlay" id="create-requirement-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Add Requirement</h3>
+        <button class="modal-close" onclick="closeModal('create-requirement-modal')">✕</button>
+      </div>
+      <form id="create-requirement-form">
+        <div class="form-group">
+          <label for="req-title">Requirement Title</label>
+          <input type="text" id="req-title" class="form-control" placeholder="e.g. Profile Picture Upload Size Limit" required />
+        </div>
+        <div class="form-group">
+          <label for="req-desc">Scope Details (Description)</label>
+          <textarea id="req-desc" class="form-control" placeholder="Users can upload a JPEG up to 5MB..." required></textarea>
+        </div>
+        <div class="form-group">
+          <label for="req-priority">Priority</label>
+          <select id="req-priority" class="form-control">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="req-domain">Business Domain</label>
+          <input type="text" id="req-domain" class="form-control" placeholder="e.g. Authentication, Uploads" value="general" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('create-requirement-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Requirement</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Playwright Script Workspace -->
+  <div class="modal-overlay" id="script-workspace-modal">
+    <div class="modal-container" style="width: 720px; max-width: 95%;">
+      <div class="modal-header">
+        <h3>Playwright Automation script</h3>
+        <button class="modal-close" onclick="closeModal('script-workspace-modal')">✕</button>
+      </div>
+      <div id="script-modal-workspace-body">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Execution Workspace (Four-Panel Layout) -->
+  <div class="modal-overlay" id="execution-workspace-modal">
+    <div class="modal-container" style="width: 1080px; max-width: 95%; max-height: 90vh;">
+      <div class="modal-header">
+        <h3>Execution Workspace</h3>
+        <button class="modal-close" onclick="if (window.appInstance && window.appInstance.activeExecutionStream) window.appInstance.activeExecutionStream.close(); closeModal('execution-workspace-modal')">✕</button>
+      </div>
+      <div id="execution-workspace-modal-body">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+{
+  "projects": [
+    {
+      "id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "name": "Test Project",
+      "description": "Desc",
+      "created_at": "2026-07-07T08:09:32.829394Z",
+      "requirements": [
+        "be20626a-1c9e-46f8-84f2-2926ead2fc07"
+      ]
+    },
+    {
+      "id": "e4241a00-a03d-44b0-8ac1-18955a3f92f6",
+      "name": "Test Proj",
+      "description": "",
+      "created_at": "2026-07-07T08:09:32.848591Z",
+      "requirements": [
+        "bb17e28a-16c9-47b6-bf79-292c6b021c89"
+      ]
+    },
+    {
+      "id": "4a4b7f39-5e4b-4e44-9e19-4b1d550da903",
+      "name": "Test Proj",
+      "description": "",
+      "created_at": "2026-07-07T08:09:45.847034Z",
+      "requirements": [
+        "de94eab4-6179-4551-b7b8-6fb2b1ce9357"
+      ]
+    },
+    {
+      "id": "a052e137-ef60-467e-b9d6-a95befb042cd",
+      "name": "Test Project",
+      "description": "A project for automated testing.",
+      "created_at": "2026-07-07T08:28:52.271233Z",
+      "requirements": []
+    },
+    {
+      "id": "a0e1efb2-a709-45be-94e6-ae66fbcb63ee",
+      "name": "Test Project",
+      "description": "",
+      "created_at": "2026-07-07T08:32:28.912346Z",
+      "requirements": []
+    }
+  ],
+  "requirements": {
+    "bb17e28a-16c9-47b6-bf79-292c6b021c89": {
+      "id": "bb17e28a-16c9-47b6-bf79-292c6b021c89",
+      "title": "Req Title",
+      "description": "Req Desc",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T08:09:32.866578Z",
+      "priority": "high",
+      "business_domain": "finance",
+      "attachments": []
+    },
+    "de94eab4-6179-4551-b7b8-6fb2b1ce9357": {
+      "id": "de94eab4-6179-4551-b7b8-6fb2b1ce9357",
+      "title": "Req Title",
+      "description": "Req Desc",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T08:09:45.867766Z",
+      "priority": "high",
+      "business_domain": "finance",
+      "attachments": []
+    },
+    "be20626a-1c9e-46f8-84f2-2926ead2fc07": {
+      "id": "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+      "title": "ASD",
+      "description": "S",
+      "source": "manual",
+      "uploaded_at": "2026-07-07T08:27:42.636331Z",
+      "priority": "medium",
+      "business_domain": "general",
+      "attachments": []
+    }
+  },
+  "scenarios": {
+    "d3ad6ad0-f498-46c4-83fc-88a32485bdd3": {
+      "id": "d3ad6ad0-f498-46c4-83fc-88a32485bdd3",
+      "requirement_id": "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+      "scenario_name": "Happy Path: Successful Deployment",
+      "description": "User successfully deploys ASD with valid inputs and receives confirmation.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T08:28:04.850056Z"
+    },
+    "f57c45aa-bb23-4356-af4c-07631ccc6739": {
+      "id": "f57c45aa-bb23-4356-af4c-07631ccc6739",
+      "requirement_id": "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+      "scenario_name": "Edge Case: Invalid Input Handling",
+      "description": "User attempts to deploy ASD with invalid input and observes error messages.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T08:28:04.850068Z"
+    },
+    "63977287-fd46-4a4f-bd45-e6d4c2f7588e": {
+      "id": "63977287-fd46-4a4f-bd45-e6d4c2f7588e",
+      "requirement_id": "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+      "scenario_name": "Boundary Value: Maximum Deployment Size",
+      "description": "User attempts to deploy ASD with maximum allowed deployment size and verifies successful deployment.",
+      "priority": "low",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T08:28:04.850073Z"
+    },
+    "066eb369-7b09-47a0-80b7-1ec61e83e9e5": {
+      "id": "066eb369-7b09-47a0-80b7-1ec61e83e9e5",
+      "requirement_id": "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+      "scenario_name": "Error Case: Network Connection Failure",
+      "description": "User experiences network connection failure while deploying ASD and observes error messages.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T08:28:04.850077Z"
+    },
+    "b6939a6b-5450-493b-80fa-c670d346a569": {
+      "id": "b6939a6b-5450-493b-80fa-c670d346a569",
+      "requirement_id": "be20626a-1c9e-46f8-84f2-2926ead2fc07",
+      "scenario_name": "Edge Case: Unsupported File Type",
+      "description": "User attempts to deploy ASD with an unsupported file type and verifies error handling.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-07T08:28:04.850081Z"
+    }
+  },
+  "test_cases": {}
+}

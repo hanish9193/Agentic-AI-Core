@@ -97,6 +97,20 @@ class Settings(BaseSettings):
     def from_yaml(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Settings":
         raw = yaml.safe_load(path.read_text()) if path.exists() else {}
 
+        # Merge local overrides from override.yaml if exists
+        override_path = CONFIG_DIR / "override.yaml"
+        if override_path.exists():
+            try:
+                overrides = yaml.safe_load(override_path.read_text())
+                if isinstance(overrides, dict):
+                    for key, val in overrides.items():
+                        if isinstance(val, dict) and key in raw and isinstance(raw[key], dict):
+                            raw[key].update(val)
+                        else:
+                            raw[key] = val
+            except Exception:
+                pass
+
         # .env values win if set; LLM_API_KEY has no YAML equivalent on purpose.
         raw.setdefault("llm", {})["api_key"] = _env("LLM_API_KEY")
         raw.setdefault("llm", {})["api_base"] = _env("LLM_API_BASE")
@@ -106,6 +120,7 @@ class Settings(BaseSettings):
         _override(raw, "workflow", "human_review_enabled", "HUMAN_REVIEW_ENABLED", cast=_bool)
 
         return cls(**raw)
+
 
 
 def _env(key: str) -> str | None:
