@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from backend.models.requirement import Requirement
 from backend.models.scenario import Scenario
 from backend.models.execution_result import ExecutionResult
+from backend.models.execution_report import ExecutionReport
 from backend.models.test_case import EvaluationStatus, TestCase
 
 
@@ -43,6 +44,7 @@ class WorkflowState(BaseModel):
     pending_approval_ids: list[UUID] = Field(default_factory=list)
     human_approved_test_case_ids: list[UUID] = Field(default_factory=list)
     execution_results: list[ExecutionResult] = Field(default_factory=list)
+    execution_report: ExecutionReport | None = None
     logs: list[str] = Field(default_factory=list)
 
     def add_log(self, message: str) -> None:

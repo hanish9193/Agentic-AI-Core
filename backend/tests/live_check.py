@@ -40,6 +40,7 @@ Run with:
 from backend.agents.execution_agent import ExecutionAgent
 from backend.agents.human_approval_agent import HumanApprovalAgent
 from backend.agents.playwright_agent import PlaywrightAgent
+from backend.agents.report_agent import ReportAgent
 from backend.graph.workflow import run_workflow
 from backend.models.requirement import Requirement
 from backend.models.test_case import EvaluationStatus
@@ -97,9 +98,9 @@ def main():
         print("  1. LLM_API_KEY in .env is missing, empty, or invalid")
         print("  2. The account behind that key has no billing/quota set up")
         print("  3. LLM_PROVIDER / LLM_MODEL in .env don't match a real, available model")
-        print("  4. The model's response didn't match what was sent (e.g. wrong scenario/test")
-        print("     case number) - this is usually transient model inconsistency, not a setup")
-        print("     problem; try running again before assuming something's broken")
+        print("  4. The model's response didn't match what was sent (e.g. Evaluation Agent's")
+        print("     scenario/test case number, or a required field left empty) - this is usually")
+        print("     transient model inconsistency, not a setup problem; try running again")
         print(f"\nUnderlying error: {exc}")
         return
     except PlaywrightRunnerError as exc:
@@ -122,14 +123,26 @@ def main():
     for tc in final_state.generated_test_cases:
         _print_test_case_block(tc, final_state)
 
-    print(f"\n{len(final_state.approved_test_cases())} of {len(final_state.generated_test_cases)} test cases approved.")
-    passed = sum(1 for r in final_state.execution_results if r.status.value == "passed")
-    print(f"{passed} of {len(final_state.execution_results)} executed test cases actually passed.")
+    report = final_state.execution_report
+    print("\n=== Execution Report ===")
+    print(f"Requirement: {report.requirement_title}")
+    print(f"Scenarios: {report.scenario_count}   Test cases: {report.test_case_count}")
+    print(f"Approved: {report.approved_count}   Needs review: {report.needs_review_count}   Rejected: {report.rejected_count}")
+    print(f"Executed: {report.executed_count}   Passed: {report.passed_count}   Failed: {report.failed_count}   Blocked: {report.blocked_count}")
+    print(f"Pass rate: {report.pass_rate:.0%}   Total execution time: {report.total_execution_seconds:.1f}s")
+    if report.failed_tests:
+        print("Failed:")
+        for entry in report.failed_tests:
+            print(f"    - {entry.title}: {entry.reason}")
+    if report.blocked_tests:
+        print("Blocked:")
+        for entry in report.blocked_tests:
+            print(f"    - {entry.title}: {entry.reason}")
 
     print(
         "\nA generated script 'looking right' and a script that actually passes when run are "
-        "different claims - if any executed here failed or errored, read the error_message "
-        "above. That's not this pipeline malfunctioning; it's the pipeline doing exactly what "
+        "different claims - if any executed here failed or errored, read the reasons above. "
+        "That's not this pipeline malfunctioning; it's the pipeline doing exactly what "
         "ExecutionAgent exists for: catching bugs in AI-generated code before a human would have to."
     )
 
@@ -161,6 +174,14 @@ def main():
         print(f"  result: {execution.status.value if execution else 'not found'}")
     except PlaywrightRunnerError as exc:
         print(f"  Playwright execution unavailable: {exc}")
+
+    final_state = ReportAgent().run(final_state)
+    updated_report = final_state.execution_report
+    print(
+        f"\n  Updated report after the human-approved item: "
+        f"{updated_report.passed_count}/{updated_report.executed_count} passed "
+        f"({updated_report.pass_rate:.0%})"
+    )
 
 
 if __name__ == "__main__":

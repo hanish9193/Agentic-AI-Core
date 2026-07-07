@@ -1,7 +1,8 @@
 """
-The six-node graph, run with fakes underneath everything that would
-otherwise touch a real LLM or a real subprocess. HumanApprovalAgent
-needs neither, so build_graph() just uses its real instance by default.
+The seven-node graph, run with fakes underneath everything that would
+otherwise touch a real LLM or a real subprocess. HumanApprovalAgent and
+ReportAgent need neither, so build_graph() just uses their real
+instances by default.
 
 Needs the stub_llm_service and fake_playwright_runner fixtures from
 conftest.py, so this runs under pytest only, not `python -m`.
@@ -17,7 +18,7 @@ from backend.models.requirement import Requirement
 from backend.models.test_case import TestCaseStatus
 
 
-def test_graph_runs_all_six_agents(stub_llm_service, fake_playwright_runner):
+def test_graph_runs_all_seven_agents(stub_llm_service, fake_playwright_runner):
     requirement = Requirement(
         title="Login flow",
         description="User can log in with valid credentials",
@@ -27,7 +28,8 @@ def test_graph_runs_all_six_agents(stub_llm_service, fake_playwright_runner):
         scenario_agent=ScenarioAgent(llm_service=stub_llm_service),
         test_case_agent=TestCaseAgent(llm_service=stub_llm_service),
         evaluation_agent=EvaluationAgent(llm_service=stub_llm_service),
-        # human_approval_agent omitted - no LLM to stub, real instance is fine here
+        # human_approval_agent and report_agent omitted - neither needs an
+        # LLM or subprocess to stub, real instances are fine here
         playwright_agent=PlaywrightAgent(llm_service=stub_llm_service),
         execution_agent=ExecutionAgent(runner=fake_playwright_runner),
     )
@@ -47,11 +49,16 @@ def test_graph_runs_all_six_agents(stub_llm_service, fake_playwright_runner):
     assert len(final_state.execution_results) == 3
     assert any("Execution Agent finished: 3/3 passed" in line for line in final_state.logs)
 
+    report = final_state.execution_report
+    assert report is not None
+    assert report.test_case_count == 3
+    assert report.passed_count == 3
+    assert report.pass_rate == 1.0
+    assert any("Report Agent finished" in line for line in final_state.logs)
+
     print("Log trail:")
     for line in final_state.logs:
         print("   ", line)
 
-    print("\nFinal state of the full pipeline:")
-    for tc in final_state.generated_test_cases:
-        print(f"    - {tc.title} confidence={tc.confidence:.2f} eval={tc.evaluation_status.value} "
-              f"has_script={tc.playwright_script is not None} exec_status={tc.status.value}")
+    print("\nFinal report:")
+    print(f"    {report.passed_count}/{report.executed_count} passed ({report.pass_rate:.0%})")
