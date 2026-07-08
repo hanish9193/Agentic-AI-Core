@@ -125,6 +125,9 @@ class ProjectService:
             test_cases.extend(self.get_test_cases_for_scenario(sc.id))
         return test_cases
 
+    def get_test_case(self, test_case_id: UUID) -> TestCase | None:
+        return self.repo.get_test_case(test_case_id)
+
     def update_test_case(
         self,
         test_case_id: UUID,

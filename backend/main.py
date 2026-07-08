@@ -8,6 +8,7 @@ import io
 import zipfile
 import xml.etree.ElementTree as ET
 import pandas as pd
+from datetime import datetime
 import fitz
 from fastapi import FastAPI, HTTPException, Body, status, BackgroundTasks, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
@@ -23,6 +24,7 @@ from backend.schemas.scenario_dto import ScenarioUpdate, ScenarioResponse
 from backend.schemas.testcase_dto import TestCaseUpdate, TestCaseResponse, ScriptUpdatePayload
 from backend.models.document import Document
 from backend.models.execution_result import ExecutionResult
+import backend.services.report_service
 
 
 app = FastAPI(
@@ -619,7 +621,8 @@ def read_settings():
             "browser": settings.playwright.browser,
             "headless": settings.playwright.headless,
             "timeout": settings.playwright.timeout,
-            "retries": settings.playwright.retries
+            "retries": settings.playwright.retries,
+            "workspace_url": settings.playwright.workspace_url
         }
     }
 
@@ -851,6 +854,14 @@ def get_execution_screenshot(project_id: UUID, execution_id: UUID, path: str = N
     return FileResponse(file_path)
 
 
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/screenshot/{filename}")
+def get_execution_screenshot_by_filename(project_id: UUID, execution_id: UUID, filename: str):
+    file_path = Path("backend/playwrightt/public/artifacts") / str(execution_id) / "screenshots" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Screenshot does not exist")
+    return FileResponse(file_path)
+
+
 @app.get("/api/v1/projects/{project_id}/executions/{execution_id}/video")
 def get_execution_video(project_id: UUID, execution_id: UUID, path: str = None):
     if not path:
@@ -889,6 +900,19 @@ def get_execution_pdf(project_id: UUID, execution_id: UUID):
             pdf_path = r_info.get("pdf_path")
             if pdf_path and Path(pdf_path).exists():
                 return FileResponse(pdf_path, filename=Path(pdf_path).name)
+                
+    # If not found, try to compile on the fly
+    result = project_service.get_execution_result(project_id, execution_id)
+    if result:
+        from backend.services.report_service import ReportService
+        try:
+            r_info = ReportService().compile_reports(project_id, result)
+            pdf_path = r_info.get("pdf_path")
+            if pdf_path and Path(pdf_path).exists():
+                return FileResponse(pdf_path, filename=Path(pdf_path).name)
+        except Exception as compile_err:
+            print(f"[On-the-fly PDF compile error]: {compile_err}")
+            
     raise HTTPException(status_code=404, detail="PDF report not found")
 
 
@@ -902,6 +926,19 @@ def get_execution_html(project_id: UUID, execution_id: UUID):
             html_path = r_info.get("html_path")
             if html_path and Path(html_path).exists():
                 return FileResponse(html_path)
+                
+    # If not found, try to compile on the fly
+    result = project_service.get_execution_result(project_id, execution_id)
+    if result:
+        from backend.services.report_service import ReportService
+        try:
+            r_info = ReportService().compile_reports(project_id, result)
+            html_path = r_info.get("html_path")
+            if html_path and Path(html_path).exists():
+                return FileResponse(html_path)
+        except Exception as compile_err:
+            print(f"[On-the-fly HTML compile error]: {compile_err}")
+            
     raise HTTPException(status_code=404, detail="HTML report not found")
 
 
@@ -988,6 +1025,115 @@ def add_test_case_note(test_case_id: UUID, payload: dict = Body(...)):
     if not note:
         raise HTTPException(status_code=400, detail="Note content is required")
     project_service.add_test_case_note(test_case_id, note)
+    return {"status": "success"}
+
+
+@app.get("/api/v1/projects/{project_id}/testcases/{test_case_id}", response_model=TestCaseResponse)
+def get_test_case(project_id: UUID, test_case_id: UUID):
+    tc = project_service.get_test_case(test_case_id)
+    if not tc:
+        raise HTTPException(status_code=404, detail="Test case not found")
+    return TestCaseResponse(
+        id=tc.id,
+        scenario_id=tc.scenario_id,
+        title=tc.title,
+        preconditions=tc.preconditions,
+        steps=tc.steps,
+        expected_result=tc.expected_result,
+        priority=tc.priority,
+        status=tc.status,
+        confidence=tc.confidence,
+        evaluation_status=tc.evaluation_status,
+        evaluation_reason=tc.evaluation_reason,
+        playwright_script=tc.playwright_script,
+        generated_at=tc.generated_at
+    )
+
+
+@app.get("/api/v1/playwright/workspace")
+def get_playwright_workspace(project_id: UUID, test_case_id: UUID):
+    tc = project_service.get_test_case(test_case_id)
+    if not tc:
+        raise HTTPException(status_code=404, detail="Test case not found")
+    settings = get_settings()
+    return {
+        "project_id": str(project_id),
+        "test_case_id": str(test_case_id),
+        "playwright_script": tc.playwright_script,
+        "base_url": settings.playwright.base_url,
+        "browser": settings.playwright.browser
+    }
+
+
+@app.put("/api/v1/playwright/script")
+def save_playwright_script(payload: dict = Body(...)):
+    project_id = payload.get("project_id")
+    test_case_id = payload.get("test_case_id")
+    script = payload.get("script")
+    if not project_id or not test_case_id or script is None:
+        raise HTTPException(status_code=400, detail="project_id, test_case_id, and script are required")
+    
+    from uuid import UUID
+    updated = project_service.update_test_case_script(UUID(test_case_id), script)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Test case not found")
+    return {"status": "success"}
+
+
+@app.post("/api/v1/projects/{project_id}/executions/webhook")
+def process_execution_webhook(project_id: UUID, payload: dict = Body(...)):
+    from backend.services.execution_service import ExecutionService
+    from backend.services.workflow_service import active_execution_events
+    
+    print(f"[Webhook DEBUG] Received payload: {payload}")
+    
+    event = payload.get("event")
+    test_case_id_str = payload.get("test_case_id")
+    execution_id_str = payload.get("execution_id")
+    
+    if not event:
+        raise HTTPException(status_code=400, detail="event is required")
+        
+    test_case_key = test_case_id_str or execution_id_str or "draft-execution"
+    events = active_execution_events.setdefault(test_case_key, [])
+    
+    if event == "started":
+        events.clear()  # reset previous events
+        events.append({
+            "status": "Running",
+            "timeline": "Browser Started",
+            "log": "Next.js execution engine started..."
+        })
+    elif event == "updated":
+        log_line = payload.get("log_line")
+        timeline_event = payload.get("timeline_event")
+        live_screenshot = payload.get("live_screenshot")
+        
+        events.append({
+            "status": "Running",
+            "timeline": timeline_event.get("event") if timeline_event else None,
+            "log": log_line,
+            "screenshot": live_screenshot
+        })
+    elif event == "completed":
+        # Finalize execution in Python service layer
+        exec_service = ExecutionService()
+        result = exec_service.finalize_execution(project_id, payload)
+        
+        events.append({
+            "status": "Completed" if result.status.value == "passed" else "Failed",
+            "timeline": "Execution completed successfully" if result.status.value == "passed" else "Execution completed with error",
+            "log": result.error_message or "All steps completed.",
+            "screenshot": result.screenshot_path,
+            "artifact": {
+                "duration": result.duration_seconds,
+                "status": result.status.value,
+                "screenshot": result.screenshot_path,
+                "video": result.video_path,
+                "trace": result.trace_path
+            }
+        })
+        
     return {"status": "success"}
 
 

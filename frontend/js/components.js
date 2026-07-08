@@ -288,7 +288,7 @@ export const Components = {
               ` : `
                 <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" disabled>Generate Script</button>
               `}
-              <a href="#/playwright" style="display: block; font-size: 0.7rem; color: var(--accent-primary); margin-top: 4px; font-weight: 600; text-decoration: none;">→ Open in Playwright Workspace</a>
+              <a href="javascript:void(0)" onclick="window._testCaseActions.onViewScript('${tc.id}')" style="display: block; font-size: 0.7rem; color: var(--accent-primary); margin-top: 4px; font-weight: 600; text-decoration: none;">→ Open in Playwright Workspace</a>
             ` : `
               <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" disabled>Generate Script</button>
               <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">Approve test case first</div>

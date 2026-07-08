@@ -12,6 +12,23 @@ interface ExecutionRunnerOptions {
   recordTrace?: boolean;
 }
 
+async function sendWebhook(projectId: string | undefined, payload: any) {
+  // Only send webhooks if projectId is valid and not the default demo-project
+  if (!projectId || projectId === 'demo-project') return;
+  try {
+    const response = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/executions/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      console.error(`[Webhook] Failed to send webhook event ${payload.event}: ${response.statusText}`);
+    }
+  } catch (err) {
+    console.error(`[Webhook] Error sending webhook event ${payload.event}:`, err);
+  }
+}
+
 export class ExecutionEngine {
   private browser: Browser | null = null;
   private page: Page | null = null;
@@ -20,11 +37,10 @@ export class ExecutionEngine {
 
   async validateScript(script: string): Promise<{ valid: boolean; error?: string }> {
     try {
-      // Basic validation - check for malicious patterns
       const dangerousPatterns = [
         /require\s*\(\s*['"](fs|child_process|os|path)['"]/,
         /import\s+.*\s+from\s+['"](fs|child_process|os|path)['"]/,
-        /eval\s*\(/,
+        /(?<![\$a-zA-Z0-9_])eval\s*\(/,
         /Function\s*\(/,
       ];
 
@@ -34,8 +50,6 @@ export class ExecutionEngine {
         }
       }
 
-      // Try to parse as valid JavaScript by wrapping in async function
-      // This allows top-level await in user scripts
       const wrappedScript = `
         return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent }) => {
           ${script}
@@ -51,7 +65,23 @@ export class ExecutionEngine {
   async run(options: ExecutionRunnerOptions): Promise<void> {
     const { executionId, script, artifactDir, recordVideo = true, recordTrace = true } = options;
 
+    // Get browser and metadata from execution
+    const execution = executionQueue.getExecution(executionId);
+    if (!execution) throw new Error('Execution not found');
+
+    const projectId = execution.metadata.projectId;
+    const testCaseId = execution.metadata.testCaseIds?.[0];
+    const browserType = execution.metadata.browser || 'chromium';
+
     try {
+      // 1. Trigger Started Webhook
+      await sendWebhook(projectId, {
+        execution_id: executionId,
+        test_case_id: testCaseId,
+        event: 'started',
+        status: 'running'
+      });
+
       // Create artifact directory
       await fs.mkdir(artifactDir, { recursive: true });
 
@@ -64,14 +94,16 @@ export class ExecutionEngine {
       if (recordVideo) await fs.mkdir(videoDir, { recursive: true });
       if (recordTrace) await fs.mkdir(traceDir, { recursive: true });
 
-      // Get browser from execution metadata
-      const execution = executionQueue.getExecution(executionId);
-      if (!execution) throw new Error('Execution not found');
-
-      const browserType = execution.metadata.browser || 'chromium';
-
       // Launch browser
       executionQueue.addTimelineEvent(executionId, 'Launching browser', 'info');
+      await sendWebhook(projectId, {
+        execution_id: executionId,
+        test_case_id: testCaseId,
+        event: 'updated',
+        status: 'running',
+        timeline_event: { event: 'Launching browser', type: 'info' }
+      });
+
       wsManager.broadcast({
         type: 'update',
         executionId,
@@ -88,8 +120,16 @@ export class ExecutionEngine {
       let browser;
       try {
         browser = await chromium.launch(launchOptions);
+        this.browser = browser;
       } catch (launchError: any) {
         executionQueue.addTimelineEvent(executionId, `Browser launch failed: ${launchError.message}`, 'error');
+        await sendWebhook(projectId, {
+          execution_id: executionId,
+          test_case_id: testCaseId,
+          event: 'updated',
+          status: 'running',
+          timeline_event: { event: `Browser launch failed: ${launchError.message}`, type: 'error' }
+        });
         throw launchError;
       }
 
@@ -106,6 +146,14 @@ export class ExecutionEngine {
       this.page = page;
 
       executionQueue.addTimelineEvent(executionId, 'Browser opened successfully', 'success');
+      await sendWebhook(projectId, {
+        execution_id: executionId,
+        test_case_id: testCaseId,
+        event: 'updated',
+        status: 'running',
+        timeline_event: { event: 'Browser opened successfully', type: 'success' }
+      });
+
       wsManager.broadcast({
         type: 'status',
         executionId,
@@ -118,12 +166,28 @@ export class ExecutionEngine {
 
       // Setup console listener
       page.on('console', (msg) => {
-        executionQueue.addConsole(executionId, `[${msg.type()}] ${msg.text()}`);
+        const text = `[${msg.type()}] ${msg.text()}`;
+        executionQueue.addConsole(executionId, text);
+        sendWebhook(projectId, {
+          execution_id: executionId,
+          test_case_id: testCaseId,
+          event: 'updated',
+          status: 'running',
+          log_line: text
+        });
       });
 
       // Setup error listener
-      page.on('pageerror', (error) => {
-        executionQueue.addConsole(executionId, `[error] ${error.message}`);
+      page.on('pageerror', (err) => {
+        const text = `[error] ${err.message}`;
+        executionQueue.addConsole(executionId, text);
+        sendWebhook(projectId, {
+          execution_id: executionId,
+          test_case_id: testCaseId,
+          event: 'updated',
+          status: 'running',
+          log_line: text
+        });
       });
 
       // Create execution context with page utilities
@@ -137,13 +201,37 @@ export class ExecutionEngine {
           const filepath = path.join(screenshotDir, filename);
           await page.screenshot({ path: filepath });
           executionQueue.addScreenshot(executionId, filename);
+
+          // Webhook update for screenshot capture
+          await sendWebhook(projectId, {
+            execution_id: executionId,
+            test_case_id: testCaseId,
+            event: 'updated',
+            status: 'running',
+            live_screenshot: path.join(artifactDir, 'screenshots', filename)
+          });
+
           return filepath;
         },
         addLog: (message: string) => {
           executionQueue.addLog(executionId, message);
+          sendWebhook(projectId, {
+            execution_id: executionId,
+            test_case_id: testCaseId,
+            event: 'updated',
+            status: 'running',
+            log_line: message
+          });
         },
         addTimelineEvent: (event: string, type?: string) => {
           executionQueue.addTimelineEvent(executionId, event, type as any);
+          sendWebhook(projectId, {
+            execution_id: executionId,
+            test_case_id: testCaseId,
+            event: 'updated',
+            status: 'running',
+            timeline_event: { event, type }
+          });
         },
       };
 
@@ -173,17 +261,59 @@ export class ExecutionEngine {
       await browser.close();
 
       executionQueue.completeExecution(executionId);
+      
+      const finalExecution = executionQueue.getExecution(executionId);
+      const screenshotFilename = finalExecution?.artifacts.screenshots.length 
+        ? finalExecution.artifacts.screenshots[finalExecution.artifacts.screenshots.length - 1] 
+        : null;
+
+      // 3. Trigger Completed Webhook
+      await sendWebhook(projectId, {
+        execution_id: executionId,
+        test_case_id: testCaseId,
+        event: 'completed',
+        status: 'passed',
+        duration_seconds: finalExecution?.metadata.duration || 0,
+        screenshot_path: screenshotFilename ? path.join(artifactDir, 'screenshots', screenshotFilename) : null,
+        video_path: finalExecution?.artifacts.video ? path.join(artifactDir, 'video', finalExecution.artifacts.video) : null,
+        trace_path: finalExecution?.artifacts.trace ? path.join(artifactDir, 'trace', finalExecution.artifacts.trace) : null,
+        error_message: null,
+        timeline: finalExecution?.timeline || [],
+        screenshots: finalExecution?.artifacts.screenshots || []
+      });
+
       wsManager.broadcast({
         type: 'complete',
         executionId,
         data: {
           status: 'completed',
-          duration: executionQueue.getExecution(executionId)?.metadata.duration,
+          duration: finalExecution?.metadata.duration,
         },
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
       executionQueue.setError(executionId, error.message);
+      
+      const finalExecution = executionQueue.getExecution(executionId);
+      const screenshotFilename = finalExecution?.artifacts.screenshots.length 
+        ? finalExecution.artifacts.screenshots[finalExecution.artifacts.screenshots.length - 1] 
+        : null;
+
+      // 3. Trigger Completed Webhook (failed run)
+      await sendWebhook(projectId, {
+        execution_id: executionId,
+        test_case_id: testCaseId,
+        event: 'completed',
+        status: 'failed',
+        duration_seconds: finalExecution?.metadata.duration || 0,
+        screenshot_path: screenshotFilename ? path.join(artifactDir, 'screenshots', screenshotFilename) : null,
+        video_path: finalExecution?.artifacts.video ? path.join(artifactDir, 'video', finalExecution.artifacts.video) : null,
+        trace_path: finalExecution?.artifacts.trace ? path.join(artifactDir, 'trace', finalExecution.artifacts.trace) : null,
+        error_message: error.message,
+        timeline: finalExecution?.timeline || [],
+        screenshots: finalExecution?.artifacts.screenshots || []
+      });
+
       wsManager.broadcast({
         type: 'error',
         executionId,
@@ -279,7 +409,7 @@ export class ExecutionEngine {
 
   <div class="section">
     <h2>Screenshots (${screenshots.length})</h2>
-    ${screenshots.map((file) => `<img src="screenshots/${file}" alt="${file}" />`).join('')}
+    ${screenshots.map((file) => `<img src="screenshot/${file}" alt="${file}" />`).join('')}
   </div>
 </body>
 </html>`;

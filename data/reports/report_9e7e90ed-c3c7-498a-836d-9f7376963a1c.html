@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Execution Report - 9e7e90ed-c3c7-498a-836d-9f7376963a1c</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 40px 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 32px;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 24px;
+        }
+        .header-title h1 {
+            margin: 0 0 8px 0;
+            font-size: 24px;
+            color: #3b82f6;
+        }
+        .header-title p {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        .badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-passed { background-color: #10b981; color: #ffffff; }
+        .badge-failed { background-color: #ef4444; color: #ffffff; }
+        .badge-error { background-color: #f59e0b; color: #ffffff; }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .metric-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .metric-label {
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #f8fafc;
+        }
+        
+        h2 {
+            font-size: 20px;
+            color: #f1f5f9;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+        }
+        
+        .step-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+        }
+        .step-num {
+            background-color: #3b82f6;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .step-title {
+            font-weight: bold;
+            font-size: 15px;
+            color: #e2e8f0;
+            flex-grow: 1;
+        }
+        .step-time {
+            font-family: monospace;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .step-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        .detail-row {
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        .step-image img {
+            max-width: 100%;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <span class="badge badge-passed">
+                    passed
+                </span>
+            </div>
+            <div class="header-title">
+                <h1>Test Run Report</h1>
+                <p>Execution ID: 9e7e90ed-c3c7-498a-836d-9f7376963a1c</p>
+            </div>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Duration</div>
+                <div class="metric-value">24.76s</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Run Date</div>
+                <div class="metric-value" style="font-size: 14px; padding-top: 4px;">
+                    2026-07-08 08:55:58 UTC
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Total Steps</div>
+                <div class="metric-value">9</div>
+            </div>
+        </div>
+        
+        <h2>Step-by-Step Walkthrough</h2>
+        <div class="steps-container">
+            
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 1</span>
+                    <span class="step-title">Execution Queued</span>
+                    <span class="step-time">+0.00s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Execute test step: 'Execution Queued'.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Timeline logged event of type 'info'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Step executed successfully.</div>
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 2</span>
+                    <span class="step-title">Launching browser</span>
+                    <span class="step-time">+0.07s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Initialize a headless Chromium browser instance.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Chromium browser process launched.</div>
+                    <div class="detail-row"><strong>Result:</strong> Browser engine is ready.</div>
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 3</span>
+                    <span class="step-title">Browser opened successfully</span>
+                    <span class="step-time">+1.85s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Create a clean browser page session context.</div>
+                    <div class="detail-row"><strong>Observation:</strong> New blank page tab opened.</div>
+                    <div class="detail-row"><strong>Result:</strong> Browser session is active.</div>
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 4</span>
+                    <span class="step-title">Screenshot Captured</span>
+                    <span class="step-time">+17.35s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Capture screenshot to record browser visual state.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Visual state captured in file '01-initial-state-2026-07-08T08-55-46.png'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Screenshot image saved on disk.</div>
+                </div>
+                
+                <div class="step-image">
+                    <img src="/api/v1/projects/5471e234-c6bd-4ed7-a26f-7db5850ec41f/executions/9e7e90ed-c3c7-498a-836d-9f7376963a1c/screenshot?path=E:\Agentic-AI-Automation\backend\playwrightt\public\artifacts\9e7e90ed-c3c7-498a-836d-9f7376963a1c\screenshots\01-initial-state-2026-07-08T08-55-46.png" alt="Screenshot 4" />
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 5</span>
+                    <span class="step-title">Screenshot Captured</span>
+                    <span class="step-time">+20.61s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Capture screenshot to record browser visual state.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Visual state captured in file '02-form-filled-2026-07-08T08-55-52.png'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Screenshot image saved on disk.</div>
+                </div>
+                
+                <div class="step-image">
+                    <img src="/api/v1/projects/5471e234-c6bd-4ed7-a26f-7db5850ec41f/executions/9e7e90ed-c3c7-498a-836d-9f7376963a1c/screenshot?path=E:\Agentic-AI-Automation\backend\playwrightt\public\artifacts\9e7e90ed-c3c7-498a-836d-9f7376963a1c\screenshots\02-form-filled-2026-07-08T08-55-52.png" alt="Screenshot 5" />
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 6</span>
+                    <span class="step-title">Screenshot Captured</span>
+                    <span class="step-time">+22.18s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Capture screenshot to record browser visual state.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Visual state captured in file '03-insurant-data-page-2026-07-08T08-55-55.png'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Screenshot image saved on disk.</div>
+                </div>
+                
+                <div class="step-image">
+                    <img src="/api/v1/projects/5471e234-c6bd-4ed7-a26f-7db5850ec41f/executions/9e7e90ed-c3c7-498a-836d-9f7376963a1c/screenshot?path=E:\Agentic-AI-Automation\backend\playwrightt\public\artifacts\9e7e90ed-c3c7-498a-836d-9f7376963a1c\screenshots\03-insurant-data-page-2026-07-08T08-55-55.png" alt="Screenshot 6" />
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 7</span>
+                    <span class="step-title">trace Generated</span>
+                    <span class="step-time">+24.31s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Execute test step: 'trace Generated'.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Timeline logged event of type 'success'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Step executed successfully.</div>
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 8</span>
+                    <span class="step-title">htmlReport Generated</span>
+                    <span class="step-time">+24.32s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Execute test step: 'htmlReport Generated'.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Timeline logged event of type 'success'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Step executed successfully.</div>
+                </div>
+                
+            </div>
+            
+
+            <div class="step-card">
+                <div class="step-header">
+                    <span class="step-num">Step 9</span>
+                    <span class="step-title">Status: completed</span>
+                    <span class="step-time">+24.76s</span>
+                </div>
+                <div class="step-details">
+                    <div class="detail-row"><strong>Action:</strong> Execute test step: 'Status: completed'.</div>
+                    <div class="detail-row"><strong>Observation:</strong> Timeline logged event of type 'info'.</div>
+                    <div class="detail-row"><strong>Result:</strong> Step executed successfully.</div>
+                </div>
+                
+            </div>
+            
+        </div>
+    </div>
+</body>
+</html>

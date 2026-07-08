@@ -9,12 +9,15 @@ the real public method and exercise this exact code path, with no
 monkeypatching and no real API key. See test_scenario_agent.py.
 """
 
+import logging
 from typing import TypeVar
 
 from litellm import completion
 from pydantic import BaseModel
 
 from backend.config.settings import LLMConfig, get_settings
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -57,6 +60,34 @@ class LLMServiceError(Exception):
 class LLMService:
     def __init__(self, config: LLMConfig | None = None):
         self.config = config or get_settings().llm
+        
+        # Enable LangSmith tracing for LiteLLM if configured
+        self._init_langsmith_tracing()
+    
+    def _init_langsmith_tracing(self) -> None:
+        """Initialize LangSmith tracing for LiteLLM if enabled.
+        
+        This integrates LiteLLM with LangSmith using the official integration.
+        When enabled, all LLM calls will be traced to LangSmith automatically.
+        
+        Error handling: Any tracing setup failure is logged but never breaks LLM functionality.
+        """
+        try:
+            settings = get_settings()
+            if not settings.langsmith.tracing_enabled:
+                return
+            
+            import litellm
+            
+            # Enable LangSmith callback (official LiteLLM integration)
+            if "langsmith" not in (litellm.callbacks or []):
+                litellm.callbacks = (litellm.callbacks or []) + ["langsmith"]
+                logger.info("LiteLLM LangSmith tracing enabled")
+                
+        except Exception as e:
+            # Tracing failure should never break LLM functionality
+            logger.warning(f"Failed to enable LiteLLM LangSmith tracing: {e}")
+
 
     def _model_string(self) -> str:
         prefix = _PROVIDER_PREFIXES.get(self.config.provider, "")

@@ -302,71 +302,26 @@
       </div>
 
       <!-- VIEW: Playwright Workspace -->
-      <div class="view-panel" id="playwright-view" style="display: none; flex-direction: column; height: calc(100vh - 100px);">
-        <div class="page-header" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-          <div>
-            <h1 style="font-size: 1.5rem; margin-bottom: 4px;">Playwright Workspace</h1>
-            <p class="page-description" style="margin-bottom: 0;">Author, verify, and run automated script executions in an IDE environment.</p>
-          </div>
+      <div class="view-panel" id="playwright-view">
+        <div class="page-header">
+          <h1>Playwright Workspace</h1>
         </div>
-
-        <!-- Top Bar: Selectors -->
-        <div class="top-bar-selectors" style="display: flex; gap: 16px; margin-bottom: 16px; background-color: var(--bg-secondary); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color);">
-          <div class="form-group" style="margin-bottom: 0; flex: 1;">
-            <label for="playwright-req-select" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Requirement</label>
-            <select id="playwright-req-select" class="form-control" style="font-size: 0.85rem; padding: 6px 12px;"></select>
-          </div>
-          <div class="form-group" style="margin-bottom: 0; flex: 1;">
-            <label for="playwright-scenario-select" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Scenario Filter</label>
-            <select id="playwright-scenario-select" class="form-control" style="font-size: 0.85rem; padding: 6px 12px;">
-              <option value="all">Show All Scenarios</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Middle IDE Area: Left list, Right editor -->
-        <div class="ide-middle-pane" style="display: flex; flex: 1; gap: 16px; min-height: 400px; margin-bottom: 16px;">
-          <!-- Left Pane: Approved Test Cases -->
-          <div class="ide-left-pane" style="width: 40%; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); display: flex; flex-direction: column; overflow: hidden;">
-            <div style="background-color: var(--bg-tertiary); padding: 10px 14px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
-              <span>Approved Test Cases</span>
-              <span class="badge badge-approved" id="playwright-approved-count" style="font-size: 0.7rem;">0</span>
+        <p class="page-description">Author, edit, and run automated script executions in the dedicated Playwright Workspace.</p>
+        
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 400px; padding: 20px;">
+          <div class="metric-card" style="max-width: 500px; text-align: center; padding: 40px; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+            <div style="background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 50%; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 36px; height: 36px; color: var(--accent-primary);">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
             </div>
-            <div id="playwright-list-container" style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <!-- Cards loaded dynamically -->
-            </div>
-          </div>
-
-          <!-- Right Pane: Script Editor (Monaco Container) -->
-          <div class="ide-right-pane" style="width: 60%; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); display: flex; flex-direction: column; overflow: hidden; position: relative;">
-            <div style="background-color: var(--bg-tertiary); padding: 10px 14px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; height: 38px;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px; color: var(--accent-primary);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
-                <span id="playwright-active-title" style="font-weight: 600; font-size: 0.8rem; font-family: monospace;">No test case selected</span>
-                <span id="playwright-unsaved-dot" style="display: none; width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-danger);" title="Unsaved changes"></span>
-              </div>
-              <div id="playwright-editor-actions" style="display: none; gap: 8px; align-items: center;">
-                <button class="btn btn-secondary" id="btn-playwright-save" style="padding: 4px 10px; font-size: 0.75rem;" disabled>Save</button>
-                <button class="btn btn-primary" id="btn-playwright-run" style="padding: 4px 10px; font-size: 0.75rem; background-color: var(--color-success); border-color: var(--color-success);">Run Test</button>
-              </div>
-            </div>
-            <div id="playwright-editor-container" style="flex: 1; min-height: 350px;">
-              <!-- Monaco or textarea loader -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 48px; height: 48px; margin-bottom: 12px; color: var(--border-color);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                Select an approved test case from the left panel to load the Playwright scripting workspace.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bottom Bar: Recent Executions -->
-        <div class="ide-bottom-pane" style="height: 180px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); display: flex; flex-direction: column; overflow: hidden; min-height: 150px;">
-          <div style="background-color: var(--bg-tertiary); padding: 8px 14px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary);">
-            Execution History & Logs
-          </div>
-          <div id="playwright-executions-container" style="flex: 1; overflow-y: auto; padding: 8px;">
-            <!-- History grid -->
+            <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--text-primary);">Playwright Execution Subsystem</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin: 0;">
+              Execute browser automation scripts with real-time browser preview, interactive timelines, console logs, and video/trace collection.
+            </p>
+            <button class="btn btn-primary" id="btn-launch-playwright-workspace" style="padding: 12px 24px; font-size: 0.95rem; margin-top: 8px;">
+              Open Playwright Workspace
+            </button>
           </div>
         </div>
       </div>

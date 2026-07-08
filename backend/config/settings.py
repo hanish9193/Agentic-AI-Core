@@ -85,6 +85,22 @@ class PlaywrightConfig(BaseModel):
     headless: bool = True
     timeout: int = 60
     retries: int = 0
+    workspace_url: str = "http://localhost:3000"
+
+
+class LangSmithConfig(BaseModel):
+    """LangSmith tracing configuration.
+    
+    Loaded from environment variables:
+    - LANGSMITH_TRACING: Enable/disable tracing (default: false)
+    - LANGSMITH_ENDPOINT: API endpoint (default: https://api.smith.langchain.com)
+    - LANGSMITH_API_KEY: API authentication key (required if tracing enabled)
+    - LANGSMITH_PROJECT: Project name for traces (default: Enterprise-AI-TestAutomation)
+    """
+    tracing_enabled: bool = False
+    endpoint: str = "https://api.smith.langchain.com"
+    api_key: str | None = None
+    project_name: str = "Enterprise-AI-TestAutomation"
 
 
 class Settings(BaseSettings):
@@ -101,6 +117,7 @@ class Settings(BaseSettings):
     generation: GenerationConfig = GenerationConfig()
     evaluation: EvaluationConfig = EvaluationConfig()
     playwright: PlaywrightConfig = PlaywrightConfig()
+    langsmith: LangSmithConfig = LangSmithConfig()
 
     @classmethod
     def from_yaml(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Settings":
@@ -127,6 +144,13 @@ class Settings(BaseSettings):
         _override(raw, "llm", "model", "LLM_MODEL")
         _override(raw, "workflow", "evaluation_threshold", "EVALUATION_THRESHOLD", cast=float)
         _override(raw, "workflow", "human_review_enabled", "HUMAN_REVIEW_ENABLED", cast=_bool)
+
+        # LangSmith configuration from .env
+        raw.setdefault("langsmith", {})
+        _override(raw, "langsmith", "tracing_enabled", "LANGSMITH_TRACING", cast=_bool)
+        _override(raw, "langsmith", "endpoint", "LANGSMITH_ENDPOINT")
+        raw.setdefault("langsmith", {})["api_key"] = _env("LANGSMITH_API_KEY")
+        _override(raw, "langsmith", "project_name", "LANGSMITH_PROJECT")
 
         return cls(**raw)
 

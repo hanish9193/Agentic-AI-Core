@@ -14,10 +14,24 @@ export async function GET(
     // First try to get from execution queue
     const execution = executionQueue.getExecution(executionId);
     if (execution) {
+      const namedScreenshots = (execution.artifacts.screenshots || []).map(
+        f => `/api/artifacts/${executionId}/screenshot/${f}`
+      );
+      // Retrieve filenames from the timeline events when available
+      const timelineScreenshots = (execution.timeline || [])
+        .filter(e => e.event === 'Screenshot Captured' && e.details)
+        .map(e => `/api/artifacts/${executionId}/screenshot/${e.details}`);
+
+      const allScreenshotUrls = timelineScreenshots.length > 0 
+        ? timelineScreenshots 
+        : namedScreenshots;
+
       return NextResponse.json({
         executionId,
         artifacts: execution.artifacts,
         metadata: execution.metadata,
+        screenshots: namedScreenshots,
+        allScreenshots: allScreenshotUrls,
       });
     }
 

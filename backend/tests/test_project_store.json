@@ -1,0 +1,21 @@
+{
+  "projects": [],
+  "requirements": {},
+  "scenarios": {},
+  "test_cases": {},
+  "documents": {},
+  "execution_results": {},
+  "scenario_notes": {},
+  "test_case_notes": {},
+  "reports": {
+    "60229ce6-8089-4958-aaf7-375ba5f4fa2b": {
+      "id": "60229ce6-8089-4958-aaf7-375ba5f4fa2b",
+      "project_id": "2e1206b1-bd43-4dfd-bc9e-cc72d0d2a990",
+      "execution_id": "bb9ccd46-fc07-490b-b443-3d41d63e41c6",
+      "junit_path": "data\\reports\\junit_bb9ccd46-fc07-490b-b443-3d41d63e41c6.xml",
+      "html_path": "data\\reports\\report_bb9ccd46-fc07-490b-b443-3d41d63e41c6.html",
+      "pdf_path": "data\\reports\\report_bb9ccd46-fc07-490b-b443-3d41d63e41c6.pdf",
+      "created_at": "2026-07-08T09:47:32.609578+00:00"
+    }
+  }
+}

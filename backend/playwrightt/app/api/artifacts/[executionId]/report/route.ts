@@ -4,9 +4,10 @@ import * as path from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { executionId: string } }
+  context: { params: Promise<{ executionId: string }> }
 ) {
   try {
+    const params = await context.params;
     const { executionId } = params;
     const reportPath = path.join(
       process.cwd(),

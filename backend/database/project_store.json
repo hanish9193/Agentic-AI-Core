@@ -8,7 +8,8 @@
       "requirements": [
         "be20626a-1c9e-46f8-84f2-2926ead2fc07",
         "7f8d4a01-d4fe-42e0-80b7-d5b903ed3336",
-        "232bfcfb-44a3-40a0-a0d8-baf916d1a315"
+        "232bfcfb-44a3-40a0-a0d8-baf916d1a315",
+        "2214b95c-fee7-4e89-b38d-a49a0a558da2"
       ]
     },
     {
@@ -60,7 +61,18 @@
       "line_of_business": "general",
       "created_at": "2026-07-07T10:31:24.673016Z",
       "requirements": [
-        "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1"
+        "2024c1ce-5a87-4cc2-9b24-4a0724ce2de1",
+        "3ee18c06-bdf5-402b-ab97-e229f5d4ac23"
+      ]
+    },
+    {
+      "id": "2fddbabf-e314-4768-bbfa-3420e4d16274",
+      "name": "Test Project",
+      "description": "Description",
+      "line_of_business": "insurance",
+      "created_at": "2026-07-08T03:27:17.600054Z",
+      "requirements": [
+        "89ad1301-cbae-4d17-b045-6e9ad5b1e7c1"
       ]
     }
   ],
@@ -139,6 +151,49 @@
       "business_domain": "Banking",
       "attachments": [
         "bankk.pdf"
+      ]
+    },
+    "3ee18c06-bdf5-402b-ab97-e229f5d4ac23": {
+      "id": "3ee18c06-bdf5-402b-ab97-e229f5d4ac23",
+      "title": "REQ-001: Software Requirement Speci\ufb01cation \nBanking Login M...",
+      "description": "Software Requirement Speci\ufb01cation \nBanking Login Module \n \nModule \nAuthentication \n \nBusiness Priority \nHigh \n \nFunctional Requirements \n \nREQ-001 \nThe application shall allow a registered customer to log in using a valid username and \npassword. \n \nREQ-002 \nIf invalid credentials are entered, an appropriate error message shall be displayed. \n \nREQ-003 \nThe application shall lock the account after \ufb01ve consecutive failed login attempts. \n \nREQ-004 \nUsers shall be able to reset forgotten passwords using registered email. \n \nREQ-005 \nThe Remember Me option shall preserve login for 30 days. \n \nREQ-006 \nSession shall expire after 15 minutes of inactivity. \n \nREQ-007 \nPasswords shall be masked. \n \nREQ-008 \nUsername is mandatory. \n \nREQ-009 \nPassword is mandatory. \n \nREQ-010 \nSuccessful login redirects user to Dashboard.",
+      "source": "manual",
+      "uploaded_at": "2026-07-08T02:26:45.112328Z",
+      "original_filename": "wdsxz.pdf",
+      "requirement_id": "REQ-001",
+      "requirement_title": "Software Requirement Speci\ufb01cation \nBanking Login M...",
+      "priority": "high",
+      "business_domain": "Banking",
+      "attachments": [
+        "wdsxz.pdf"
+      ]
+    },
+    "89ad1301-cbae-4d17-b045-6e9ad5b1e7c1": {
+      "id": "89ad1301-cbae-4d17-b045-6e9ad5b1e7c1",
+      "title": "Req Title",
+      "description": "Req Description",
+      "source": "manual",
+      "uploaded_at": "2026-07-08T03:27:17.613785Z",
+      "original_filename": null,
+      "requirement_id": null,
+      "requirement_title": null,
+      "priority": "HIGH",
+      "business_domain": "claims",
+      "attachments": []
+    },
+    "2214b95c-fee7-4e89-b38d-a49a0a558da2": {
+      "id": "2214b95c-fee7-4e89-b38d-a49a0a558da2",
+      "title": "REQ-001: Citation: He, H.; Yang, X.; Mi, X.;\nShen, H.; Liao...",
+      "description": "Citation: He, H.; Yang, X.; Mi, X.;\nShen, H.; Liao, X. Multi-Agent Deep\nReinforcement Learning Based\nDynamic Task Offloading in a\nDevice-to-Device Mobile-Edge\nComputing Network to Minimize\nAverage Task Delay with Deadline\nConstraints. Sensors 2024, 24, 5141.\nhttps://doi.org/10.3390/s24165141\nAcademic Editors: Otman A. Basir\nand Boon-Chong Seet\nReceived: 14 June 2024\nRevised: 2 August 2024\nAccepted: 6 August 2024\nPublished: 8 August 2024\nCopyright: \u00a9 2024 by the authors.\nLicensee MDPI, Basel, Switzerland.\nThis article is an open access article\ndistributed\nunder\nthe\nterms\nand\nconditions of the Creative Commons\nAttribution (CC BY) license (https://\ncreativecommons.org/licenses/by/\n4.0/).\nsensors\nArticle\nMulti-Agent Deep Reinforcement Learning Based Dynamic\nTask Offloading in a Device-to-Device Mobile-Edge\nComputing Network to Minimize Average Task Delay with\nDeadline Constraints\nHuaiwen He 1\n, Xiangdong Yang 1,2\n, Xin Mi 1,2, Hong Shen 3 and Xuefeng Liao 4,*\n1\nSchool of Computer, Zhongshan Institute, University of Electronic Science and Technology of China,\nZhongshan 528400, China; he_huai_wen@aliyun.com (H.H.); yangxiangdong.cs@aliyun.com (X.Y.);\n202021080226@std.uest.edu.cn (X.M.)\n2\nComputer Science and Engineering School, University of Electronic Science and Technology of China,\nChengdu 611731, China\n3\nEngineering and Technology, Central Queensland University, Rockhampton 4701, Australia;\nh.shen@cqu.edu.au\n4\nSchool of Data Science and Artificial Intelligence, Wenzhou University of Technology, Wenzhou 325027, China\n*\nCorrespondence: liaoxuefeng@wzut.edu.cn\nAbstract: Device-to-device (D2D) is a pivotal technology in the next generation of communication,\nallowing for direct task offloading between mobile devices (MDs) to improve the efficient utilization\nof idle resources. This paper proposes a novel algorithm for dynamic task offloading between\nthe active MDs and the idle MDs in a D2D\u2013MEC (mobile edge computing) system by deploying\nmulti-agent deep reinforcement learning (DRL) to minimize the long-term average delay of delay-\nsensitive tasks under deadline constraints. Our core innovation is a dynamic partitioning scheme\nfor idle and active devices in the D2D\u2013MEC system, accounting for stochastic task arrivals and\nmulti-time-slot task execution, which has been insufficiently explored in the existing literature. We\nadopt a queue-based system to formulate a dynamic task offloading optimization problem. To\naddress the challenges of large action space and the coupling of actions across time slots, we model\nthe problem as a Markov decision process (MDP) and perform multi-agent DRL through multi-\nagent proximal policy optimization (MAPPO). We employ a centralized training with decentralized\nexecution (CTDE) framework to enable each MD to make offloading decisions solely based on its local\nsystem state. Extensive simulations demonstrate the efficiency and fast convergence of our algorithm.\nIn comparison to the existing sub-optimal results deploying single-agent DRL, our algorithm reduces\nthe average task completion delay by 11.0% and the ratio of dropped tasks by 17.0%. Our proposed\nalgorithm is particularly pertinent to sensor networks, where mobile devices equipped with sensors\ngenerate a substantial volume of data that requires timely processing to ensure quality of experience\n(QoE) and meet the service-level agreements (SLAs) of delay-sensitive applications.\nKeywords: mobile edge computing; dynamic matching; D2D; delay constraint; multi-agent reinforcement\nlearning\n1. Introduction\nWith the advancement of Internet of Things (IoT) technology, sensor networks play an\nincreasingly important role in various applications. The vast amount of data generated by\nthese sensor networks requires real-time processing to support applications such as smart\nhomes, smart cities, and Industrial Internet of Things (IIoT). However, transmitting all\ndata to remote cloud servers for processing presents challenges of high latency and band-\nwidth limitations. Mobile edge computing (MEC) has emerged as a promising computing\nparadigm that aims to reduce response time for computation tasks and enhance the quality\nSensors 2024, 24, 5141. https://doi.org/10.3390/s24165141\nhttps://www.mdpi.com/journal/sensors\nSensors 2024, 24, 5141\n2 of 19\nof experience (QoE) of users by offloading tasks to edge servers [1]. However, the dynamic\nand random nature of task arrivals can lead to a significant increase in workload during cer-\ntain periods. This surge in workload poses challenges for edge servers, making it difficult\nto meet the latency requirements of tasks like face recognition, virtual reality, augmented\nreality, online games, and more. D2D technology addresses this issue by enabling MDs to\noffload tasks directly to idle MDs, facilitating resource utilization and collaboration across\nthe network [2].\nIn D2D\u2013MEC networks, MDs typically operate in two modes: requester MDs (active\ndevices) and server MDs (idle devices) [2]. Requester MDs can offload tasks to server MDs\nor edge servers, while server MDs not only handle their own tasks but also accept tasks\nfrom other requester MDs. This approach can effectively utilize idle resources within the\nnetwork by enabling task offloading and collaboration among mobile devices. However,\nmost existing research in this field primarily emphasizes the static partitioning of MDs,\nwhere active devices and idle devices are pre-determined [3]. This restricts the flexibility\nof D2D communication in real-world scenarios. Additionally, the dynamic nature of\ntask arrivals and the need for collaboration among active devices present considerable\nchallenges for task offloading in D2D\u2013MEC.\nIn order to ensure a high quality of experience (QoE) for users in mobile edge com-\nputing (MEC) systems, it is crucial to process tasks within their deadlines, especially for\ndelay-sensitive tasks. Zuo et al. [4] proposed an alternating iterative algorithm, based\non continuous relaxation and greedy rounding (CRGR), to achieve the Nash equilibrium.\nAbbas et al. [5] introduced an algorithm that maximizes the number of completed tasks\nthrough hierarchical and iterative allocation while minimizing energy consumption and\nmonetary costs. However, the aforementioned studies did not consider leveraging D2D\ntechnology to improve the utilization of network resources. Hamdi et al. [6] put forth a\nlayered optimization method to maximize energy efficiency (EE) in D2D\u2013MEC systems\nunder delay constraints. Sun et al. [7] proposed an algorithm to maximize the network\nenergy efficiency in D2D\u2013MEC networks. However, they consider the division of D2D roles\nto be static.\nDRL algorithms have been successfully applied to the task offloading problem in MEC\nin various existing works [8\u201310]. Huang et al. [8] proposed learning algorithms based\non Q-learning or deep Q-learning network (DQN) for task offloading in MEC systems.\nLuo et al. [11] introduced a distributed learning algorithm based on the asynchronous\nadvantage actor\u2013critic (A3C) technique to optimize energy consumption and quality of\nexperience in software-defined mobile edge networks. Qiao et al. [12] and Li et al. [10]\ndesigned a reinforcement learning framework for D2D edge computing and networks\nto address challenges related to the dynamic nature and uncertainty of the environment.\nHowever, most of the aforementioned studies predominantly utilized single-agent rein-\nforcement learning algorithms or overlooked the unknown load dynamics at each mobile\ndevice. Due to the dynamical and random nature of MEC systems, the decision space size\nincreases exponentially with the number of mobile devices, which may bring the curse of\ndimensionality and a struggle to converge for single-agent DRL algorithms.\nIn this paper, we investigate the dynamic task offloading problem in a D2D\u2013MEC\nsystem for delay-sensitive tasks under delay constraints. Our objective is to minimize\nthe long-term average task delay under deadline constraints. To achieve this, we propose\na dynamic D2D partitioning approach for MDs, based on a queuing-based system, con-\nsidering the dynamic load level of MDs and the presence of multiple time slot tasks. To\ntackle the challenges posed by a huge decision space and coupling of actions across time\nslots, we formulate the problem as a cooperative Markov game and propose a multi-agent\n(MA) DRL-based algorithm based on the MAPPO [13] technique and implementation in a\nCDTE-based manner. Our main contributions can be summarized as follows:\n\u2022\nWe introduce a novel dynamic D2D partitioning method based on a queuing system for\nhandling delay-sensitive tasks in D2D\u2013MEC networks. Furthermore, we formulate the\nproblem of minimizing the long-term average task delay under deadline constraints as\nSensors 2024, 24, 5141\n3 of 19\na dynamic assignment problem, considering the random load level at MDs and multi-\nslot spanned tasks. Our proposed model surpasses existing approaches by providing a\nmore precise characterization of task latency and improving the utilization of network\ncomputing resources. Additionally, it exhibits superior scalability and practicality.\n\u2022\nWe formulate the dynamic offloading problem as a cooperative Markov game and\npropose a multi-agent DRL-based algorithm utilizing the MAPPO technique to address\nthe exponential growth of the decision space. Our proposed algorithm allows for\nefficient online task decision-making in dynamic and volatile network environments,\nleveraging the strengths of MAPPO to manage large decision spaces effectively.\n\u2022\nWe adopt the CDTE framework, enabling a distributed decision-making model. Dur-\ning the execution phase, each MD can independently make decisions based on its\nown system state, significantly reducing communication overhead. This reliance on\nlocal observations ensures that the system remains robust and adaptable, even in\nfluctuating network conditions.\n\u2022\nWe conduct comprehensive experiments and the numerical results demonstrate the\neffectiveness and fast convergence of our proposed algorithm in a time-varying system\nenvironment. Compared to the sub-optimal outcomes obtained by deploying single-\nagent DRL, our algorithm, which enables distributed decision-making, achieves a\nsignificant reduction of 11.0% in average task completion delay and a 17.0% decrease\nin the ratio of dropped tasks.\nThe rest of this paper is organized as follows. Section 2 presents a review of related\nworks. In Section 3, we provide details of the system model. In Section 4, we formulate\nthe task offloading problem with delay constraints as a dynamic assignment problem. In\nSection 5, we propose a multi-agent DRL-based algorithm based on the MAPPO tech-\nnique. The experimental setup and numerical results are presented in Section 6. Finally,\nSection 7 concludes this paper.\n2. Related Works\n2.1. Delay-Sensitive Task Offloading in MEC Networks\nResearch on optimizing latency reduction for delay-sensitive tasks in MEC networks has\nattracted a great deal of attention [14\u201318]. Wu et al. [14] introduced a delay-aware energy-\nefficient (DAEE) online offloading algorithm designed to optimize task offloading in Industrial\nInternet of Things (IIoT) systems, addressing the challenge of balancing low latency and\nlow power consumption for delay-sensitive and compute-intensive devices. Zhao et al. [17]\nproposes a novel deep reinforcement learning algorithm for privacy-preserving task offloading\nin multi-user MEC systems, balancing low latency with the protection of users\u2019 location and\nusage pattern privacy. Yang et al. [19] proposed a novel offloading framework for the multi-\nserver MEC network to jointly optimize job offloading decisions and computing resource\nallocation using multi-task learning. Despite the extensive research, most of these studies\nassume that tasks can be completed within a single time slot. Tang and Wong [20] proposed an\nalgorithm focused on minimizing long-term costs in MEC, taking into account non-divisible\ntasks that are sensitive to delay and the varying edge loads over multiple time slots. However,\ntheir approach did not incorporate the use of D2D communication and did not take into\naccount MADRL-based algorithms.\n2.2. D2D Communication Applied in MEC Networks\nD2D communication, a cornerstone innovation of 5G technology, enables users to\ndelegate tasks to nearby idle devices, significantly boosting the collective computational\nperformance of the network [21\u201323]. Wang et al. [15] proposes a novel algorithm leveraging\na Knapsack problem-based pre-allocation strategy and an alternate optimization technique\nto optimize the energy consumption and transmission delay in D2D-assisted MEC systems.\nChai et al. [24] proposed a heuristic algorithm based on the Kuhn\u2013Munkres algorithm\nand Lagrangian dual method for joint computation offloading and resource allocation\nin D2D\u2013MEC systems. Sun et al. [7] leveraged the Lyapunov optimization technique to\nSensors 2024, 24, 5141\n4 of 19\ndesign the DACORA algorithm, in order to maximize long-term utility energy efficiency\n(UEE), considering the dynamics of task arrival rate and battery level. However, previous\nresearch typically regards the roles of D2D devices as service providers or requesters as\nstatic, overlooking the dynamic shifts in device roles within the evolving D2D network\ncontext. Peng et al. [1] took into account the dynamic partitioning of devices, and proposed\nan online resource coordinating and allocating scheme based on the Lyapunov optimization\nframework. However, they overlooked the scenario of tasks spanning multiple time slots\nand the associated waiting times in the execution process, which hinders the enhanced user\nexperience tailored to user needs.\n2.3. DRL for Computation Offloading in MEC Networks\nDRL has recently emerged as a promising alternative for solving online computation\noffloading problems in MEC networks. Due to its ability to extract valuable knowledge from\nthe environment and make adaptive decisions, DRL technology has received significant\nattention recently for edge computing task offloading [8,20,25,26]. Chen et al. [25] first\nproposed a DQN-based algorithm to handle huge state spaces and learn the optimal\ncomputation offloading policy. Wang et al. [27] proposed a task-offloading algorithm\nbased on meta-reinforcement learning to enable the model to quickly adapt to different\nenvironments. However, the above research works were based on single agents and made\ncentralized decisions, which may be impractical in the real world as the number of MDs\nis increasing due to the exploration of the decision space in MEC systems. Some works\nbased on multi-agent DRL schemes are proposed for task offloading problems [28\u201330].\nHowever, most of these approaches rely on the multi-agent deep deterministic policy\ngradient (MDDPG) framework [31], which is designed for continuous action spaces. This\nmakes it suitable for scenarios where agents need to perform smooth and continuous\nactions, such as in robotic control. Therefore, the MDDPG algorithm is not well-suited for\nthe target device selection and matching in dynamic D2D task offloading, as studied in\nthis paper.\n2.4. Federated Learning in MEC Task Offloading\nIn recent years, federated learning has gained significant attention in edge comput-\ning task offloading by enabling multiple devices to collaboratively train models without\nsharing local data, offering a privacy-preserving solution. To relieve the straggler effect,\nJi et al. [32] proposed an edge-assisted federated learning Computation Offloading scheme,\nin which the stragglers offload partial computation and the offload size were optimized\nby a proposed threshold-based offloading strategy. To benefit convergence speed and\nglobal-model accuracy, Mills et al. [33] introduced non-federated batch normalization lay-\ners into federated deep neural networks and allowed users to train models with their own\npersonalized data. Han et al. [34] proposed a federated learning-based training scheme\nto ease the training burden on each IoT device. To facilitate applying data and resource\nheterogeneity to federated learning in edge task offloading, Ma et al. [35] integrated in-\nformation entropy into edge datasets and considered device heterogeneity. However,\nfederated learning has drawbacks. It requires a high communication overhead due to\nfrequent model updates between devices and the central server, which can be problematic\nin bandwidth-limited environments. Additionally, it suffers from data heterogeneity, where\nvarying data distributions across devices impact the global model\u2019s performance.\nDifferent from the previous studies, this paper introduces a multi-agent reinforcement\nlearning approach tailored for the scheduling of delay-sensitive tasks within D2D\u2013MEC\nnetworks. Our algorithm is designed to minimize the completion time of tasks, accounting\nfor their multi-time slot nature and associated deadlines. Distinguishing our work from [8],\nwho focused solely on single-agent reinforcement learning and neglected the collaborative\npotential of D2D technology among terminal nodes, we also address the critical aspect of\nuser task processing delays. Contrary to their aim of maximizing data processing rates, our\nfocus extends to enhancing the overall user experience.\nSensors 2024, 24, 5141\n5 of 19\nWe select MAPPO as the algorithmic framework for the following compelling reasons:\n(1) MAPPO\u2019s design is particularly suited for discrete action spaces, which is essential\nfor our scenario wherein decisions involve selecting from a finite set of options, such as\noffloading tasks to specific D2D service nodes or edge servers\u2014unlike MDDPG, which is\nbetter adapted to continuous action spaces. (2) Introduced more recently than MDDPG,\nMAPPO offers advanced policy optimization and stability in training, allowing for efficient\nexploration within a large discrete action space and maintaining a critical balance between\nexploration and exploitation. (3) Our approach leverages MAPPO\u2019s strengths in a discrete\naction space and introduces a sophisticated, adaptive mechanism for task offloading that\nresponds to real-time network dynamics, effectively minimizing average task delay under\nstrict deadlines\u2014a significant advancement over existing methods.\n3. System Model\nIn this paper, we consider a heterogeneous MEC network system consisting of D\nmobile devices and an edge server with D2D communication support, which is denoted\nas D = {0, 1, 2, . . . , D}, where 0 represents the edge server. The system architecture is\nillustrated in Figure 1. We assume that the D2D\u2013MEC system operates in discrete time slots\nrepresented by T = {1, 2, . . . , T}, where each time slot lasts for \u2206t seconds. In each time\nslot, tasks are generated in each MD according to a certain probability model.\n \nComputation\n Queue\nTransmission \nQueue\nScheduler\nw1(t)\nw1(t)\nMD1\na1(t) = 1\na1(t) = 1 \na1(t) \u22601\na1(t) \u22601\nComputation\n Queue\nTransmission \nQueue\nScheduler\nw2(t)\nw2(t)\nMD2\na2(t) = 2\na2(t) = 2 \na2(t) \u22602\na2(t) \u22602\nTransmission \nQueue\nScheduler\nwm(t)\nwm(t)\nMDm\nam(t) = m\nam(t) = m \nam(t) \u2260m\nam(t) \u2260m\n\u2026\n\u2026\nComputation\n Queue\nComputation  Queue\nCellular link \nD2D link \nFigure 1. Architecture of D2D\u2013MEC network.\nIn the following subsections, we present the details of the device model, computation\nmodel, transmission model, energy model, and delay model employed in the system. The\nkey notation used in this paper is summarized in Table 1.\nTo accurately mode the service time of the computation task, we adopt a queuing\nsystem to represent the task processing procedure. Each MD d \u2208[1, D] has two types of\nqueues: the computation queue Qcomp\nd\nused for task execution and the transmission queue\nQtran\nd\nused to offload tasks to D2D devices or the edge server. For the edge server, there\nonly exists one computation queue, denoted as Qcomp\n0\n.\nSince the load of MDs varies stochastically, we dynamically divide the MD set into idle\ndevices (requesters) and active devices (servers) based on the backlog of their computation\nqueues, which are defined as follows:\nSensors 2024, 24, 5141\n6 of 19\n(1)\nIdle device: In time slot t, Qcomp\nd\n(t) = \u2205. Idle devices can provide computing services\nfor other MDs via a D2D link.\nTable 1. Key Notations.\nSymbol\nDefinition\nD\nThe set of mobile devices\nT\nThe whole time slots\n\u2206t\nThe duration of time slot t\nwm(t)\nThe computation task generated on mobile device m at time slot t\nstm\nThe size of task wm(t)\nctm\nThe computation complexity of task wm(t)\n\u03c4tm\nThe deadline for task wm(t)\nA(t)\nThe task offloading decision for all MDs at time slot t\natm(t)\nThe offloading decision of the mth active device at time slot t\nQcomp\nd\nThe computing queue of mobile device d\nQtran\nd\nThe transmission queue of mobile device d\nlcomp\nm,d (t)\nThe time slot when task wm(t) is fully processed at mobile device d\nltran\nm\n(t)\nThe time slot when task w(m, t) transmission is completed at device m\n\u03d5comp\nm,d (t)\nThe waiting time slots of task wm(t) in computation queue at mobile device d\n\u03d5tran\nm\n(t)\nThe waiting time slots of task wm(t) in transmission queue at mobile device m\nrm(t)\nThe transmission rate of mobile device m at time slot t\npm\nThe transmission power at device m\nhdm(t)\nThe channel gain between active device m and idle device d at slot t\nN0\nThe white noise\nBm(t)\nThe bandwidth of device m at time slot t\nL(m, t)\nThe total duration of task w(m, t) from generation to execution completion\nSm(t)\nLocal observation information of device m on time slot t\nS(t)\nGlobal state information on time slot t\nr(t)\nReward in time slot t\n(2)\nActive device: In time slot t, Qcomp\nd\n(t) \u0338= \u2205. Active devices only process a task locally,\nor offload tasks to edge servers or idle MDs, but cannot accept tasks from other MDs.\n3.1. Task Model\nWe consider time-sensitive tasks, such as virtual reality (VR) or animation rendering,\nthat can span over multiple time slots. At time t, each MD m stochastically generates\na computation task, denoted as wm(t), specified by a three-tuple < st\nm, ct\nm, \u03c4t\nm >, where\nst\nm represents the size of task w in 1-bit unit, ct\nm denotes the computation complexity of\ntask w measured in the number of central processing unit (CPU) cycles required for a\n1-bit operation, and \u03c4t\nm indicates the task deadline for completion (an integer multiple\nof the time slot). Each job should be processed within \u03c4t\nm time slot to avoid incurring an\nexpiration penalty.\nWe assume that each task is indivisible, such that the system adopts a binary offloading\nmode, which allows tasks to be executed either locally or offloaded to an edge server\nthrough cellular links, or transferred to idle devices via D2D links. Each MD employs\na scheduler that determines the target device for task execution. The active devices set\nat slot t is denoted as AD(t) = {ad1, ad2, . . . , ad|AD(t)|}, and the idle devices at slot t is\ndenoted as ID(t) = {id0, id1, id2, . . . , id|ID(t)|}, where id0 represents the edge server which\nis always regarded as an idle device due to its sufficient computing resources. Hence, we\nhave |AD(t)| + |ID(t)| = D.\nSensors 2024, 24, 5141\n7 of 19\n3.2. Computation Model\nThe computation queue follows the first-in-first-out (FIFO) principle, where tasks\nin the queue buffer must wait for the completion of the preceding task before being\nscheduled. The computing delay of a task is composed of two parts: the waiting time and\nexecution time.\nLet et denote the time slot of task wm(t) placed in the queue Qcomp\nd\nat device d \u2208D, and\nlcomp\nm,d (t) denote the time slot of task wm(t) to be completely processed or dropped in device\nd. Note that, if the task is computed locally, we obtain et = t, and lcomp\nm,d (t) can be written as\nlcomp\nm\n(t). Hence, the number of time slots that task wm(t) will wait for scheduling before\nexecuting it in the computation queue Qcomp\nd\ncan be expressed as follows:\n\u03d5comp\nm,d (t) =\n\"\nmax\nt\u2032\u2208{0,1,\u00b7\u00b7\u00b7 ,t\u22121},d\u2032\u2208[1,D]lcomp\nd\u2032,d\n\u0000t\u2032\u0001 \u2212et + 1\n#+\n(1)\nwhere the operator [x]+ = max{0, x}; lcomp\nd\u2032,d (0) is initially set to zero for presentation simplic-\nity. The term\nmax\nt\u2032\u2208{0,1,\u00b7\u00b7\u00b7 ,t\u22121},d\u2032\u2208[1,D]lcomp\nd\u2032,d (t\u2032) determines the time slot when all the tasks placed\nin the computation queue Qcomp\nd\nbefore time slot et have either been processing or dropped.\nHence, \u03d5comp\nm,d (t) determines the number of waiting time slots in the computation queue.\nFor each task wm(t) that arrives at the computation queue Qcomp\nd\nat the beginning of\ntime slot et, it will either be processed completely or dropped in slot lcomp\nm,d (t), as follows:\nlcomp\nm,d (t) = min\n\u001a\net + \u03d5comp\nm,d (t) + \u2308st\nmct\nm\nfd\u2206t \u2309\u22121, t + \u03c4t\nm \u22121\n\u001b\n(2)\nwhere fd represents the process rate of device d. Specifically, task wm(t) will be scheduled\nto be executed at the beginning of slot et + \u03d5comp\nm,d (t). \u2308\u00b7 \u2309is the ceiling function, which means\ndevices only switch to executing the next task at the beginning of a new time slot. The term\nl stmctm\nfd\u2206t\nm\nrepresents the total time slots required to process the task completely. Considering\nthe deadline of the tasks, here, we use a min operator to determine the minor value of the\nprocess completely and the drop time slot.\nWhen multiple offloaded tasks or a newly generated task arrive at device d in the\nsame time slot, they are queued in Qcomp\nd\n, following the rules outlined below:\n(1)\nPriority of offloaded tasks: Tasks that have been offloaded from other devices are\ngiven higher priority over tasks that are locally generated at device d. This ensures\nthat the device first addresses the tasks that involve inter-device collaboration.\n(2)\nDeadline-oriented queuing: Among the offloaded tasks, those with shorter dead-\nlines are positioned ahead in the queue. This prioritizes tasks that require quicker\ncompletion, reflecting the system\u2019s consideration for task urgency.\nBy adhering to these rules, the system effectively manages task collision and maintains\nan orderly queue that respects both the source of the tasks and their respective deadlines.\n3.3. Task Offloading Model\nWe assume that cellular links and D2D links operate on different frequency bands\nand adopt orthogonal frequency division multiple access (OFDMA) for access. Therefore,\ncommunication between any two devices does not interfere with the communication between\nother devices [15]. The transmission queue Qtran\nd\n, d \u2208[1, D] also follows the FIFO principle.\nSimilar to the computation queue, let ltran\nm\n(t) denote the slot when wm(t) is successfully\ntransmitted to the target device or dropped, from when it entered the queue Qtran\nd\n, so that we\nobtain the amount of time slots that wm(t) will wait before transfer in Qtran\nd\n, as follows:\nSensors 2024, 24, 5141\n8 of 19\n\u03d5tran\nm\n(t) =\n\u0014\nmax\nt\u2032\u2208{0,1,\u00b7\u00b7\u00b7 ,t\u22121}ltran\nm\n\u0000t\u2032\u0001 \u2212t + 1\n\u0015+\n(3)\nwhere ltran\nm\n(t) represents the time slot when task wm(t) leaves the queue Qtran\nd\n, and we set\nltran\nm\n(0) = 0 for presentation simplicity. The term\nmax\nt\u2032\u2208{0,1,\u00b7\u00b7\u00b7 ,t\u22121}ltran\nm\n(t\u2032) determines the time\nslot when all the tasks placed in the transmission queue before time slot t have either been\nprocessed or dropped.\nIn mobile device m \u2208[1, D], task wm(t), placed in the transmission queue at the\nbeginning of time slot t, needs a conditional part for if task wm(t) is either completely sent\nor dropped in time slot ltran\nm\n(t), as follows:\nltran\nm\n(t) = min\n(\nt + \u03d5tran\nm\n+ argmin\n\u03b8\n\u001a\nst\nm \u2264\nt+\u03b8\n\u2211\ni=t\nrm(i)\u2206t\n\u001b\n, t + \u03c4t\nm \u22121\n)\n(4)\nwhere rm(t) represents the transmission rate of MD m in t. Specifically, the task wm(t)\nwill start to transmit at the beginning of the time slot t + \u03d5tran\nm\n(t). The term argmin\n\u03b8\n\u001a\nst\nm \u2264\n\u2211t+\u03b8\ni=t rm(i)\u2206t\n\u001b\nrepresents the total time slots required to transfer data successfully, where\nrm(i)\u2206t represents the transfer data size in slot i. Hence, ltran\nm\n(t) decides the time slot when\na task will either be sent successfully or dropped.\nThe transmission rate rm(t) of MD m at t can be calculated based on Shannon\u2019s theorem,\nas follows:\nrm(t) = Bm(t) log2(1 + pmhd\nm(t)\nN0\n)\n(5)\nwhere Bm(t) is the bandwidth allocated to MD m and pm represents the transmission\npower of device m, which is a constant value. hd\nm(t) represents the channel gain between\ndevice m and target device d at time slot t, which keeps it fixed within a time slot and\nfollows a Rayleigh distribution that varies over time. N0 represents the white noise during\ntransmission. Here, we adopt the average bandwidth allocation scheme, wherein the total\nbandwidth is allocated equally among each pair of communicating nodes.\nDue to the negligible size of task results compared to the original task data, the\ntransmission time for task result return is extremely short. Therefore, similarly to [20], the\ntransmission time for the task result return is ignored.\n3.4. Task Delay Model\nLet am(t) = m denote the target device to execute task wm(t); we have am(t) \u2208\nID(t) S{m}.\nIf am(t) = m, which means task wm(t) will be processed locally, based on Equation (2),\nwe have the total delay Lm(t) = lcomp\nm\n(t) \u2212t + 1, which can be written as follows:\nLloc\nm (t) = min\n\u001a\n\u03d5comp\nm\n(t) +\n\u0018 st\nmct\nm\nfm\u2206t\n\u0019\n, \u03c4t\nm\n\u001b\n(6)\nIf am(t) \u0338= m, then task wm(t) will be offloaded to remote device d to process. As\nthe transmission delay is Ltran\nm\n(t) = ltran\nm\n(t) \u2212t + 1, the processing delay is Lcomp\nm\n(t) =\n\u03d5comp\nm,d (t) + \u2308stmctm\nfm\u2206T \u2309. Hence, we obtain the following equation for the total delay of the\nremotely executed task:\nLrem\nm (t) = min\n\u001a\nLtran\nm\n(t) + Lcomp\nm\n(t), \u03c4t\nm\n\u001b\n(7)\nTherefore, the total delay of task wm(t) can be derived as follows:\nSensors 2024, 24, 5141\n9 of 19\nL(m, t) = 1(am(t)=m)Llocal\nm\n(t) + 1(am(t)\u0338=m)Lrem\nm (t)\n(8)\nwhere 1(\u00b7) is an indicator function that outputs 1 when \u00b7 is true and 0 otherwise.\n4. Problem Formulation\nIn this paper, we aim to minimize the long-term average task delay under deadline\nconstraints by making task offloading decisions A(t) = {a1(t), a2(t), . . . , ad(t)} for each\nMD in each time slot t. The objective function at slot t is written as\n1\nD\u2211\nD\nd=1 L(d, t).\nTherefore, the task offloading optimization can be formulated as follows:\n(P1) min\nA(t)\n1\nT\nT\n\u2211\nt=1\n1\nD\nD\n\u2211\nd=1\nL(d, t)\ns.t.\nL(d, t) \u2264\u03c4t\nd, \u2200d \u2208[1, D]\n(9a)\nad(t) \u2208ID(t)\n[\n{d}, \u2200d \u2208[1, D]\n(9b)\nIn problem P1, constraint (9a) ensures that tasks are completed or dropped upon\nreaching their deadlines, minimizing average task delay. Constraint (9b) specifies the target\ndevice for task execution, including both idle devices and the local device where the task\nis generated.\nProblem P1 can be classified as a dynamic assignment problem, characterized by its\ncomplexity in high-dimensional space and being non-deterministic polynomial (NP)-hard.\nThe time complexity of this problem increases exponentially with the cardinality of the\nsets of available devices |AD(t)| and idle devices |ID(t)| at each time slot t. Addition-\nally, the strong coupling of action decisions across multiple time slots exacerbates the\ncomputational challenge.\nEven if the offline information of the system is known in advance, it is challeng-\ning to solve using traditional techniques due to the curse of dimensionality. Hence, we\npropose a novel algorithm with low complexity that operates online using a multi-agent\nDRL framework.\n5. Algorithm Design\nProximal policy optimization (PPO) is a robust policy gradient algorithm within the\nactor\u2013critic framework, demonstrating exceptional performance in diverse reinforcement\nlearning tasks [36]. Its simplicity and effectiveness have made it a popular choice for\nnumerous RL applications, addressing the stability and sample efficiency concerns of\ntraditional policy gradient methods through careful policy network update clipping and\nthe use of a surrogate objective function.\nBeyond the scope of single-agent DRL methods, MAPPO significantly expands the\napplicability of PPO. It excels in scenarios where multiple agents must interact and make\ndecisions autonomously, demonstrating superior performance in environments that require\nstability and sample efficiency within discrete action spaces. The robust handling of discrete\naction spaces and overall resilience in multi-agent systems make MAPPO an ideal choice\nfor the dynamic task offloading problem explored in this study.\nThis advancement underscores the importance of MAPPO in facilitating collaborative\nactions among agents, ensuring that each operates optimally within a shared environment.\nThe scalable and efficient solution MAPPO offers is particularly significant for cooperative\ndecision-making in complex settings, addressing challenges that extend beyond the reach\nof single-agent approaches.\nIn this section, we present a novel framework for task offloading based on the multi-\nagent DRL technique. Leveraging the MAPPO technique, our proposed algorithm builds\nupon the cooperative decision-making abilities of MAPPO to effectively address the dy-\nSensors 2024, 24, 5141\n10 of 19\nnamic offloading challenges in MEC systems. By formulating the problem as a cooperative\nMarkov game and employing CTDE architecture, our algorithm provides a robust and\nefficient solution for dynamic offloading in MEC systems, effectively managing the heavy\ncommunication burden and offering scalability in decision-making processes.\nFirstly, we formulate the problem of minimizing long-term average task delay as a\ncooperative Markov game.\n5.1. MDP of P1\n5.1.1. State\nOur algorithm incorporates both local and global states. The local state includes\nthe system information of each MD and is used to train the actor network for individ-\nual decision-making. On the other hand, the global state comprises the entire system\ninformation at the current time slot and is utilized to train the critic network.\nAt the beginning of slot t, each device m \u2208[1, D] observes its state information, which\nincludes task properties such as task size, task complexity, and expiration time, as well\nas information about the computation queue, transmission queue, and channel state. Let\nBcomp\nm\n(t) =\nmax\nt\u2032\u22080,1,\u00b7\u00b7\u00b7 ,t\u22121,m\u2032\u2208[1,D]lcomp\nm\u2032,m (t\u2032) \u2212t + 1 denote the backlog of computation queue\nat slot t, and Btran\nm\n(t) =\nmax\nt\u2032\u22080,1,\u00b7\u00b7\u00b7 ,t\u22121ltran\nm\n(t\u2032) \u2212t + 1 denote the backlog of the transmission\nqueue of each MD; we obtain the local state vector as follows:\nSm(t) =\n\u0012\nst\nm, ct\nm, \u03c4t\nm, Bcomp\nm\n(t), Btran\nm\n(t), hm(t), \u2212\u2212\u2192\nid(t)\n\u0013\n(10)\nwhere \u2212\u2212\u2192\nid(t) is a one-dimension vector and consists of the identifier (ID) of all the idle\ndevices. We assume that each idle MD will broadcast the state of its computation queue at\nthe end of each time slot. For device m at time slot t, if no task is generated, st\nm, ct\nm, and\u03c4t\nm\nare all set to zero.\nThe global state integrates the local state information from each MD and the queue\ninformation from the edge server, which are denoted as follows:\nS(t) =\n\u0012\nS1(t), S2(t), . . . , SD(t)\n\u0013\n(11)\n5.1.2. Action\nAt the beginning of slot t, when MD m generates a task wm(t), the scheduler decides\nwhether to execute the task locally or offload it to an idle device. Therefore, the action\nvector of each MD can be presented as follows:\nA(t) =\n\u0012\nid0, id1, id2, . . . , idID\n\u0013\n\u222am\n(12)\n5.1.3. Reward\nAccording to problem P1, the optimization objective is the ratio of the total task delay\nto the task deadline. Therefore, the reward signal can be directly defined as follows:\nr(t) =\n\u2211m\u2208[1,D] 1(atm=m)Llocal\nm\n(t) + 1(atm\u0338=m)Lrem\nm (t)\n\u2211m\u2208[1,D] 1(stm) \u0338= 0)\n(13)\nwhere the item \u2211m\u2208[1,D] 1(st\nm) \u0338= 0) represents all tasks generated in time slot t.\n5.2. Multi-Agent DRL-Based Algorithm\nTo reduce the exponential decision space of P1, we propose a multi-agent DRL-\nbased algorithm that leverages a state-of-the-art multi-agent RL technique named MAPPO.\nSensors 2024, 24, 5141\n11 of 19\nMAPPO exhibits significantly higher algorithmic runtime efficiency than and comparable\ndata sample efficiency to off-policy algorithms under limited computing resources, which\nmake it well-suited for a MEC system. Here, we adopt the popular CTDE architecture,\nwhich consists of two crucial components: one central critic network and multiple actor\nnetworks. The architecture of the multi-agent DRL algorithm is depicted in Figure 2. The\nprocess involves two phases, which are described below.\nReinforcement learning module \nCentralized learning \nGlobal Critic network \nActor network of MD1 \nThe old actor\nnetwork \nThe new actor\nnetwork \nAdvantage \nActor network of MD2 \nThe old actor\nnetwork \nThe new actor\nnetwork \nloss \nActor network of MDm \nThe old actor\nnetwork \nThe new actor\nnetwork \nloss \nloss \nMD1 \nMD2 \nMDm \nEnvironment\nmodule \nChoose action \nChoose action \nChoose action \nPrivate state \nPrivate state \nPrivate state \nReward module \nReplay\nMemory M \nReplay\nMemory 2 \nReplay\nMemory 1 \nSave trajectory  \nto replay memory \nJoint State S\nJoint action A \nReward r \n...\n...\n...\nFigure 2. Architecture of multi-agent DRL algorithm.\n(1)\nCentralized training\nWe utilize a global critic network to obtain accurate evaluations of the global sys-\ntem states to guide the training of actor networks for each MD. Similar to the PPO\nalgorithm, these networks are trained using the following steps:\n(a)\nFirstly, each agent m interacts with the environment by randomly sampling\nactions based on its observed system state Sm(t) and executing the selected\naction. Then, agents observe the local state in the next time slot and obtain\nthe reward rm(t + 1). The trajectory data (Sm(t), am(t), rm(t + 1), Sm(t + t)) are\nstored in the local experience replay pool.\nAfterwards, agent m sends its local state Sm(t), the next time step state Sm(t + 1),\nand the local reward rm(t + 1) to the central controller for further processing.\n(b)\nBy aggregating the information from each agent, we acquire the global state S(t),\nS(t + 1), and the global reward r(t). These values serve as inputs for the critic\nnetwork when computing the state values V(S) and V(S\n\u2032). Here, we employ\na target network to compute the temporal difference (TD) target and TD error\n\u03b4t = r(t) + \u03b3V(S(t + 1)) \u2212V(S(t), where \u03b3 is the discount factor.\nIn the training phase, the system samples a batch of trajectories from the replay\nmemory in the central controller and performs updates on the critic network. The\nupdate equation for the critic network can be expressed as follows:\nL(\u03d5cri) = ES(t),A(t)[r(t) + \u03b3V\u03d5cri(S(t + 1)) \u2212V\u03d5cri(S(t))]2\n(14)\nwhere V\u03d5cri(.) is the value function of the critic network under parameter \u03d5cri.\nWe employ generalized advantage estimation (GAE) to compute the advantage\nfunction, as follows:\n\u02c6At =\n\u221e\n\u2211\nl=0\n(\u03b3\u03bb)l\u03b4t+l\n(15)\nSensors 2024, 24, 5141\n12 of 19\nwhere \u03b3 is used to determine the importance given to future rewards, while \u03bb is a\nparameter similar to TD(\u03bb), with a trade-off between variance and bias. \u03b4V\nt+l refers to\nthe l \u2212step TD error, which is computed as \u03b4t+l = r(t + l) + \u03b3V(t + l + 1) \u2212V(t + l).\nThe value of GAE will be broadcasted to each agent for the training of the ac-\ntor network.\n(c)\nUpon receiving the advantage function \u02c6At, each agent conducts batch sampling from\nits own experience replay pool and calculates the surrogate value by considering the\nprobability distribution of old and new actions, along with the advantage function\n\u02c6At. This surrogate value is used to update the parameters of the actor network. The\nupdate equation for the actor network at agent m is as follows:\nL(\u03b8act\nm ) = E\u03c0\u03b8m [min(\u03c8t(\u03b8act\nm ) \u02c6At, clip(\u03c8t(\u03b8act\nm ), 1 \u2212\u03f5, 1 + \u03f5) \u02c6At)]\n(16)\nwhere \u03c8t(\u03b8act\nm ) = \u03c0\u03b8m(am(t)|Sm(t))\n\u03c0old\n\u03b8m (ad(t)|S(t)) represents the probability ratio, \u03f5 is a hyperpa-\nrameter in PPO that limits the deviation between the new and old networks, and\n\u02c6At is used to assess the quality of action A(t) in state S(t).\n(2)\nDecentralized Execution\nAfter completing centralized training, the critic network becomes unnecessary. The\nactor network is deployed to each individual MD and utilizes locally observed system\nstates for decision-making. Communication is not required during the decision-\nmaking process. Decentralized decision-making is fast and can be performed in real\ntime. The details of our MARL dynamic offloading algorithm are summarized in\nAlgorithm 1.\nAlgorithm 1: Multi-agent DRL-based dynamic offloading algorithm\nInput: Equipment Set E, Total Episode Number N, Time Domain T\nOutput: Offloading policy A\n1 for episode n \u21901 to N do\n2\nfor time slot t \u2208T do\n3\nfor equipment e \u2208E do\n4\nfor task w \u2208Qcomp\ne\nS Qtran\ne\ndo\n5\nif task w expires then\n6\ndrop w;\n7\nend\n8\nend\n9\nend\n10\nfor device d \u2208D do\n11\nUse actor network to output action probability distribution;\n12\nSample the action ad(t) of current time slot;\n13\nend\n14\nAllocate equal bandwidth to each communication pair based on A(t);\n15\nInteract with the environment using joint actions A(t);\n16\nGet the next state s(t + 1) and cost C(S(t), A(t));\n17\nfor d \u2208D do\n18\nstoring the trajectories (sd(t), ad(t), C(S(t), A(t)), sd(t + 1)) into the\nreplay buffer RBd;\n19\nend\n20\nend\n21\nSample the same batch of trajectories from the replay buffers of different\ndevices;\n22\nUpdate the Global Critic network using (14);\n23\nUpdate the Actor network using (16);\n24 end\nSensors 2024, 24, 5141\n13 of 19\n5.3. Communication Overhead Analysis\nIn the multi-agent reinforcement learning model we propose, the CTDE paradigm\nis adopted, where the communication overhead between each agent and the central con-\ntroller is primarily concentrated in the training phase. Below, we analyze the system\u2019s\ncommunication load during both the training and decentralized execution phases.\nDuring the training phase, the exchange of information among devices is orchestrated\nas follows:\n(1)\nIdle MDs state information collection: At the end of each time slot, if a MD identifies\nan empty computation queue, it transmits its identifier to the edge server. The server\nthen designates the MD as idle. After aggregating idle MD status information, the\nserver broadcasts this data to all active MDs. The communication overhead in this\nphase is minimal, as it only includes the identifiers of idle MDs.\n(2)\nInteraction of active MDs with environment and reporting of system state formation:\nUpon the receipt of the aggregated information of the idle MD sets, each active MD\nintegrates this data with its local state information to construct a comprehensive\nsystem state representation. During time slot t, the active MD interacts with the\nenvironment, collects current observations denoted as Si(t), and makes decisions\nbased on its established policy. At the next time step, each agent observes the new\nstate, Si(t + 1) and receives the corresponding reward, rm(t). These agents then relay\nSi(t) , Si(t + 1) , and rm(t) back to the central controller located at the edge server.\nThe communication overhead in this phase arises from the volume of data transmitted\nby the agents on each active MD to the edge server. According to the definition of\nthe local system state of the active MDs as mentioned earlier, this communication\noverhead, after data encoding, can be approximately a few tens of bytes. This is\nconsidered a relatively small and acceptable overhead.\n(3)\nCritic network prediction and TD error calculation: The edge server uses the collected\ndata to construct the global system state, predict outcomes, determine the TD target,\nand compute the TD error. This TD error is then broadcast to all agents on active\nMDs, thereby aiding in the update of the parameters within the value network. The\ncommunication overhead at this juncture is solely due to the broadcast of the TD error,\nwhich involves a minimal amount of data transmission, exerting virtually no impact\non network communication.\n(4)\nPolicy network update: With the TD error received, each active MD\u2019s agent refines its\npolicy network, adapting to the new information and improving its decision-making\nprocess for future interactions. No communication overhead is incurred at this stage.\nDuring the decentralized execution phase, each agent makes decisions solely based\non its current system state, eliminating the need for the central value network. Con-\nsequently, the communication overhead at this stage is primarily attributed to the\nacquisition of information regarding idle MDs. According to the aforementioned\nanalysis, the communication overhead generated from obtaining the status of idle\nMDs is minimal and does not adversely affect system performance. This reduction is\nparticularly beneficial in maintaining the efficiency and responsiveness of the system,\nespecially in scenarios where resource conservation is critical.\n6. Simulation Results\n6.1. System Parameter Settings\nTo verify our algorithm, we conducted extensive simulations, demonstrating its con-\nvergence and performance superiority compared to baseline algorithms. Table 2 lists the\nbasic system parameters.\nThe centralized critic networks and the actor network in each MD utilize a three-layer\nnetwork structure, with 64 nodes in the intermediate layer. During the neural network\ntraining process, a batch size of 64 is employed, the learning rate is set to 1 \u00d7 103, and the\nnumber of MDs is fixed at 20. The task generation probability gradually increases from\n0.1 to 0.5. Network parameters are updated using the Adam optimizer. To ensure high\nSensors 2024, 24, 5141\n14 of 19\nrandomness and unpredictability in the experimental data generation, the relationship\nbetween random numbers and the task generation probability determines whether a task\nis generated. The channel gains between devices follow the Rayleigh distribution.\nTable 2. Simulation system parameters.\nParameters\nValues\nMobile device number D\n20\nThe CPU frequency of mobile device fd\n2 GHz\nThe CPU frequency of edge serverf0\n3 GHz\nMinimum task size smin\n3 Mbits\nMaximum task size smax\n10 Mbits\nMinimum task complexity cmin\n0.5 gigacycles per Mbits\nMaximum task complexity cmax\n2 gigacycles per Mbits\nMinimum task generation probability\n0.1\nMaximum task generation probability\n0.5\nTotal bandwidth B\n3 MHz\nDevice transmission power pd\n3 W\nWhite noise N0\n\u221214 dbm\\Hz\n6.2. Algorithm Convergence Performance\nIn this section, we mainly study the convergence performance of the proposed algo-\nrithm under different values of different hyper-parameters. We consider 1000 episodes and\neach episode has 100 time frames. The experimental results are shown in Figure 3, where\nthe X-axis represents the episodes and the Y-axis represents the average completion delay\nof the task (the average time required by the task from creation to completion).\n(a)\n0\n200\n400\n600\n800\n1000\nEpisode\n0.17\n0.18\n0.19\n0.20\n0.21\n0.22\nDrop ratio\nBatch size=2\nBatch size=4\nBatch size=8\nBatch size=16\nBatch size=32\nBatch size=64\nBatch size=128\nBatch size=256\n(b)\nFigure 3.\nPerformance evaluation under different batch sizes.\n(a) average delay; (b) ratio of\ndropped tasks.\nFigure 3 shows the convergence of the proposed algorithm under different batch sizes,\nwhich refer to the number of training examples utilized in one iteration. Generally, as\nthe batch size increases, the gradient estimation during each training step becomes more\naccurate, thereby reducing the variance of parameter updates. However, larger batch sizes\nmay make the model more prone to getting stuck in local minima and lose some ability to\nescape from them. On the other hand, smaller batch sizes can provide more randomness,\nhelping the model to jump out of local minima. As we can see from Figure 3, changing the\nparameter of the batch size has only about a 1% impact on performance. Thus, we choose\nan appropriate batch size (e.g., 64) to increase the convergence speed without reducing the\nperformance significantly.\nFigure 4 shows the convergence of the proposed algorithm under different learning\nrates, which is a tuning parameter in an optimization algorithm that determines the step\nSensors 2024, 24, 5141\n15 of 19\nsize at each iteration while moving toward the minimum of a loss function. In Figure 4,\nwhen the learning rate is too small (e.g., 1 \u00d7 105), it will lead to a relatively slow convergence\nand, therefore, requires more computational resources. However, if the learning rate is too\nlarge (e.g., 1 \u00d7 102, 5 \u00d7 102), the neural network cannot converge to a good performance\nbecause of the great vibration of loss function.\n1\u00d710-5\n5\u00d710-5\n1\u00d710-4\n5\u00d710-4\n5\u00d710-4\n1\u00d710-3\n5\u00d710-3\n1\u00d710-2\n5\u00d710-2\n(a)\n1\u00d710 -5\n5\u00d710-5\n1\u00d710 -4\n5\u00d710 -4\n5\u00d710 -4\n1\u00d710 -3\n5\u00d710 -3\n1\u00d710 -2\n5\u00d710 -2\n(b)\nFigure 4. Performance evaluation under different learning rates. (a) average delay; (b) ratio of\ndropped tasks.\nFigure 5 shows the convergence of the proposed algorithm under different task gener-\nation probabilities, where the task generation probability is the probability of each device\nproducing a task in each time frame. As shown in Figure 5, there is an obvious correlation\nbetween task generation probability and algorithm performance: the larger the task genera-\ntion probability, the larger the average delay. This is because, with limited computing and\ncommunication resources, the higher the probability of task generation, the fewer resources\nare allocated on average, and the higher the delay of task completion.\n(a)\n0\n200\n400\n600\n800\n1000\nEpisode\n0.1\n0.2\n0.3\n0.4\n0.5\n0.6\n0.7\n0.8\nDrop ratio\ntask generation probability=0.1\ntask generation probability=0.3\ntask generation probability=0.5\ntask generation probability=0.7\ntask generation probability=0.9\n(b)\nFigure 5. Performance evaluation under different task generation probabilities. (a) average delay;\n(b) ratio of dropped tasks.\nFigure 6 illustrates the performance of the proposed algorithm under different drop\npenalty values, where the penalty values are represented as follows:\nC(S(t), A(t)) =\n\uf8f1\n\uf8f2\n\uf8f3\nPenalty Value,\nif task is dropped\n1(am(t)=m)Llocal\nm\n(t)+1(am(t)\u0338=m)Lrem\nm (t)\n\u03c4tm\n,\nif task is not dropped\n(17)\nGenerally, as the penalty value increases, the model should become prone to dropout,\nwhich thus results in a decrease in the drop ratio. Interestingly, the experimental results\nshow the opposite behavior. This may be due to the change from a continuous range of\nSensors 2024, 24, 5141\n16 of 19\npenalty values with an upper limit of one to discrete values. This change may make it\ndifficult for the critic network to converge, resulting in the observed results.\n(a)\n0\n200\n400\n600\n800\n1000\nEpisode\n0.17\n0.18\n0.19\n0.20\n0.21\n0.22\nDrop ratio\npenalty=1\npenalty=1.5\npenalty=2\npenalty=2.5\npenalty=3\n(b)\nFigure 6.\nPerformance evaluation under different penalties.\n(a) average delay; (b) ratio of\ndropped tasks.\n6.3. Performance Comparison Evaluation\nTo valuate the performance of our algorithm, we consider the following benchmark\nalgorithms:\n(1)\nIPPO: each agent employs an independent PPO algorithm to select actions based on\nglobal state information;\n(2)\nA2C: the A2C algorithm is used to sample from (1 + N)N types of actions;\n(3)\nTD3: the multidimensional discrete action space is transformed into multiple continuous\nactions, and the selection of an action is based on the shortest Euclidean distance [2];\n(4)\nHeuristic: if a task can be completed within two time slots, it is computed locally;\notherwise, it is offloaded to the edge server;\n(5)\nAll_local: all tasks are executed locally;\n(6)\nAll_edge: all tasks are offloaded to the edge server;\n(7)\nGreedy: the action with the shortest expected time, considering the current queue\nsituation and channel status, is selected;\n(8)\nRandom: Actions for each task are randomly selected. Here, we use two performance\nmetrics: the average delay and the drop ratio(ratio of the number of timeout tasks to\nthe total number of tasks.\nAlthough MADDPG [31] is a representative and high-performing algorithm in the\nfield of multi-agent reinforcement learning, it was not selected as a benchmark in this study\nfor specific reasons. The MADDPG algorithm is primarily tailored to optimize continuous\naction spaces, which does not align perfectly with the discrete action space of the problem\naddressed in our study.\nFigure 7 illustrates the convergence of our proposed algorithm and baseline algorithms.\nIt can be observed that our algorithm presents a similar performance to the IPPO algorithm,\nin terms of the delay metric. However, our algorithm only relies on local state information\nfor decision-making, significantly reducing communication overhead. In comparison to the\nsub-optimal A2C algorithm, our approach achieves an 11.0% reduction in the delay metric\nand a 17.0% reduction in the drop ratio metric.\nFigure 8 illustrates the comparison of the average delay and drop ratio between our\nproposed algorithm and the baseline algorithms under different edge server frequencies.\nAs the computing power of the edge server increases, the overall system computing\nresources increase, resulting in a decreased average delay and drop ratio. It is important to\nnote that the all_local algorithm, which does not rely on edge servers, maintains a stable\nperformance curve.\nSensors 2024, 24, 5141\n17 of 19\n(a)\n0\n500\n1000\n1500\n2000\n2500\nEpisode\n0.2\n0.3\n0.4\n0.5\n0.6\n0.7\nDrop ratio\nalgorithm = ippo\nalgorithm = a2c\nalgorithm = td3\nalgorithm = CTDE\nalgorithm = greedy\nalgorithm = heuristic\nalgorithm = all_local\nalgorithm = all_edge\nalgorithm = random\n(b)\nFigure 7. Performance of different algorithms. (a) average delay; (b) ratio of dropped tasks.\nFigure 9 shows the comparison of the average delay and drop ratio between our\nproposed algorithm and the baseline algorithms under different task deadlines. From\nFigure 9, it is evident that several benchmark algorithms, such as all_local, all_edge, and\ngreedy, face a limitation imposed by the deadline, causing the average delay to approach\nthe upper limit, i.e., the deadline itself. Consequently, as the deadline increases, the average\ndelay also grows, while the drop ratio decreases due to the slack in the deadline. In\ncontrast, the CTDE, IPPO, and A2C algorithms exhibit superior performances. When the\ndeadline is less than five, their curves resemble those of other algorithms, albeit relatively\nflat. However, as the deadline continues to increase, these algorithms reach a stable curve,\nsuggesting that the tasks have been fully processed.\n(a)\n(b)\nFigure 8. Performance of different algorithms across different edge CPU frequencies. (a) average\ndelay; (b) ratio of dropped tasks.\n(a)\n(b)\nFigure 9. Performance of different algorithms across different task deadlines. (a) average delay;\n(b) ratio of dropped tasks.\nSensors 2024, 24, 5141\n18 of 19\n7. Conclusions\nIn this paper, we investigate the dynamic task offloading problem in D2D\u2013MEC sys-\ntems for delay-sensitive tasks under delay constraints. We propose a dynamic partitioning\napproach for a D2D MD set based on a queuing-based system. We formulate the min-\nimization of a long-term average task delay with deadline constraints as a cooperative\nMarkov game and propose a multi-agent DRL-based algorithm. Our proposed algorithm\nis implemented in a CTDE-based manner, which enables each MD to make offloading\ndecisions solely based on its local system state. Extensive simulations show the efficiency\nof our algorithm. In future work, we will consider bandwidth resource allocation strategy\nin the D2D\u2013MEC network.\nAuthor Contributions: Conceptualization, H.H. and X.M.; methodology, X.Y. and H.H.; software,\nX.M.; validation, H.H. and X.L.; investigation, X.M.; resources, H.H.; writing\u2014original draft prepa-\nration, X.M.; writing\u2014review, H.H., X.Y., X.L. and H.S. All authors have read and agreed to the\npublished version of the manuscript.\nFunding: This research is supported in part by the Science and Technology Foundation of Guangdong\nProvince, China, No. 2021A0101180005. The corresponding author is Xuefeng Liao.\nInstitutional Review Board Statement: Not applicable.\nInformed Consent Statement: Not applicable.\nData Availability Statement: Available on request.\nAcknowledgments: The authors would like to thank the editor and all reviewers for their valuable\ncomments and efforts on this article.\nConflicts of Interest: The authors declare no conflicts of interest.\nReferences\n1.\nPeng, J.; Qiu, H.; Cai, J.; Xu, W.; Wang, J. D2D-assisted multi-user cooperative partial offloading, transmission scheduling and\ncomputation allocating for MEC. IEEE Trans. Wirel. Commun. 2021, 20, 4858\u20134873. [CrossRef]\n2.\nZhang, T.; Zhu, K.; Wang, J. Energy-efficient mode selection and resource allocation for D2D-enabled heterogeneous networks: A\ndeep reinforcement learning approach. IEEE Trans. Wirel. Commun. 2020, 20, 1175\u20131187. [CrossRef]\n3.\nFang, T.; Yuan, F.; Ao, L.; Chen, J. Joint task offloading, D2D pairing, and resource allocation in device-enhanced MEC: A potential\ngame approach. IEEE Internet Things J. 2021, 9, 3226\u20133237. [CrossRef]\n4.\nZuo, Y.; Jin, S.; Zhang, S.; Han, Y.; Wong, K.K. Delay-limited computation offloading for MEC-assisted mobile blockchain\nnetworks. IEEE Trans. Commun. 2021, 69, 8569\u20138584. [CrossRef]\n5.\nAbbas, N.; Sharafeddine, S.; Mourad, A.; Abou-Rjeily, C.; Fawaz, W. Joint computing, communication and cost-aware task\noffloading in D2D-enabled Het-MEC. Comput. Netw. 2022, 209, 108900. [CrossRef]\n6.\nHamdi, M.; Hamed, A.B.; Yuan, D.; Zaied, M. Energy-efficient joint task assignment and power control in energy-harvesting D2D\noffloading communications. IEEE Internet Things J. 2021, 9, 6018\u20136031. [CrossRef]\n7.\nSun, M.; Xu, X.; Huang, Y.; Wu, Q.; Tao, X.; Zhang, P. Resource management for computation offloading in D2D-aided wireless\npowered mobile-edge computing networks. IEEE Internet Things J. 2020, 8, 8005\u20138020. [CrossRef]\n8.\nHuang, L.; Bi, S.; Zhang, Y.J.A. Deep reinforcement learning for online computation offloading in wireless powered mobile-edge\ncomputing networks. IEEE Trans. Mob. Comput. 2019, 19, 2581\u20132593. [CrossRef]\n9.\nGao, A.; Zhang, S.; Hu, Y.; Liang, W.; Ng, S.X. Game-combined multi-agent DRL for tasks offloading in wireless powered MEC\nnetworks. IEEE Trans. Veh. Technol. 2023, 72, 9131\u20139144. [CrossRef]\n10.\nLi, G.; Chen, M.; Wei, X.; Qi, T.; Zhuang, W. Computation Offloading With Reinforcement Learning in D2D-MEC Network. In\nProceedings of the 2020 International Wireless Communications and Mobile Computing (IWCMC), Limassol, Cyprus, 15\u201319 June\n2020; IEEE: Piscataway, NJ, USA, 2020; pp. 69\u201374.\n11.\nLuo, J.; Yu, F.R.; Chen, Q.; Tang, L. Adaptive video streaming with edge caching and video transcoding over software-defined\nmobile networks: A deep reinforcement learning approach. IEEE Trans. Wirel. Commun. 2019, 19, 1577\u20131592. [CrossRef]\n12.\nQiao, G.; Leng, S.; Zhang, Y. Online learning and optimization for computation offloading in D2D edge computing and networks.\nMob. Netw. Appl. 2019, 3, 1111\u20131122. [CrossRef]\n13.\nYu, C.; Velu, A.; Vinitsky, E.; Wang, Y.; Bayen, A.; Wu, Y. The surprising effectiveness of ppo in cooperative, multi-agent games.\narXiv 2021, arXiv:2103.01955.\n14.\nWu, H.; Chen, J.; Nguyen, T.N.; Tang, H. Lyapunov-guided delay-aware energy efficient offloading in IIoT-MEC systems. IEEE\nTrans. Ind. Inform. 2022, 19, 2117\u20132128. [CrossRef]\nSensors 2024, 24, 5141\n19 of 19\n15.\nWang, H.; Lin, Z.; Lv, T. Energy and delay minimization of partial computing offloading for D2D-assisted MEC systems. In\nProceedings of the 2021 IEEE Wireless Communications and Networking Conference (WCNC), Nanjing, China, 29 March\u20131 April\n2021; IEEE: Piscataway, NJ, USA, 2021; pp. 1\u20136.\n16.\nChen, J.; Xing, H.; Xiao, Z.; Xu, L.; Tao, T. A DRL agent for jointly optimizing computation offloading and resource allocation in\nMEC. IEEE Internet Things J. 2021, 8, 17508\u201317524. [CrossRef]\n17.\nZhao, P.; Tao, J.; Kangjie, L.; Zhang, G.; Gao, F. Deep reinforcement learning-based joint optimization of delay and privacy in\nmultiple-user MEC systems. IEEE Trans. Cloud Comput. 2022, 11, 1487\u20131499. [CrossRef]\n18.\nGoudarzi, M.; Palaniswami, M.; Buyya, R. Scheduling IoT applications in edge and fog computing environments: A taxonomy\nand future directions. ACM Comput. Surv. 2022, 55, 1\u201341. [CrossRef]\n19.\nYang, B.; Cao, X.; Bassey, J.; Li, X.; Qian, L. Computation offloading in multi-access edge computing: A multi-task learning\napproach. IEEE Trans. Mob. Comput. 2020, 20, 2745\u20132762. [CrossRef]\n20.\nTang, M.; Wong, V.W. Deep reinforcement learning for task offloading in mobile edge computing systems. IEEE Trans. Mob.\nComput. 2020, 21, 1985\u20131997. [CrossRef]\n21.\nNadeem, L.; Azam, M.A.; Amin, Y.; Al-Ghamdi, M.A.; Chai, K.K.; Khan, M.F.N.; Khan, M.A. Integration of D2D, network slicing,\nand MEC in 5G cellular networks: Survey and challenges. IEEE Access 2021, 9, 37590\u201337612. [CrossRef]\n22.\nMi, X.; He, H.; Shen, H. A Multi-Agent RL Algorithm for Dynamic Task Offloading in D2D-MEC Network with Energy\nHarvesting. Sensors 2024, 24, 2779. [CrossRef]\n23.\nHe, Y.; Ren, J.; Yu, G.; Cai, Y. D2D communications meet mobile edge computing for enhanced computation capacity in cellular\nnetworks. IEEE Trans. Wirel. Commun. 2019, 18, 1750\u20131763. [CrossRef]\n24.\nChai, R.; Lin, J.; Chen, M.; Chen, Q. Task execution cost minimization-based joint computation offloading and resource allocation\nfor cellular D2D MEC systems. IEEE Syst. J. 2019, 13, 4110\u20134121. [CrossRef]\n25.\nChen, X.; Zhang, H.; Wu, C.; Mao, S.; Ji, Y.; Bennis, M. Optimized computation offloading performance in virtual edge computing\nsystems via deep reinforcement learning. IEEE Internet Things J. 2018, 6, 4005\u20134018. [CrossRef]\n26.\nBi, S.; Huang, L.; Wang, H.; Zhang, Y.J.A. Lyapunov-guided deep reinforcement learning for stable online computation offloading\nin mobile-edge computing networks. IEEE Trans. Wirel. Commun. 2021, 20, 7519\u20137537. [CrossRef]\n27.\nWang, J.; Hu, J.; Min, G.; Zomaya, A.Y.; Georgalas, N. Fast adaptive task offloading in edge computing based on meta\nreinforcement learning. IEEE Trans. Parallel Distrib. Syst. 2020, 32, 242\u2013253. [CrossRef]\n28.\nHuang, B.; Liu, X.; Wang, S.; Pan, L.; Chang, V. Multi-agent reinforcement learning for cost-aware collaborative task execution in\nenergy-harvesting D2D networks. Comput. Netw. 2021, 195, 108176. [CrossRef]\n29.\nSacco, A.; Esposito, F.; Marchetto, G.; Montuschi, P. Sustainable task offloading in UAV networks via multi-agent reinforcement\nlearning. IEEE Trans. Veh. Technol. 2021, 70, 5003\u20135015. [CrossRef]\n30.\nGao, H.; Wang, X.; Ma, X.; Wei, W.; Mumtaz, S. Com-DDPG: A multiagent reinforcement learning-based offloading strategy for\nmobile edge computing. arXiv 2020, arXiv:2012.05105.\n31.\nLowe, R.; Wu, Y.I.; Tamar, A.; Harb, J.; Pieter Abbeel, O.; Mordatch, I. Multi-agent actor-critic for mixed cooperative-competitive\nenvironments. Adv. Neural Inf. Process. Syst. 2017, 30, 6382\u20136393\n32.\nJi, Z.; Chen, L.; Zhao, N.; Chen, Y.; Wei, G.; Yu, F.R. Computation offloading for edge-assisted federated learning. IEEE Trans. Veh.\nTechnol. 2021, 70, 9330\u20139344. [CrossRef]\n33.\nMills, J.; Hu, J.; Min, G. Multi-task federated learning for personalised deep neural networks in edge computing. IEEE Trans.\nParallel Distrib. Syst. 2021, 33, 630\u2013641. [CrossRef]\n34.\nHan, Y.; Li, D.; Qi, H.; Ren, J.; Wang, X. Federated learning-based computation offloading optimization in edge computing-\nsupported internet of things. In Proceedings of the ACM Turing Celebration Conference-China, Chengdu, China, 17\u201319 May\n2019; pp. 1\u20135.\n35.\nMa, M.; Wu, L.; Liu, W.; Chen, N.; Shao, Z.; Yang, Y. Data-aware hierarchical federated learning via task offloading.\nIn\nProceedings of the GLOBECOM 2022\u20132022 IEEE Global Communications Conference, Rio de Janeiro, Brazil, 4\u20138 December 2022;\nIEEE: Piscataway, NJ, USA, 2022; pp. 1\u20136.\n36.\nSchulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; Klimov, O.\nProximal policy optimization algorithms.\narXiv 2017,\narXiv:1707.06347.\nDisclaimer/Publisher\u2019s Note: The statements, opinions and data contained in all publications are solely those of the individual\nauthor(s) and contributor(s) and not of MDPI and/or the editor(s). MDPI and/or the editor(s) disclaim responsibility for any injury to\npeople or property resulting from any ideas, methods, instructions or products referred to in the content.",
+      "source": "manual",
+      "uploaded_at": "2026-07-08T10:28:48.829004Z",
+      "original_filename": "sensors-24-05141.pdf",
+      "requirement_id": "REQ-001",
+      "requirement_title": "Citation: He, H.; Yang, X.; Mi, X.;\nShen, H.; Liao...",
+      "priority": "high",
+      "business_domain": "Auth",
+      "attachments": [
+        "sensors-24-05141.pdf"
       ]
     }
   },
@@ -292,31 +347,69 @@
       "confidence": 0.0,
       "approved": false,
       "generated_at": "2026-07-07T10:50:42.417335Z"
+    },
+    "aa79e84c-47b1-4200-883c-91494df564fa": {
+      "id": "aa79e84c-47b1-4200-883c-91494df564fa",
+      "requirement_id": "3ee18c06-bdf5-402b-ab97-e229f5d4ac23",
+      "scenario_name": "Happy Path Login Success",
+      "description": "Valid username and password, successful login to dashboard.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-08T02:27:25.377364Z"
+    },
+    "eb836705-2fb9-47fe-98ad-e8415d6c11d9": {
+      "id": "eb836705-2fb9-47fe-98ad-e8415d6c11d9",
+      "requirement_id": "3ee18c06-bdf5-402b-ab97-e229f5d4ac23",
+      "scenario_name": "Invalid Credentials Error Message",
+      "description": "Incorrect username and/or password, error message displayed.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-08T02:27:25.377395Z"
+    },
+    "4244d3bb-b372-43c1-ac66-487e75aa093b": {
+      "id": "4244d3bb-b372-43c1-ac66-487e75aa093b",
+      "requirement_id": "3ee18c06-bdf5-402b-ab97-e229f5d4ac23",
+      "scenario_name": "Account Lock After Five Failed Attempts",
+      "description": "Five consecutive incorrect login attempts, account locked.",
+      "priority": "high",
+      "confidence": 0.0,
+      "approved": true,
+      "generated_at": "2026-07-08T02:27:25.377411Z"
+    },
+    "2119c159-2100-4464-8659-75fdfee408b6": {
+      "id": "2119c159-2100-4464-8659-75fdfee408b6",
+      "requirement_id": "3ee18c06-bdf5-402b-ab97-e229f5d4ac23",
+      "scenario_name": "Reset Forgotten Password Using Email",
+      "description": "Registered user resets password via email recovery process.",
+      "priority": "medium",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-08T02:27:25.377429Z"
+    },
+    "3df32927-a6ca-42b9-af12-cb68acbb83f5": {
+      "id": "3df32927-a6ca-42b9-af12-cb68acbb83f5",
+      "requirement_id": "3ee18c06-bdf5-402b-ab97-e229f5d4ac23",
+      "scenario_name": "Session Expiration After Inactivity",
+      "description": "User leaves application inactive for 15 minutes, session expires.",
+      "priority": "low",
+      "confidence": 0.0,
+      "approved": false,
+      "generated_at": "2026-07-08T02:27:25.377442Z"
+    },
+    "2b8a5d75-e680-4725-ae38-8ede77b1752b": {
+      "id": "2b8a5d75-e680-4725-ae38-8ede77b1752b",
+      "requirement_id": "89ad1301-cbae-4d17-b045-6e9ad5b1e7c1",
+      "scenario_name": "Test Scenario",
+      "description": "Test Desc",
+      "priority": "high",
+      "confidence": 0.9,
+      "approved": true,
+      "generated_at": "2026-07-08T02:00:00Z"
     }
   },
   "test_cases": {
-    "2595ad5a-8b02-41fd-846f-5ee7376b1513": {
-      "id": "2595ad5a-8b02-41fd-846f-5ee7376b1513",
-      "scenario_id": "2463fe31-8357-4b5f-b784-b679a961d6ce",
-      "title": "Valid Credentials Login to Dashboard",
-      "preconditions": [
-        "User account is registered",
-        "Username and password are correct"
-      ],
-      "steps": [
-        "Navigate to the login page of the Banking Login Module",
-        "Enter valid username and password",
-        "Click on the login button"
-      ],
-      "expected_result": "The application successfully redirects the user to the Dashboard with no errors displayed.",
-      "priority": "high",
-      "status": "pending",
-      "confidence": 0.8500000000000001,
-      "evaluation_status": "approved",
-      "evaluation_reason": "clear steps but doesn't test password masking or account locking",
-      "playwright_script": null,
-      "generated_at": "2026-07-07T09:31:52.731208Z"
-    },
     "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5": {
       "id": "6bfbb573-7251-49dc-b7c7-a14a92c6f1b5",
       "scenario_id": "08cf1f56-8521-4354-a187-c703c97bc756",
@@ -359,6 +452,90 @@
       "evaluation_reason": "clear steps but expected result is too vague regarding password reset process",
       "playwright_script": "import { test, expect } from '@playwright/test';\n\ntest('Forgot Password - Registered Email Required', async ({ page }) => {\n  console.log('[Timeline] Navigate: Navigating to target URL');\n  await page.goto('https://sampleapp.tricentis.com/101/app.php');\n\n  console.log('[Timeline] Click: Clicking Forgot Password link');\n  const forgotPasswordLink = page.getByRole('link', { name: 'Forgot your password?' });\n  await forgotPasswordLink.click();\n\n  console.log('[Timeline] Enter Email: Entering registered email address in the email field');\n  const emailField = page.getByPlaceholder('Email Address');\n  await emailField.type('test@sampleapp.com');\n\n  console.log('[Timeline] Submit: Submitting the forgot password request');\n  const submitButton = page.getByRole('button', { name: 'Submit' });\n  try {\n    await submitButton.click();\n    await page.waitForLoadState('networkidle2');\n    expect(await page.getByText('An email with a verification link has been sent to your email address')).toBeVisible();\n  } catch (error) {\n    console.error(error);\n    throw new Error('Forgot password request failed');\n  }\n});\n// comment",
       "generated_at": "2026-07-07T10:51:46.076159Z"
+    },
+    "f31fef8d-7f85-4ca4-a5d3-04e5439c6602": {
+      "id": "f31fef8d-7f85-4ca4-a5d3-04e5439c6602",
+      "scenario_id": "4244d3bb-b372-43c1-ac66-487e75aa093b",
+      "title": "Account Lock After Five Failed Attempts",
+      "preconditions": [
+        "User account is active",
+        "User has registered credentials"
+      ],
+      "steps": [
+        "Navigate to banking login page",
+        "Enter valid username and incorrect password five times",
+        "Submit login attempt"
+      ],
+      "expected_result": "Account should be locked with an error message indicating five failed attempts",
+      "priority": "high",
+      "status": "pending",
+      "confidence": 0.5,
+      "evaluation_status": "approved",
+      "evaluation_reason": "tests a specific requirement, but preconditions are too vague",
+      "playwright_script": null,
+      "generated_at": "2026-07-08T02:27:49.143060Z"
+    },
+    "102c3ddb-5c7f-42b3-a001-72248a0189fc": {
+      "id": "102c3ddb-5c7f-42b3-a001-72248a0189fc",
+      "scenario_id": "d3ad6ad0-f498-46c4-83fc-88a32485bdd3",
+      "title": "Successful Deployment with Valid Inputs",
+      "preconditions": [
+        "User is logged in with admin privileges",
+        "ASD application is configured correctly"
+      ],
+      "steps": [
+        "Navigate to the deployment page",
+        "Enter valid inputs for deployment, including username and password",
+        "Click on the 'Deploy' button"
+      ],
+      "expected_result": "The system successfully deploys ASD and displays a confirmation message with deployment details.",
+      "priority": "high",
+      "status": "pending",
+      "confidence": 0.0,
+      "evaluation_status": "approved",
+      "evaluation_reason": "Does not test ASD requirement at all, it's about successful deployment in general",
+      "playwright_script": null,
+      "generated_at": "2026-07-08T03:16:12.515440Z"
+    },
+    "f8f82480-b4dd-4438-8ad3-bda571ce2494": {
+      "id": "f8f82480-b4dd-4438-8ad3-bda571ce2494",
+      "scenario_id": "2463fe31-8357-4b5f-b784-b679a961d6ce",
+      "title": "Valid Credentials Login",
+      "preconditions": [
+        "The user is registered in the system.",
+        "The user has a valid username and password."
+      ],
+      "steps": [
+        "Navigate to the Banking Login page.",
+        "Enter the valid username and password.",
+        "Click on the Login button."
+      ],
+      "expected_result": "The application redirects successfully to the Dashboard page with no errors displayed.",
+      "priority": "high",
+      "status": "blocked",
+      "confidence": 0.75,
+      "evaluation_status": "approved",
+      "evaluation_reason": "it tests a specific aspect of the requirement, but not all aspects related to login",
+      "playwright_script": "import { test, expect } from '@playwright/test';\n\ntest('Valid Credentials Login', async ({ page }) => {\n  console.log('[Timeline] Navigate: Navigating to Banking Login page');\n  await page.goto('https://sampleapp.tricentis.com/101/app.php');\n  console.log('[Timeline] Success');\n});",
+      "generated_at": "2026-07-08T03:24:31.863440Z"
+    },
+    "eccad072-edc7-40cb-b117-307074ff2178": {
+      "id": "eccad072-edc7-40cb-b117-307074ff2178",
+      "scenario_id": "2b8a5d75-e680-4725-ae38-8ede77b1752b",
+      "title": "Login verification",
+      "preconditions": [],
+      "steps": [
+        "Open page",
+        "Verify text"
+      ],
+      "expected_result": "Logged in",
+      "priority": "high",
+      "status": "pending",
+      "confidence": 0.95,
+      "evaluation_status": "approved",
+      "evaluation_reason": null,
+      "playwright_script": "await page.goto('/'\n// Vfcati TetCmnt",
+      "generated_at": "2026-07-08T02:00:00Z"
     }
   },
   "execution_results": {
@@ -421,6 +598,150 @@
       "trace_path": null,
       "executed_at": "2026-07-07T12:13:33.013198Z",
       "project_id": "13b7a8e5-a1ac-4d8c-bc28-729578fd30b6"
+    },
+    "f7b6806b-cf3d-453f-a2bc-4cd1b1575008": {
+      "id": "f7b6806b-cf3d-453f-a2bc-4cd1b1575008",
+      "test_case_id": "eccad072-edc7-40cb-b117-307074ff2178",
+      "status": "passed",
+      "duration_seconds": 4.5,
+      "error_message": null,
+      "screenshot_path": "screenshots/final.png",
+      "video_path": "video/run.webm",
+      "trace_path": "trace/trace.zip",
+      "executed_at": "2026-07-08T03:27:17.653342Z",
+      "project_id": "2fddbabf-e314-4768-bbfa-3420e4d16274"
+    },
+    "4e473e8e-5bda-4bcd-9aee-9513986c274d": {
+      "id": "4e473e8e-5bda-4bcd-9aee-9513986c274d",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "failed",
+      "duration_seconds": 6.466,
+      "error_message": "page.waitForSelector: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[name=\"Model\"] option:nth-child(2)') to be visible\u001b[22m\n\u001b[2m    10 \u00d7 locator resolved to hidden <option value=\"Scooter\">Scooter</option>\u001b[22m\n",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-08T03:47:13.947726Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "460e1420-c960-444f-9e62-723de4833704": {
+      "id": "460e1420-c960-444f-9e62-723de4833704",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "failed",
+      "duration_seconds": 35.436,
+      "error_message": "page.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[name=\"Engine Performance\"]')\u001b[22m\n",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-08T03:49:09.403375Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "84352442-b711-4a51-8858-78cbc6d69754": {
+      "id": "84352442-b711-4a51-8858-78cbc6d69754",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "passed",
+      "duration_seconds": 3.846,
+      "error_message": null,
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\84352442-b711-4a51-8858-78cbc6d69754\\trace\\trace.zip",
+      "executed_at": "2026-07-08T03:51:27.728387Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "672e759a-94e4-4632-80ed-5040b39ae22f": {
+      "id": "672e759a-94e4-4632-80ed-5040b39ae22f",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "passed",
+      "duration_seconds": 5.481,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\672e759a-94e4-4632-80ed-5040b39ae22f\\screenshots\\03-insurant-data-page-2026-07-08T03-52-52.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\672e759a-94e4-4632-80ed-5040b39ae22f\\trace\\trace.zip",
+      "executed_at": "2026-07-08T03:52:53.016732Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "ac569da8-602c-4938-9064-ba0ecccdfa37": {
+      "id": "ac569da8-602c-4938-9064-ba0ecccdfa37",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "passed",
+      "duration_seconds": 5.436,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\ac569da8-602c-4938-9064-ba0ecccdfa37\\screenshots\\03-insurant-data-page-2026-07-08T03-54-19.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\ac569da8-602c-4938-9064-ba0ecccdfa37\\trace\\trace.zip",
+      "executed_at": "2026-07-08T03:54:19.565526Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "89a0232b-24fa-4be4-aa08-a3908d22438c": {
+      "id": "89a0232b-24fa-4be4-aa08-a3908d22438c",
+      "test_case_id": "f8f82480-b4dd-4438-8ad3-bda571ce2494",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-08T04:14:41.355339Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "f24f21f3-daac-4478-875f-92dbe3573015": {
+      "id": "f24f21f3-daac-4478-875f-92dbe3573015",
+      "test_case_id": "f8f82480-b4dd-4438-8ad3-bda571ce2494",
+      "status": "error",
+      "duration_seconds": 0.0,
+      "error_message": "Playwright did not produce report.json. Last output: 'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\cli\\\\testActions.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\lib\\\\program.js',\n'C:\\\\Users\\\\Hanish\\\\AppData\\\\Local\\\\npm-cache\\\\_npx\\\\e41f203b7505f1fb\\\\node_modules\\\\playwright\\\\cli.js'\n]\n}",
+      "screenshot_path": null,
+      "video_path": null,
+      "trace_path": null,
+      "executed_at": "2026-07-08T04:15:39.533323Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "9e7e90ed-c3c7-498a-836d-9f7376963a1c": {
+      "id": "9e7e90ed-c3c7-498a-836d-9f7376963a1c",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "passed",
+      "duration_seconds": 24.764,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\9e7e90ed-c3c7-498a-836d-9f7376963a1c\\screenshots\\03-insurant-data-page-2026-07-08T08-55-55.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\9e7e90ed-c3c7-498a-836d-9f7376963a1c\\trace\\trace.zip",
+      "executed_at": "2026-07-08T08:55:58.125253Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "aadbfd55-2882-4b1a-a472-35d102973fbe": {
+      "id": "aadbfd55-2882-4b1a-a472-35d102973fbe",
+      "test_case_id": "126fff68-4583-495f-a125-ed4e62de1e7a",
+      "status": "passed",
+      "duration_seconds": 15.455,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\aadbfd55-2882-4b1a-a472-35d102973fbe\\screenshots\\03-insurant-data-page-2026-07-08T09-23-39.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\aadbfd55-2882-4b1a-a472-35d102973fbe\\trace\\trace.zip",
+      "executed_at": "2026-07-08T09:23:41.489031Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "185836db-42de-48c0-aa64-603249308988": {
+      "id": "185836db-42de-48c0-aa64-603249308988",
+      "test_case_id": "00000000-0000-0000-0000-000000000000",
+      "status": "passed",
+      "duration_seconds": 11.754,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\185836db-42de-48c0-aa64-603249308988\\screenshots\\03-insurant-data-page-2026-07-08T10-30-25.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\185836db-42de-48c0-aa64-603249308988\\trace\\trace.zip",
+      "executed_at": "2026-07-08T10:30:26.336538Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "a3c8e347-9d33-4e08-99ef-5fb655ee8039": {
+      "id": "a3c8e347-9d33-4e08-99ef-5fb655ee8039",
+      "test_case_id": "00000000-0000-0000-0000-000000000000",
+      "status": "passed",
+      "duration_seconds": 10.797,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\a3c8e347-9d33-4e08-99ef-5fb655ee8039\\screenshots\\03-insurant-data-page-2026-07-08T10-30-26.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\a3c8e347-9d33-4e08-99ef-5fb655ee8039\\trace\\trace.zip",
+      "executed_at": "2026-07-08T10:30:26.642137Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
     }
   },
   "reports": {
@@ -468,6 +789,97 @@
       "html_path": "data\\reports\\report_a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a.html",
       "pdf_path": "data\\reports\\report_a574a51b-7cd5-4a2f-8f9f-e32b8202cd9a.pdf",
       "created_at": "2026-07-07T12:13:33.150515+00:00"
+    },
+    "72e82923-54ad-4e66-a823-bde52ceb733b": {
+      "id": "72e82923-54ad-4e66-a823-bde52ceb733b",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "ac569da8-602c-4938-9064-ba0ecccdfa37",
+      "junit_path": "data\\reports\\junit_ac569da8-602c-4938-9064-ba0ecccdfa37.xml",
+      "html_path": "data\\reports\\report_ac569da8-602c-4938-9064-ba0ecccdfa37.html",
+      "pdf_path": "data\\reports\\report_ac569da8-602c-4938-9064-ba0ecccdfa37.pdf",
+      "created_at": "2026-07-08T03:54:19.683391+00:00"
+    },
+    "f80555dc-0a47-4034-96b7-a2e03db1d4e3": {
+      "id": "f80555dc-0a47-4034-96b7-a2e03db1d4e3",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "89a0232b-24fa-4be4-aa08-a3908d22438c",
+      "junit_path": "data\\reports\\junit_89a0232b-24fa-4be4-aa08-a3908d22438c.xml",
+      "html_path": "data\\reports\\report_89a0232b-24fa-4be4-aa08-a3908d22438c.html",
+      "pdf_path": "data\\reports\\report_89a0232b-24fa-4be4-aa08-a3908d22438c.pdf",
+      "created_at": "2026-07-08T04:14:41.510582+00:00"
+    },
+    "f7e6a533-f48c-4afb-a1de-f4204b183d15": {
+      "id": "f7e6a533-f48c-4afb-a1de-f4204b183d15",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "f24f21f3-daac-4478-875f-92dbe3573015",
+      "junit_path": "data\\reports\\junit_f24f21f3-daac-4478-875f-92dbe3573015.xml",
+      "html_path": "data\\reports\\report_f24f21f3-daac-4478-875f-92dbe3573015.html",
+      "pdf_path": "data\\reports\\report_f24f21f3-daac-4478-875f-92dbe3573015.pdf",
+      "created_at": "2026-07-08T04:15:39.580425+00:00"
+    },
+    "82812bad-9236-4955-9084-0a821743e9bb": {
+      "id": "82812bad-9236-4955-9084-0a821743e9bb",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "9e7e90ed-c3c7-498a-836d-9f7376963a1c",
+      "junit_path": "data\\reports\\junit_9e7e90ed-c3c7-498a-836d-9f7376963a1c.xml",
+      "html_path": "data\\reports\\report_9e7e90ed-c3c7-498a-836d-9f7376963a1c.html",
+      "pdf_path": "data\\reports\\report_9e7e90ed-c3c7-498a-836d-9f7376963a1c.pdf",
+      "created_at": "2026-07-08T08:55:58.670891+00:00"
+    },
+    "72b86600-9355-495b-9d86-eb01f90200c1": {
+      "id": "72b86600-9355-495b-9d86-eb01f90200c1",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "aadbfd55-2882-4b1a-a472-35d102973fbe",
+      "junit_path": "data\\reports\\junit_aadbfd55-2882-4b1a-a472-35d102973fbe.xml",
+      "html_path": "data\\reports\\report_aadbfd55-2882-4b1a-a472-35d102973fbe.html",
+      "pdf_path": "data\\reports\\report_aadbfd55-2882-4b1a-a472-35d102973fbe.pdf",
+      "created_at": "2026-07-08T09:23:41.813070+00:00"
+    },
+    "3d327e70-197b-4298-b409-6d8291aa613f": {
+      "id": "3d327e70-197b-4298-b409-6d8291aa613f",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "84352442-b711-4a51-8858-78cbc6d69754",
+      "junit_path": "data\\reports\\junit_84352442-b711-4a51-8858-78cbc6d69754.xml",
+      "html_path": "data\\reports\\report_84352442-b711-4a51-8858-78cbc6d69754.html",
+      "pdf_path": "data\\reports\\report_84352442-b711-4a51-8858-78cbc6d69754.pdf",
+      "created_at": "2026-07-08T09:44:23.397975+00:00"
+    },
+    "fdc5e07f-0a14-4d55-8ef9-11f887023f4d": {
+      "id": "fdc5e07f-0a14-4d55-8ef9-11f887023f4d",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "4e473e8e-5bda-4bcd-9aee-9513986c274d",
+      "junit_path": "data\\reports\\junit_4e473e8e-5bda-4bcd-9aee-9513986c274d.xml",
+      "html_path": "data\\reports\\report_4e473e8e-5bda-4bcd-9aee-9513986c274d.html",
+      "pdf_path": "data\\reports\\report_4e473e8e-5bda-4bcd-9aee-9513986c274d.pdf",
+      "created_at": "2026-07-08T09:48:37.929896+00:00"
+    },
+    "78274e5a-aa1b-40c0-8d56-6e299f52b8ff": {
+      "id": "78274e5a-aa1b-40c0-8d56-6e299f52b8ff",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "aadbfd55-2882-4b1a-a472-35d102973fbe",
+      "junit_path": "data\\reports\\junit_aadbfd55-2882-4b1a-a472-35d102973fbe.xml",
+      "html_path": "data\\reports\\report_aadbfd55-2882-4b1a-a472-35d102973fbe.html",
+      "pdf_path": "data\\reports\\report_aadbfd55-2882-4b1a-a472-35d102973fbe.pdf",
+      "created_at": "2026-07-08T09:52:36.807935+00:00"
+    },
+    "50a98734-dbb3-4cda-8974-61735c9915fe": {
+      "id": "50a98734-dbb3-4cda-8974-61735c9915fe",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "185836db-42de-48c0-aa64-603249308988",
+      "junit_path": "data\\reports\\junit_185836db-42de-48c0-aa64-603249308988.xml",
+      "html_path": "data\\reports\\report_185836db-42de-48c0-aa64-603249308988.html",
+      "pdf_path": "data\\reports\\report_185836db-42de-48c0-aa64-603249308988.pdf",
+      "created_at": "2026-07-08T10:30:26.460454+00:00"
+    },
+    "331ad083-d274-4a17-b48c-47b4ee2c35d6": {
+      "id": "331ad083-d274-4a17-b48c-47b4ee2c35d6",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "a3c8e347-9d33-4e08-99ef-5fb655ee8039",
+      "junit_path": "data\\reports\\junit_a3c8e347-9d33-4e08-99ef-5fb655ee8039.xml",
+      "html_path": "data\\reports\\report_a3c8e347-9d33-4e08-99ef-5fb655ee8039.html",
+      "pdf_path": "data\\reports\\report_a3c8e347-9d33-4e08-99ef-5fb655ee8039.pdf",
+      "created_at": "2026-07-08T10:30:26.767668+00:00"
     }
-  }
+  },
+  "documents": {}
 }

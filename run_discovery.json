@@ -1,0 +1,6 @@
+{
+  "script": "await page.goto('https://sampleapp.tricentis.com/101/app.php', { waitUntil: 'networkidle' }); addLog('Navigated to Tricentis Portal'); await screenshot('01-initial-state'); await page.selectOption('#make', 'BMW'); addLog('Selected BMW Make'); await page.waitForSelector('#model option:nth-child(2)', { state: 'attached', timeout: 3000 }); await page.selectOption('#model', 'Scooter'); addLog('Selected Scooter Model'); await page.fill('#cylindercapacity', '150'); await page.fill('#engineperformance', '90'); await page.fill('#dateofmanufacture', '06/01/2024'); if (await page.isVisible('#numberofseatsmotorcycle')) { await page.selectOption('#numberofseatsmotorcycle', '2'); } else { await page.selectOption('#numberofseats', '2'); } await page.selectOption('#fuel', 'Petrol'); await page.fill('#listprice', '25000'); await page.fill('#licenseplatenumber', 'BMW-101'); await page.fill('#annualmileage', '12000'); addLog('Form fields filled'); await screenshot('02-form-filled'); const nextBtn = await page.$('#nextenterinsurantdata'); if (nextBtn) { await nextBtn.click(); addLog('Clicked Next'); await page.waitForTimeout(1000); } await screenshot('03-insurant-data-page'); addLog('All steps completed');",
+  "projectId": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+  "testCaseIds": ["126fff68-4583-495f-a125-ed4e62de1e7a"],
+  "browser": "chromium"
+}

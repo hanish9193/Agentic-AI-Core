@@ -87,6 +87,10 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
+    def get_test_case(self, test_case_id: UUID) -> TestCase | None:
+        pass
+
+    @abstractmethod
     def delete_test_case(self, test_case_id: UUID) -> bool:
         pass
 
@@ -405,6 +409,14 @@ class JSONProjectRepository(ProjectRepository):
             tcs_raw[tc_id_str] = test_case.model_dump(mode="json")
             self._write_raw(raw)
             return test_case
+        return None
+
+    def get_test_case(self, test_case_id: UUID) -> TestCase | None:
+        raw = self._read_raw()
+        tcs_raw = raw.get("test_cases", {})
+        tc_id_str = str(test_case_id)
+        if tc_id_str in tcs_raw:
+            return TestCase.model_validate(tcs_raw[tc_id_str])
         return None
 
     def delete_test_case(self, test_case_id: UUID) -> bool:

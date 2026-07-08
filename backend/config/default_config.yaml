@@ -40,3 +40,4 @@ playwright:
   headless: true
   timeout: 60
   retries: 0
+  workspace_url: http://localhost:3000

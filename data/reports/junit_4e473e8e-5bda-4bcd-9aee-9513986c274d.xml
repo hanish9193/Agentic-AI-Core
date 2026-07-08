@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Test Suite" tests="1" failures="1" errors="0" time="6.466"><testcase name="TestCase_126fff68-4583-495f-a125-ed4e62de1e7a" classname="PlaywrightTests" time="6.466"><failure message="Assertion Failed">page.waitForSelector: Timeout 3000ms exceeded.
+Call log:
+[2m  - waiting for locator('[name="Model"] option:nth-child(2)') to be visible[22m
+[2m    10 × locator resolved to hidden &lt;option value="Scooter"&gt;Scooter&lt;/option&gt;[22m
+</failure></testcase></testsuite></testsuites>

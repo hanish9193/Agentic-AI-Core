@@ -81,7 +81,7 @@ export function ResultsSummary({
               >
                 <div className="aspect-video bg-gray-200 flex items-center justify-center">
                   <img
-                    src={screenshotUrl}
+                    src={screenshotUrl.startsWith('/') || screenshotUrl.startsWith('http') ? screenshotUrl : `/api/artifacts/${executionId}/screenshot/${screenshotUrl}`}
                     alt={`Screenshot ${index + 1}`}
                     className="w-full h-full object-cover"
                   />
