@@ -162,7 +162,10 @@ class JSONProjectRepository(ProjectRepository):
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
+        except json.JSONDecodeError as jde:
+            print(f"[ERROR] JSON decode error reading {self.file_path}: {jde}")
+            if self.file_path.exists() and self.file_path.stat().st_size > 0:
+                raise jde
             return {
                 "projects": [],
                 "requirements": {},
@@ -173,6 +176,9 @@ class JSONProjectRepository(ProjectRepository):
                 "scenario_notes": {},
                 "test_case_notes": {}
             }
+        except Exception as e:
+            print(f"[ERROR] Failed to read {self.file_path}: {e}")
+            raise e
 
     def _write_raw(self, data: dict) -> None:
         with open(self.file_path, "w", encoding="utf-8") as f:

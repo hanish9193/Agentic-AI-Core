@@ -494,7 +494,7 @@
       "confidence": 0.0,
       "evaluation_status": "approved",
       "evaluation_reason": "Does not test ASD requirement at all, it's about successful deployment in general",
-      "playwright_script": null,
+      "playwright_script": "// Tricentis Vehicle Insurance Application Test\n// This test navigates to the Tricentis app, fills out the Enter Vehicle Data form completely and moves to the next page.\n\n// Navigate to the Tricentis application\nawait page.goto('https://sampleapp.tricentis.com/101/app.php', { waitUntil: 'networkidle' });\naddLog('Navigated to Tricentis Vehicle Insurance Application');\naddTimelineEvent('Website loaded', 'success');\n\n// Take a screenshot of the initial state\nawait screenshot('01-initial-state');\n\n// Select Make\nawait page.selectOption('#make', 'BMW');\naddLog('Selected BMW as vehicle make');\naddTimelineEvent('Vehicle make selected', 'success');\n\n// Wait for Model dropdown to populate and select Model\nawait page.waitForSelector('#model option:nth-child(2)', { state: 'attached', timeout: 3000 });\nawait page.selectOption('#model', 'Scooter');\naddLog('Selected Scooter as vehicle model');\naddTimelineEvent('Vehicle model selected', 'success');\n\n// Fill Cylinder Capacity\nawait page.fill('#cylindercapacity', '150');\naddLog('Entered Cylinder Capacity: 150');\n\n// Fill Engine Performance\nawait page.fill('#engineperformance', '90');\naddLog('Entered Engine Performance: 90');\n\n// Fill Date of Manufacture\nawait page.fill('#dateofmanufacture', '06/01/2024');\naddLog('Entered Date of Manufacture: 06/01/2024');\n\n// Select Number of Seats\nif (await page.isVisible('#numberofseatsmotorcycle')) {\n  await page.selectOption('#numberofseatsmotorcycle', '2');\n} else {\n  await page.selectOption('#numberofseats', '2');\n}\naddLog('Selected 2 seats');\n\n// Select Fuel Type\nawait page.selectOption('#fuel', 'Petrol');\naddLog('Selected Petrol as fuel type');\n\n// Fill List Price\nawait page.fill('#listprice', '25000');\naddLog('Entered List Price: 25000');\n\n// Fill License Plate Number\nawait page.fill('#licenseplatenumber', 'BMW-101');\naddLog('Entered License Plate Number: BMW-101');\n\n// Fill Annual Mileage\nawait page.fill('#annualmileage', '12000');\naddLog('Entered Annual Mileage: 12000');\naddTimelineEvent('Form fields filled', 'success');\n\n// Take screenshot before proceeding\nawait screenshot('02-form-filled');\n\n// Click Next\nconst nextBtn = await page.$('#nextenterinsurantdata');\nif (nextBtn) {\n  await nextBtn.click();\n  addLog('Clicked Next (Enter Insurant Data)');\n  addTimelineEvent('Clicked Next', 'success');\n  await page.waitForTimeout(1000);\n}\n\n// Take final screenshot of insurant data page\nawait screenshot('03-insurant-data-page');\naddTimelineEvent('Test completed successfully', 'success');\naddLog('All test steps completed');\n",
       "generated_at": "2026-07-08T03:16:12.515440Z"
     },
     "f8f82480-b4dd-4438-8ad3-bda571ce2494": {
@@ -742,6 +742,18 @@
       "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\a3c8e347-9d33-4e08-99ef-5fb655ee8039\\trace\\trace.zip",
       "executed_at": "2026-07-08T10:30:26.642137Z",
       "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
+    },
+    "bd92dc31-0077-4bcd-ac2f-71eb1221a862": {
+      "id": "bd92dc31-0077-4bcd-ac2f-71eb1221a862",
+      "test_case_id": "00000000-0000-0000-0000-000000000000",
+      "status": "passed",
+      "duration_seconds": 8.977,
+      "error_message": null,
+      "screenshot_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\bd92dc31-0077-4bcd-ac2f-71eb1221a862\\screenshots\\03-insurant-data-page-2026-07-09T11-04-51.png",
+      "video_path": null,
+      "trace_path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\public\\artifacts\\bd92dc31-0077-4bcd-ac2f-71eb1221a862\\trace\\trace.zip",
+      "executed_at": "2026-07-09T11:04:52.014415Z",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f"
     }
   },
   "reports": {
@@ -879,6 +891,15 @@
       "html_path": "data\\reports\\report_a3c8e347-9d33-4e08-99ef-5fb655ee8039.html",
       "pdf_path": "data\\reports\\report_a3c8e347-9d33-4e08-99ef-5fb655ee8039.pdf",
       "created_at": "2026-07-08T10:30:26.767668+00:00"
+    },
+    "efccaf49-d8cb-4dd2-b874-1852fa0e25b0": {
+      "id": "efccaf49-d8cb-4dd2-b874-1852fa0e25b0",
+      "project_id": "5471e234-c6bd-4ed7-a26f-7db5850ec41f",
+      "execution_id": "bd92dc31-0077-4bcd-ac2f-71eb1221a862",
+      "junit_path": "data\\reports\\junit_bd92dc31-0077-4bcd-ac2f-71eb1221a862.xml",
+      "html_path": "data\\reports\\report_bd92dc31-0077-4bcd-ac2f-71eb1221a862.html",
+      "pdf_path": "data\\reports\\report_bd92dc31-0077-4bcd-ac2f-71eb1221a862.pdf",
+      "created_at": "2026-07-09T11:04:52.117071+00:00"
     }
   },
   "documents": {}

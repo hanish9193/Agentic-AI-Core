@@ -5,7 +5,7 @@ import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import { ExecutionList } from '@/components/execution-list';
 import { LiveBrowserPreview } from '@/components/live-browser-preview';
-import { Play, Code2, Globe, Save } from 'lucide-react';
+import { Play, Code2, Globe, Save, Sun, Moon } from 'lucide-react';
 import { Execution } from '@/lib/execution-queue';
 
 const SAMPLE_SCRIPT = `// Tricentis Vehicle Insurance Application Test
@@ -98,6 +98,61 @@ function PlaywrightWorkspaceContent() {
   const [testCaseTitle, setTestCaseTitle] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    // Default to dark theme to match portal
+    document.documentElement.classList.add('dark');
+  }, []);
+
+  const toggleTheme = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    
+    const changeTheme = () => {
+      setTheme(nextTheme);
+      if (typeof window !== 'undefined') {
+        if (nextTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+    };
+
+    if (!(document as any).startViewTransition) {
+      changeTheme();
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+
+    const transition = (document as any).startViewTransition(() => {
+      changeTheme();
+    });
+
+    transition.ready.then(() => {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${endRadius}px at ${x}px ${y}px)`,
+          ],
+        },
+        {
+          duration: 400,
+          easing: 'ease-out',
+          pseudoElement: '::view-transition-new(root)',
+        }
+      );
+    });
+  };
 
   // Fetch executions
   const fetchExecutions = useCallback(async () => {
@@ -247,43 +302,52 @@ function PlaywrightWorkspaceContent() {
   }, [fetchExecutions]);
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <Code2 className="w-8 h-8 text-blue-600" />
-              <h1 className="text-4xl font-bold">Playwright Workspace</h1>
+              <h1 className="text-4xl font-bold text-foreground">Playwright Workspace</h1>
             </div>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               {testCaseTitle 
                 ? `${testCaseTitle} — Persisted to the Enterprise Platform`
                 : 'Author, verify, and run browser automation scripts'}
             </p>
           </div>
-          {testCaseId && (
-            <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={toggleTheme}
+              variant="outline"
+              size="icon"
+              className="border-border text-foreground hover:bg-muted rounded-full w-10 h-10 flex items-center justify-center cursor-pointer"
+              title="Toggle Theme"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </Button>
+            {testCaseId && (
               <Button
                 onClick={handleSave}
                 disabled={isSaving || isLoading}
                 variant="outline"
-                className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                className="border-border text-foreground hover:bg-muted"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Live Browser Preview - Full Width Top Section */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-3">
             <Globe className="w-6 h-6 text-green-600" />
-            <h2 className="text-2xl font-bold">Live Browser Preview</h2>
+            <h2 className="text-2xl font-bold text-foreground">Live Browser Preview</h2>
           </div>
-          <div className="h-96 bg-white rounded-lg border border-gray-300 overflow-hidden shadow-sm">
+          <div className="h-96 bg-card rounded-lg border border-border overflow-hidden shadow-sm">
             <LiveBrowserPreview />
           </div>
         </div>
@@ -291,19 +355,19 @@ function PlaywrightWorkspaceContent() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Panel - Script Editor */}
           <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white rounded-lg border border-gray-300 p-4 shadow-sm">
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900">
+            <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-foreground">
                 <Code2 className="w-5 h-5" />
                 Monaco Editor
               </h2>
               
-              <div className="border border-gray-300 rounded overflow-hidden">
+              <div className="border border-border rounded overflow-hidden">
                 <Editor
                   height="400px"
                   defaultLanguage="typescript"
                   value={script}
                   onChange={(val) => setScript(val || '')}
-                  theme="vs-dark"
+                  theme={theme === 'dark' ? 'vs-dark' : 'vs'}
                   options={{
                     minimap: { enabled: false },
                     fontSize: 13,
@@ -318,7 +382,7 @@ function PlaywrightWorkspaceContent() {
                 <Button
                   onClick={handleExecute}
                   disabled={isLoading || !script.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                 >
                   <Play className="w-4 h-4 mr-2" />
                   {isLoading ? 'Starting...' : 'Execute Script'}
@@ -326,38 +390,38 @@ function PlaywrightWorkspaceContent() {
               </div>
 
               {saveSuccess && (
-                <div className="mt-4 p-2 bg-green-50 border border-green-300 rounded text-green-800 text-sm text-center">
+                <div className="mt-4 p-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-sm text-center">
                   Changes successfully saved to Enterprise Platform!
                 </div>
               )}
 
               {error && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-300 rounded text-red-800 text-sm">
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
                   {error}
                 </div>
               )}
             </div>
 
             {/* Status Summary */}
-            <div className="bg-white rounded-lg border border-gray-300 p-4 shadow-sm">
-              <h3 className="font-semibold mb-3 text-gray-900">Status</h3>
+            <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
+              <h3 className="font-semibold mb-3 text-foreground">Status</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Total Executions</span>
-                  <span className="font-mono text-gray-900">{executions.length}</span>
+                  <span className="text-muted-foreground">Total Executions</span>
+                  <span className="font-mono text-foreground">{executions.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Queued</span>
+                  <span className="text-muted-foreground">Queued</span>
                   <span className="font-mono text-purple-600">{queue.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Running</span>
+                  <span className="text-muted-foreground">Running</span>
                   <span className="font-mono text-blue-600">
                     {current ? '1' : '0'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Completed</span>
+                  <span className="text-muted-foreground">Completed</span>
                   <span className="font-mono text-green-600">
                     {executions.filter((e) => e.metadata.status === 'completed')
                       .length}
@@ -369,8 +433,8 @@ function PlaywrightWorkspaceContent() {
 
           {/* Right Panel - Execution List */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg border border-gray-300 p-4 shadow-sm">
-              <h2 className="text-lg font-semibold mb-4 text-gray-900">Recent Executions</h2>
+            <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
+              <h2 className="text-lg font-semibold mb-4 text-foreground">Recent Executions</h2>
               <ExecutionList
                 executions={executions}
                 queue={queue}

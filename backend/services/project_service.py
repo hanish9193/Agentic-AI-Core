@@ -233,8 +233,11 @@ class ProjectService:
 
     def update_test_case_script(self, test_case_id: UUID, script: str) -> TestCase | None:
         raw_data = self.repo._read_raw()
-        tc_data = raw_data.get("test_cases", {}).get(str(test_case_id))
+        tcs = raw_data.get("test_cases", {})
+        print(f"[DEBUG] update_test_case_script test_case_id={str(test_case_id)} keys={list(tcs.keys())[:5]}")
+        tc_data = tcs.get(str(test_case_id))
         if not tc_data:
+            print(f"[DEBUG] test case not found in database: {str(test_case_id)}")
             return None
         tc = TestCase.model_validate(tc_data)
         tc.playwright_script = script

@@ -1,0 +1,5 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Test Suite" tests="6" failures="1" errors="0" time="35.536"><testcase name="TestCase_102c3ddb-5c7f-42b3-a001-72248a0189fc" classname="PlaywrightTests" time="35.536"><failure message="Assertion Failed">locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('menuitem', { name: 'Navigation Menu' })[22m
+</failure></testcase></testsuite></testsuites>

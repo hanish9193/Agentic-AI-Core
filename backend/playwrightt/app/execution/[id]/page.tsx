@@ -83,7 +83,7 @@ export default function ExecutionDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white text-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p>Loading execution...</p>
@@ -94,9 +94,9 @@ export default function ExecutionDetailPage() {
 
   if (!execution) {
     return (
-      <div className="min-h-screen bg-white text-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">Execution not found</p>
+          <p className="text-red-500 mb-4">Execution not found</p>
           <Button onClick={() => router.push('/')} variant="outline">
             Back to Dashboard
           </Button>
@@ -123,7 +123,7 @@ export default function ExecutionDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
@@ -131,14 +131,14 @@ export default function ExecutionDetailPage() {
             <Button
               variant="ghost"
               onClick={() => router.push('/')}
-              className="text-gray-600"
+              className="text-muted-foreground"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 text-foreground" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">Execution {executionId.slice(0, 8)}</h1>
-              <p className="text-gray-600 text-sm mt-1">
-                Status: <span className="font-mono text-blue-600">{execution.metadata.status}</span>
+              <h1 className="text-3xl font-bold text-foreground">Execution {executionId.slice(0, 8)}</h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                Status: <span className="font-mono text-blue-600 dark:text-blue-400">{execution.metadata.status}</span>
               </p>
             </div>
           </div>
@@ -155,40 +155,40 @@ export default function ExecutionDetailPage() {
 
         {/* Metadata */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg p-4 border border-gray-300 shadow-sm">
-            <p className="text-gray-600 text-sm">Status</p>
-            <p className="text-lg font-semibold text-blue-600">
+          <div className="bg-card rounded-lg p-4 border border-border shadow-sm">
+            <p className="text-muted-foreground text-sm">Status</p>
+            <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
               {execution.metadata.status}
             </p>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-300 shadow-sm">
-            <p className="text-gray-600 text-sm">Started</p>
-            <p className="text-lg font-semibold text-gray-900">
+          <div className="bg-card rounded-lg p-4 border border-border shadow-sm">
+            <p className="text-muted-foreground text-sm">Started</p>
+            <p className="text-lg font-semibold text-foreground">
               {new Date(execution.metadata.started).toLocaleTimeString()}
             </p>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-300 shadow-sm">
-            <p className="text-gray-600 text-sm">Duration</p>
-            <p className="text-lg font-semibold text-gray-900">
+          <div className="bg-card rounded-lg p-4 border border-border shadow-sm">
+            <p className="text-muted-foreground text-sm">Duration</p>
+            <p className="text-lg font-semibold text-foreground">
               {execution.metadata.duration ? `${execution.metadata.duration.toFixed(2)}s` : '-'}
             </p>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-300 shadow-sm">
-            <p className="text-gray-600 text-sm">Browser</p>
-            <p className="text-lg font-semibold text-gray-900 capitalize">{execution.metadata.browser}</p>
+          <div className="bg-card rounded-lg p-4 border border-border shadow-sm">
+            <p className="text-muted-foreground text-sm">Browser</p>
+            <p className="text-lg font-semibold text-foreground capitalize">{execution.metadata.browser}</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-gray-300">
+        <div className="flex gap-2 mb-6 border-b border-border">
           {(['results', 'browser', 'timeline', 'artifacts'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 border-b-2 capitalize font-medium transition-colors ${
                 activeTab === tab
-                  ? 'border-blue-600 text-gray-900'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'border-blue-600 text-foreground font-semibold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               {tab}
@@ -197,7 +197,7 @@ export default function ExecutionDetailPage() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white rounded-lg border border-gray-300 p-6 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
           {activeTab === 'results' && (
             <ResultsSummary
               status={execution.metadata.status as any}
@@ -242,9 +242,9 @@ export default function ExecutionDetailPage() {
 
         {/* Error Display */}
         {execution.error && (
-          <div className="mt-6 p-4 bg-red-50 border border-red-300 rounded-lg">
-            <p className="text-red-900 font-semibold mb-2">Execution Error</p>
-            <p className="text-red-800 text-sm break-all">{execution.error}</p>
+          <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-red-400 font-semibold mb-2">Execution Error</p>
+            <p className="text-red-400/90 text-sm break-all">{execution.error}</p>
           </div>
         )}
       </div>

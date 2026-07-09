@@ -50,9 +50,10 @@ export class ExecutionEngine {
         }
       }
 
+      const cleanScript = script.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?/g, '');
       const wrappedScript = `
-        return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent }) => {
-          ${script}
+        return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent, test, expect }) => {
+          ${cleanScript}
         })
       `;
       new Function(wrappedScript);
@@ -164,6 +165,8 @@ export class ExecutionEngine {
       // Start screenshot capture
       this.startScreenshotCapture(executionId, page, screenshotDir);
 
+      const testPromises: Promise<void>[] = [];
+
       // Setup console listener
       page.on('console', (msg) => {
         const text = `[${msg.type()}] ${msg.text()}`;
@@ -233,17 +236,93 @@ export class ExecutionEngine {
             timeline_event: { event, type }
           });
         },
+        test: (name: string, fn: any) => {
+          const runPromise = (async () => {
+            executionQueue.addTimelineEvent(executionId, `Running: ${name}`, 'info');
+            await sendWebhook(projectId, {
+              execution_id: executionId,
+              test_case_id: testCaseId,
+              event: 'updated',
+              status: 'running',
+              timeline_event: { event: `Running: ${name}`, type: 'info' }
+            });
+            await fn(executionContext);
+          })();
+          testPromises.push(runPromise);
+          return runPromise;
+        },
+        expect: (actual: any) => {
+          const assertions = {
+            toBeVisible: async () => {
+              if (actual && typeof actual.isVisible === 'function') {
+                const visible = await actual.isVisible();
+                if (!visible) throw new Error('Element is not visible');
+              } else if (actual && actual.click) {
+                const visible = await actual.isVisible();
+                if (!visible) throw new Error('Element is not visible');
+              }
+            },
+            toBeHidden: async () => {
+              if (actual && typeof actual.isHidden === 'function') {
+                const hidden = await actual.isHidden();
+                if (!hidden) throw new Error('Element is not hidden');
+              }
+            },
+            toBeEnabled: async () => {
+              if (actual && typeof actual.isEnabled === 'function') {
+                const enabled = await actual.isEnabled();
+                if (!enabled) throw new Error('Element is not enabled');
+              }
+            },
+            toContainText: async (text: string) => {
+              if (actual && typeof actual.textContent === 'function') {
+                const content = await actual.textContent();
+                if (!content || !content.includes(text)) {
+                  throw new Error(`Element does not contain text: "${text}"`);
+                }
+              }
+            },
+            toBe: (expected: any) => {
+              if (actual !== expected) {
+                throw new Error(`Expected ${actual} to be ${expected}`);
+              }
+            },
+            toEqual: (expected: any) => {
+              if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+                throw new Error(`Expected ${actual} to equal ${expected}`);
+              }
+            },
+            not: {
+              toBe: (expected: any) => {
+                if (actual === expected) {
+                  throw new Error(`Expected ${actual} not to be ${expected}`);
+                }
+              },
+              toEqual: (expected: any) => {
+                if (JSON.stringify(actual) === JSON.stringify(expected)) {
+                  throw new Error(`Expected ${actual} not to equal ${expected}`);
+                }
+              }
+            }
+          };
+          return assertions;
+        }
       };
 
       // Execute user script with context - wrap in async function to support top-level await
+      const cleanScript = script.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?/g, '');
       const wrappedScript = `
-        return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent }) => {
-          ${script}
+        return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent, test, expect }) => {
+          ${cleanScript}
         })
       `;
       const userFunction = new Function(wrappedScript);
       const asyncFunc = userFunction();
       await asyncFunc(executionContext);
+
+      if (testPromises.length > 0) {
+        await Promise.all(testPromises);
+      }
 
       // Save trace
       if (recordTrace) {

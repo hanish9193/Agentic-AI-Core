@@ -46,24 +46,24 @@ export function ExecutionList({
   const router = useRouter();
 
   return (
-    <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+    <div className="bg-card rounded-lg border border-border overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-300">
+          <thead className="bg-muted/50 border-b border-border">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900">
+              <th className="px-4 py-3 text-left font-semibold text-foreground">
                 Execution ID
               </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900">
+              <th className="px-4 py-3 text-left font-semibold text-foreground">
                 Status
               </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900">
+              <th className="px-4 py-3 text-left font-semibold text-foreground">
                 Duration
               </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900">
+              <th className="px-4 py-3 text-left font-semibold text-foreground">
                 Started
               </th>
-              <th className="px-4 py-3 text-right font-semibold text-gray-900">
+              <th className="px-4 py-3 text-right font-semibold text-foreground">
                 Actions
               </th>
             </tr>
@@ -71,7 +71,7 @@ export function ExecutionList({
           <tbody>
             {executions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   No executions yet
                 </td>
               </tr>
@@ -79,12 +79,12 @@ export function ExecutionList({
               executions.map((execution) => (
                 <tr
                   key={execution.metadata.executionId}
-                  className="border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
                   onClick={() =>
                     router.push(`/execution/${execution.metadata.executionId}`)
                   }
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                     {execution.metadata.executionId.slice(0, 8)}...
                   </td>
                   <td className="px-4 py-3">
@@ -96,10 +96,10 @@ export function ExecutionList({
                       {execution.metadata.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-900">
+                  <td className="px-4 py-3 text-foreground">
                     {formatDuration(execution.metadata.duration)}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-4 py-3 text-muted-foreground">
                     {new Date(execution.metadata.started).toLocaleTimeString()}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -115,7 +115,7 @@ export function ExecutionList({
                             onStatusChange(execution.metadata.executionId, 'pause')
                           }
                         >
-                          <Pause className="w-4 h-4" />
+                          <Pause className="w-4 h-4 text-foreground" />
                         </Button>
                       )}
                       {execution.metadata.status === 'paused' && (
@@ -126,7 +126,7 @@ export function ExecutionList({
                             onStatusChange(execution.metadata.executionId, 'resume')
                           }
                         >
-                          <Play className="w-4 h-4" />
+                          <Play className="w-4 h-4 text-foreground" />
                         </Button>
                       )}
                       {(execution.metadata.status === 'running' ||
@@ -139,7 +139,7 @@ export function ExecutionList({
                             onStatusChange(execution.metadata.executionId, 'stop')
                           }
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-4 h-4 text-foreground" />
                         </Button>
                       )}
                     </div>

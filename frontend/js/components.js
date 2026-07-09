@@ -231,6 +231,11 @@ export const Components = {
       if (tc.evaluation_status === 'rejected') badgeClass = "badge-rejected";
       if (tc.evaluation_status === 'needs_review') badgeClass = "badge-review";
 
+      let runBadgeClass = "badge-pending";
+      if (tc.status === 'passed') runBadgeClass = "badge-approved";
+      if (tc.status === 'failed') runBadgeClass = "badge-rejected";
+      if (tc.status === 'blocked') runBadgeClass = "badge-review";
+
       const confidencePct = Math.round(tc.confidence * 100);
       const hasScript = !!tc.playwright_script;
 
@@ -278,15 +283,18 @@ export const Components = {
             </select>
           </td>
           <td>
+            <div><span class="badge ${runBadgeClass}">${escapeHTML(tc.status || 'pending')}</span></div>
+          </td>
+          <td>
             <div class="tc-conf-text" id="tc-conf-txt-${tc.id}">${confidencePct}%</div>
             <input type="number" step="0.01" min="0" max="1" class="form-control" id="tc-conf-in-${tc.id}" value="${tc.confidence}" style="display: none; padding: 4px 8px; font-size: 0.85rem; width: 70px;" />
           </td>
           <td style="min-width: 140px;">
             ${tc.evaluation_status === 'approved' ? `
               ${hasScript ? `
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" disabled>Edit Script</button>
+                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="window._testCaseActions.onViewScript('${tc.id}')">Edit Script</button>
               ` : `
-                <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" disabled>Generate Script</button>
+                <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="window._testCaseActions.onGenerateScript('${tc.id}', this)">Generate Script</button>
               `}
               <a href="javascript:void(0)" onclick="window._testCaseActions.onViewScript('${tc.id}')" style="display: block; font-size: 0.7rem; color: var(--accent-primary); margin-top: 4px; font-weight: 600; text-decoration: none;">→ Open in Playwright Workspace</a>
             ` : `
@@ -329,6 +337,7 @@ export const Components = {
               <th>Steps & Comments</th>
               <th>Expected Result</th>
               <th>Evaluation Status</th>
+              <th>Run Status</th>
               <th>Confidence</th>
               <th>Script</th>
               <th style="text-align: right; width: 140px;">Actions</th>
