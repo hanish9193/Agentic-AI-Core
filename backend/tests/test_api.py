@@ -17,12 +17,14 @@ def setup_test_db():
         os.remove(TEST_STORE_PATH)
     
     # Point active project repository to our test DB file
+    orig_repo = repo_module._active_project_repo
     test_repo = JSONProjectRepository(file_path=TEST_STORE_PATH)
     repo_module._active_project_repo = test_repo
     
     yield
     
-    # Clean up test JSON DB after test
+    # Restore original repository and clean up test JSON DB after test
+    repo_module._active_project_repo = orig_repo
     if TEST_STORE_PATH.exists():
         os.remove(TEST_STORE_PATH)
 

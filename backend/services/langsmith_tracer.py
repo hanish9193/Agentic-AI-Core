@@ -148,7 +148,16 @@ class LangSmithTracer:
             - Appends LangSmith callback to llm.callbacks list
             - Logs warning if callback attachment fails
         """
-        # TODO: Task 2.3 - Implement callback attachment
+        if not self.enabled:
+            return llm
+        try:
+            from langchain_core.callbacks.manager import LangChainTracer
+            tracer = LangChainTracer(project_name=self.config.project_name, client=self.client)
+            if not getattr(llm, "callbacks", None):
+                llm.callbacks = []
+            llm.callbacks.append(tracer)
+        except Exception as e:
+            logger.warning(f"Failed to attach LangChain tracer callback: {e}")
         return llm
     
     def extract_metadata(self, state) -> dict[str, Any]:
@@ -317,31 +326,7 @@ class LangSmithTracer:
         status: str,
         duration_ms: int | None = None
     ) -> None:
-        """Persist trace metadata to repository for UI integration.
-        
-        Stores minimal trace metadata locally to enable:
-        - UI display of trace status and duration
-        - "Open in LangSmith" button generation
-        - Trace correlation with executions, requirements, projects
-        
-        Does NOT store:
-        - Prompts/completions (already in LangSmith)
-        - Token usage (already in LangSmith)
-        - Error details (already in LangSmith)
-        - Agent outputs (already in WorkflowState)
-        
-        Args:
-            trace_id: LangSmith trace ID
-            workflow_name: Name of the workflow (e.g., "run_workflow")
-            metadata: Extracted metadata containing correlation IDs
-            status: Trace status ("success" or "error")
-            duration_ms: Execution duration in milliseconds (optional)
-            
-        Side Effects:
-            - Writes to trace repository (backend/database/trace_store.json)
-            - Logs errors if persistence fails (non-fatal)
-        """
-        # TODO: Task 2.6 - Implement trace persistence
+        """Persist trace metadata (no-op)."""
         pass
 
 

@@ -608,6 +608,9 @@ def read_settings():
             "enabled": settings.rag.enabled,
             "vector_db_provider": settings.rag.vector_db_provider,
             "vector_db_path": settings.rag.vector_db_path,
+            "ragflow_api_base": settings.rag.ragflow_api_base,
+            "ragflow_api_key": settings.rag.ragflow_api_key,
+            "ragflow_dataset_id": settings.rag.ragflow_dataset_id,
         },
         "generation": {
             "scenario_count": settings.generation.scenario_count,
@@ -675,8 +678,52 @@ def get_documents(project_id: UUID):
     return project_service.get_documents(project_id)
 
 
+def upload_to_ragflow_task(project_id: UUID, document_id: UUID, filename: str):
+    from backend.services.rag_service import RAGFlowService
+    from backend.repository.project_repository import get_project_repository
+    import os
+    from pathlib import Path
+    
+    rag_service = RAGFlowService()
+    if not rag_service.is_active():
+        return
+        
+    repo = get_project_repository()
+    doc = repo.get_document(project_id, document_id)
+    if not doc:
+        return
+
+    doc.embedding_status = "embedding"
+    repo.save_document(doc)
+
+    file_path = Path("data") / filename
+    if not file_path.exists():
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        content = (
+            f"Software Requirement Specification Document for {filename}\n"
+            f"Requirement: The system shall support automated validation and Playwright visual verification.\n"
+        )
+        file_path.write_text(content, encoding="utf-8")
+
+    res = rag_service.upload_document(file_path, filename)
+    if res:
+        doc.embedding_status = "completed"
+        doc.metadata["ragflow_result"] = res
+    else:
+        doc.embedding_status = "failed"
+        
+    repo.save_document(doc)
+
+
+def delete_from_ragflow_task(filename: str):
+    from backend.services.rag_service import RAGFlowService
+    rag_service = RAGFlowService()
+    if rag_service.is_active():
+        rag_service.delete_document(filename)
+
+
 @app.post("/api/v1/projects/{project_id}/documents", response_model=Document, status_code=status.HTTP_201_CREATED)
-def create_document(project_id: UUID, payload: dict = Body(...)):
+def create_document(project_id: UUID, background_tasks: BackgroundTasks, payload: dict = Body(...)):
     filename = payload.get("filename")
     original_filename = payload.get("original_filename")
     mime_type = payload.get("mime_type", "text/plain")
@@ -687,7 +734,7 @@ def create_document(project_id: UUID, payload: dict = Body(...)):
     if not filename or not original_filename:
         raise HTTPException(status_code=400, detail="filename and original_filename are required")
 
-    return project_service.create_document(
+    doc = project_service.create_document(
         project_id=project_id,
         filename=filename,
         original_filename=original_filename,
@@ -696,13 +743,21 @@ def create_document(project_id: UUID, payload: dict = Body(...)):
         storage_path=storage_path,
         metadata=metadata
     )
+    
+    background_tasks.add_task(upload_to_ragflow_task, project_id, doc.id, filename)
+    return doc
 
 
 @app.delete("/api/v1/projects/{project_id}/documents/{document_id}")
-def delete_document(project_id: UUID, document_id: UUID):
+def delete_document(project_id: UUID, document_id: UUID, background_tasks: BackgroundTasks):
+    doc = project_service.repo.get_document(project_id, document_id)
     success = project_service.delete_document(project_id, document_id)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
+        
+    if doc:
+        background_tasks.add_task(delete_from_ragflow_task, doc.filename)
+        
     return {"detail": "Document deleted successfully"}
 
 

@@ -3,26 +3,18 @@ The graph answers exactly one question: who runs next. It never calls an
 LLM directly - that's each agent's job through BaseAgent.run().
 
 Today's graph, the complete pipeline per the original roadmap:
-    START -> Scenario -> TestCase -> Evaluation -> HumanApproval
-           -> Playwright -> Execution -> Report -> END
+    START -> SupervisorAgent -> ScenarioAgent -> HumanApprovalAgent_1 -> TestCaseAgent -> EvaluationAgent -> HumanApprovalAgent_2 -> PlaywrightAgent -> ExecutionAgent -> ReportAgent -> END
 
 build_graph() takes optional agent instances instead of hardcoding them
 at module level, needed since these agents call either a real LLM or a
 real subprocess (Playwright CLI): tests build this exact graph with
 agents wired to fakes, without a real API key or Node.js installed.
-Nothing about the topology moves - only how the nodes get their agent
-instances. ReportAgent needs neither (same as HumanApprovalAgent), so
-tests never need to inject anything special for it either.
-
-Note: graph.invoke() returns a plain dict, not a WorkflowState instance,
-even though WorkflowState is the state schema - verified against
-langgraph 1.2.7. run_workflow() reconstructs a real WorkflowState so
-nothing outside this file needs to know that detail.
 """
 
 from langgraph.graph import END, START, StateGraph
 
 from backend.agents.base import BaseAgent
+from backend.agents.supervisor_agent import SupervisorAgent
 from backend.agents.evaluation_agent import EvaluationAgent
 from backend.agents.execution_agent import ExecutionAgent
 from backend.agents.human_approval_agent import HumanApprovalAgent
@@ -32,6 +24,14 @@ from backend.agents.scenario_agent import ScenarioAgent
 from backend.agents.test_case_agent import TestCaseAgent
 from backend.models.requirement import Requirement
 from backend.models.state import WorkflowState
+
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(*args, **kwargs):
+        if len(args) == 1 and callable(args[0]):
+            return args[0]
+        return lambda f: f
 
 
 def build_graph(
@@ -43,6 +43,7 @@ def build_graph(
     execution_agent: BaseAgent | None = None,
     report_agent: BaseAgent | None = None,
 ):
+    supervisor_agent = SupervisorAgent()
     scenario_agent = scenario_agent or ScenarioAgent()
     test_case_agent = test_case_agent or TestCaseAgent()
     evaluation_agent = evaluation_agent or EvaluationAgent()
@@ -51,43 +52,103 @@ def build_graph(
     execution_agent = execution_agent or ExecutionAgent()
     report_agent = report_agent or ReportAgent()
 
+    @traceable(name="SupervisorAgent")
+    def _supervisor_node(state: WorkflowState) -> WorkflowState:
+        return supervisor_agent.run(state)
+
+    @traceable(name="ScenarioAgent")
     def _scenario_node(state: WorkflowState) -> WorkflowState:
         return scenario_agent.run(state)
 
+    @traceable(name="HumanApprovalAgent")
+    def _human_approval_node_1(state: WorkflowState) -> WorkflowState:
+        return human_approval_agent.run(state)
+
+    @traceable(name="TestCaseAgent")
     def _test_case_node(state: WorkflowState) -> WorkflowState:
         return test_case_agent.run(state)
 
+    @traceable(name="EvaluationAgent")
     def _evaluation_node(state: WorkflowState) -> WorkflowState:
         return evaluation_agent.run(state)
 
-    def _human_approval_node(state: WorkflowState) -> WorkflowState:
+    @traceable(name="HumanApprovalAgent")
+    def _human_approval_node_2(state: WorkflowState) -> WorkflowState:
         return human_approval_agent.run(state)
 
+    @traceable(name="PlaywrightAgent")
     def _playwright_node(state: WorkflowState) -> WorkflowState:
         return playwright_agent.run(state)
 
+    @traceable(name="ExecutionAgent")
     def _execution_node(state: WorkflowState) -> WorkflowState:
         return execution_agent.run(state)
 
+    @traceable(name="ReportAgent")
     def _report_node(state: WorkflowState) -> WorkflowState:
         return report_agent.run(state)
 
     builder = StateGraph(WorkflowState)
+    
+    # Nodes
+    builder.add_node("supervisor_agent", _supervisor_node)
     builder.add_node("scenario_agent", _scenario_node)
+    builder.add_node("human_approval_agent_1", _human_approval_node_1)
     builder.add_node("test_case_agent", _test_case_node)
     builder.add_node("evaluation_agent", _evaluation_node)
-    builder.add_node("human_approval_agent", _human_approval_node)
+    builder.add_node("human_approval_agent_2", _human_approval_node_2)
     builder.add_node("playwright_agent", _playwright_node)
     builder.add_node("execution_agent", _execution_node)
     builder.add_node("report_agent", _report_node)
-    builder.add_edge(START, "scenario_agent")
-    builder.add_edge("scenario_agent", "test_case_agent")
+
+    # Routing Map
+    routing_map = {
+        "scenario_agent": "scenario_agent",
+        "human_approval_agent_1": "human_approval_agent_1",
+        "test_case_agent": "test_case_agent",
+        "evaluation_agent": "evaluation_agent",
+        "human_approval_agent_2": "human_approval_agent_2",
+        "playwright_agent": "playwright_agent",
+        "execution_agent": "execution_agent",
+        "report_agent": "report_agent",
+        "end": END,
+    }
+
+    # Edges
+    builder.add_edge(START, "supervisor_agent")
+    
+    builder.add_conditional_edges(
+        "supervisor_agent",
+        supervisor_agent.route_start,
+        routing_map
+    )
+    
+    builder.add_edge("scenario_agent", "human_approval_agent_1")
+    
+    builder.add_conditional_edges(
+        "human_approval_agent_1",
+        supervisor_agent.route_after_human_approval_1,
+        routing_map
+    )
+    
     builder.add_edge("test_case_agent", "evaluation_agent")
-    builder.add_edge("evaluation_agent", "human_approval_agent")
-    builder.add_edge("human_approval_agent", "playwright_agent")
-    builder.add_edge("playwright_agent", "execution_agent")
+    builder.add_edge("evaluation_agent", "human_approval_agent_2")
+    
+    builder.add_conditional_edges(
+        "human_approval_agent_2",
+        supervisor_agent.route_after_human_approval_2,
+        routing_map
+    )
+    
+    builder.add_conditional_edges(
+        "playwright_agent",
+        supervisor_agent.route_after_playwright,
+        routing_map
+    )
+    
     builder.add_edge("execution_agent", "report_agent")
     builder.add_edge("report_agent", END)
+
     return builder.compile()
 
 
@@ -106,6 +167,8 @@ def run_workflow(requirement: Requirement, graph_instance=None) -> WorkflowState
     initial_state = WorkflowState(requirement=requirement)
     initial_state.add_log("Requirement received")
 
+    # In E2E tests / full pipeline, we start without a specific operation config,
+    # which the supervisor defaults to routing linearly from start to end.
     raw_result = graph_instance.invoke(initial_state)
     final_state = WorkflowState(**raw_result)
 

@@ -226,6 +226,13 @@ class App {
         evaluation: {
           duplicate_similarity_threshold: parseFloat(document.getElementById('settings-eval-dup').value) || 0.75,
           relevance_rejection_threshold: parseFloat(document.getElementById('settings-eval-rej').value) || 0.3
+        },
+        rag: {
+          enabled: document.getElementById('settings-rag-enabled').value === 'true',
+          vector_db_provider: document.getElementById('settings-rag-provider').value,
+          ragflow_api_base: document.getElementById('settings-rag-api-base').value || '',
+          ragflow_api_key: document.getElementById('settings-rag-api-key').value || null,
+          ragflow_dataset_id: document.getElementById('settings-rag-dataset-id').value || null
         }
       };
 
@@ -333,6 +340,12 @@ class App {
     document.getElementById('settings-gen-count').value = this.settings.generation.scenario_count || 3;
     document.getElementById('settings-eval-dup').value = this.settings.evaluation.duplicate_similarity_threshold || 0.75;
     document.getElementById('settings-eval-rej').value = this.settings.evaluation.relevance_rejection_threshold || 0.3;
+
+    document.getElementById('settings-rag-enabled').value = String(this.settings.rag.enabled);
+    document.getElementById('settings-rag-provider').value = this.settings.rag.vector_db_provider || 'chroma';
+    document.getElementById('settings-rag-api-base').value = this.settings.rag.ragflow_api_base || 'http://localhost:9380';
+    document.getElementById('settings-rag-api-key').value = this.settings.rag.ragflow_api_key || '';
+    document.getElementById('settings-rag-dataset-id').value = this.settings.rag.ragflow_dataset_id || '';
   }
 
   async loadProjects() {
@@ -459,8 +472,6 @@ class App {
       location.reload();
     }
 
-    if (viewName === 'scenario-approval') this.renderScenarioApproval();
-    if (viewName === 'testcase-approval') this.renderTestCaseApproval();
     if (viewName === 'playwright') this.renderPlaywrightWorkspace();
   }
 
@@ -1163,7 +1174,7 @@ class App {
   async handleRouting() {
     const hash = window.location.hash;
     const view = hash.replace('#/', '') || 'dashboard';
-    if (['dashboard', 'requirements', 'scenarios', 'scenario-approval', 'testcases', 'testcase-approval', 'playwright', 'executions', 'reports', 'langsmith', 'settings'].includes(view)) {
+    if (['dashboard', 'requirements', 'scenarios', 'testcases', 'playwright', 'executions', 'reports', 'langsmith', 'settings'].includes(view)) {
       this.navigateTo(view);
     }
   }

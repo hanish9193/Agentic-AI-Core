@@ -31,3 +31,5 @@ class Scenario(BaseModel):
     generated_at: datetime = Field(
     default_factory=lambda: datetime.now(timezone.utc)
     )
+    reviewer: str | None = None
+    approved_at: datetime | None = None

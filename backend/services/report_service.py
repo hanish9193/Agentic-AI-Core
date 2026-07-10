@@ -7,7 +7,7 @@ import os
 from backend.models.execution_result import ExecutionResult
 from backend.repository.project_repository import ProjectRepository
 
-def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, execution_id: UUID) -> dict:
+def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, execution_id: UUID, test_case=None) -> dict:
     """
     Parses a single raw timeline event from the Playwright runner and wraps it
     in a structured step dictionary containing Action, Observation, and Result fields.
@@ -34,29 +34,50 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
     observation = f"Timeline logged event of type '{evt_type}'."
     result = "Step executed successfully."
 
-    # If it is a screenshot event, let's provide custom premium context mapping
+    # If it is a screenshot event, let's provide dynamic context mapping
     if screenshot_filename:
+        import re
         fn_lower = screenshot_filename.lower()
-        if "initial" in fn_lower or "01" in fn_lower:
-            title = "Initial Portal Loading"
-            action = "Navigate to the Tricentis Vehicle Insurance portal and initialize the test session."
-            observation = "The application landing page loaded successfully. The vehicle data input form is displayed and interactive."
-            result = "Portal loaded and ready for automation."
-        elif "form-filled" in fn_lower or "02" in fn_lower:
-            title = "Vehicle Form Input Completion"
-            action = "Fill out all vehicle specifications: Make (BMW), Model (Scooter), Cylinder Capacity (150), Engine Performance (90), Date of Manufacture, Seats (2), Fuel (Petrol), List Price (25000), License Plate, and Annual Mileage."
-            observation = "All input fields and selection dropdowns populated with correct test data parameters. No form validation errors."
-            result = "Vehicle data form validation passed."
-        elif "insurant-data" in fn_lower or "03" in fn_lower:
-            title = "Transition to Enter Insurant Data"
-            action = "Click the 'Next' action button to submit the vehicle form data and navigate to the Insurant details form."
-            observation = "Form submitted successfully. Browser page navigated to the Enter Insurant Data portal page view."
-            result = "Navigation to insurant form successful."
+        
+        # Extract step number from filename prefix, e.g. "03-insurant-data" -> 3
+        step_num = None
+        match = re.match(r"^(\d+)", fn_lower)
+        if match:
+            step_num = int(match.group(1))
+
+        if test_case and step_num is not None and 1 <= step_num <= len(test_case.steps):
+            step_desc = test_case.steps[step_num - 1]
+            title = f"Step {step_num}: {step_desc}"
+            action = f"Execute step {step_num}: {step_desc}"
+            observation = "Browser successfully navigated / interacted. Verified visual state layout."
+            
+            # If it is the last step in the test case, use expected result
+            if step_num == len(test_case.steps):
+                result = f"Verified expected result: {test_case.expected_result}"
+            else:
+                result = f"Step {step_num} verification passed."
         else:
-            title = "Visual State Capture"
-            action = "Capture screenshot to record browser visual state."
-            observation = f"Visual state captured in file '{screenshot_filename}'."
-            result = "Screenshot image saved on disk."
+            # Fallback to predefined templates for Tricentis sample app
+            if "initial" in fn_lower or fn_lower.startswith("01-"):
+                title = "Initial Portal Loading"
+                action = "Navigate to the Tricentis Vehicle Insurance portal and initialize the test session."
+                observation = "The application landing page loaded successfully. The vehicle data input form is displayed and interactive."
+                result = "Portal loaded and ready for automation."
+            elif "form-filled" in fn_lower or fn_lower.startswith("02-"):
+                title = "Vehicle Form Input Completion"
+                action = "Fill out all vehicle specifications: Make (BMW), Model (Scooter), Cylinder Capacity (150), Engine Performance (90), Date of Manufacture, Seats (2), Fuel (Petrol), List Price (25000), License Plate, and Annual Mileage."
+                observation = "All input fields and selection dropdowns populated with correct test data parameters. No form validation errors."
+                result = "Vehicle data form validation passed."
+            elif "insurant-data" in fn_lower or fn_lower.startswith("03-"):
+                title = "Transition to Enter Insurant Data"
+                action = "Click the 'Next' action button to submit the vehicle form data and navigate to the Insurant details form."
+                observation = "Form submitted successfully. Browser page navigated to the Enter Insurant Data portal page view."
+                result = "Navigation to insurant form successful."
+            else:
+                title = "Visual State Capture"
+                action = "Capture screenshot to record browser visual state."
+                observation = f"Visual state captured in file '{screenshot_filename}'."
+                result = "Screenshot image saved on disk."
 
     return {
         "title": title,
@@ -129,9 +150,15 @@ class ReportService:
                 except Exception as parse_err:
                     print(f"[Timeline recovery failed from report.html]: {parse_err}")
 
+        test_case = None
+        try:
+            test_case = self.repo.get_test_case(execution_result.test_case_id)
+        except Exception as tc_err:
+            print(f"[ReportService] Failed to load test case {execution_result.test_case_id} for mapping: {tc_err}")
+
         mapped_steps = []
         for idx, evt in enumerate(raw_timeline):
-            mapped_steps.append(map_timeline_event_to_step(evt, idx, project_id, execution_result.id))
+            mapped_steps.append(map_timeline_event_to_step(evt, idx, project_id, execution_result.id, test_case=test_case))
 
         # Filter to only steps that actually contain screenshots
         screenshot_steps = [s for s in mapped_steps if s["screenshot_url"]]

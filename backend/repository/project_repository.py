@@ -103,6 +103,10 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
+    def get_document(self, project_id: UUID, document_id: UUID) -> Document | None:
+        pass
+
+    @abstractmethod
     def save_document(self, document: Document) -> None:
         pass
 
@@ -453,6 +457,13 @@ class JSONProjectRepository(ProjectRepository):
             if doc_data.get("project_id") == p_id_str:
                 result.append(Document.model_validate(doc_data))
         return result
+
+    def get_document(self, project_id: UUID, document_id: UUID) -> Document | None:
+        raw = self._read_raw()
+        doc_data = raw.get("documents", {}).get(str(document_id))
+        if doc_data and doc_data.get("project_id") == str(project_id):
+            return Document.model_validate(doc_data)
+        return None
 
     def save_document(self, document: Document) -> None:
         raw = self._read_raw()

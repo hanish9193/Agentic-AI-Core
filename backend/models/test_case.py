@@ -57,3 +57,5 @@ class TestCase(BaseModel):
     evaluation_reason: str | None = None
     playwright_script: str | None = None
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    reviewer: str | None = None
+    approved_at: datetime | None = None

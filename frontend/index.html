@@ -49,25 +49,11 @@
         Scenarios
       </div>
 
-      <div class="nav-item" data-view="scenario-approval">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        Scenario Approval
-      </div>
-
       <div class="nav-item" data-view="testcases">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
         </svg>
         Test Cases
-      </div>
-
-      <div class="nav-item" data-view="testcase-approval">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-        </svg>
-        Test Case Approval
       </div>
 
       <div class="nav-item" data-view="playwright">
@@ -486,6 +472,36 @@
                     <option value="true">True</option>
                     <option value="false">False</option>
                   </select>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <div class="settings-section-title">Knowledge Base RAG Settings</div>
+                <div class="form-group">
+                  <label for="settings-rag-enabled">Enable RAG Engine</label>
+                  <select id="settings-rag-enabled" class="form-control">
+                    <option value="false">False</option>
+                    <option value="true">True</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="settings-rag-provider">Vector DB / RAG Provider</label>
+                  <select id="settings-rag-provider" class="form-control">
+                    <option value="chroma">Chroma DB (Local)</option>
+                    <option value="ragflow">RAGFlow Engine</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="settings-rag-api-base">RAGFlow API Base URL</label>
+                  <input type="text" id="settings-rag-api-base" class="form-control" placeholder="http://localhost:9380" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-rag-api-key">RAGFlow API Key</label>
+                  <input type="password" id="settings-rag-api-key" class="form-control" placeholder="••••••••" />
+                </div>
+                <div class="form-group">
+                  <label for="settings-rag-dataset-id">RAGFlow Dataset ID</label>
+                  <input type="text" id="settings-rag-dataset-id" class="form-control" placeholder="your-dataset-uuid" />
                 </div>
               </div>
 

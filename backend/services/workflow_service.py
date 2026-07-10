@@ -32,15 +32,19 @@ class WorkflowService:
         if mode == "replace":
             self.repo.clear_scenarios_for_requirement(requirement_id)
 
-        # Instantiate ScenarioAgent with the requested custom scenario count
-        agent = ScenarioAgent(scenario_count=count)
+        # New LangGraph-based Orchestration:
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
         
-        # Build initial WorkflowState
+        scenario_agent = ScenarioAgent(scenario_count=count)
+        local_graph = build_graph(scenario_agent=scenario_agent)
+        
         state = WorkflowState(requirement=requirement)
-        state.add_log("Starting scenario generation from service")
+        state.add_log("Starting scenario generation from service via LangGraph")
         
-        # Execute agent run
-        final_state = agent.run(state)
+        config = {"configurable": {"operation": WorkflowOperation.GENERATE_SCENARIOS}}
+        raw_result = local_graph.invoke(state, config)
+        final_state = WorkflowState(**raw_result)
         
         # Persist scenarios
         self.repo.save_scenarios(final_state.generated_scenarios)
@@ -66,20 +70,21 @@ class WorkflowService:
         for s in approved_scenarios:
             self.repo.delete_test_cases_for_scenario(s.id)
 
-        # Setup state with approved scenarios
+        # New LangGraph-based Orchestration:
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
+        
+        local_graph = build_graph()
         state = WorkflowState(requirement=requirement, generated_scenarios=approved_scenarios)
-        state.add_log("Starting test case generation and evaluation steps from service")
-
-        # Run agents sequentially as in the graph
-        tc_agent = TestCaseAgent()
-        state = tc_agent.run(state)
-
-        eval_agent = EvaluationAgent()
-        state = eval_agent.run(state)
+        state.add_log("Starting test case generation and evaluation steps from service via LangGraph")
+        
+        config = {"configurable": {"operation": WorkflowOperation.GENERATE_TESTCASES}}
+        raw_result = local_graph.invoke(state, config)
+        final_state = WorkflowState(**raw_result)
 
         # Persist generated test cases
-        self.repo.save_test_cases(state.generated_test_cases)
-        return state.generated_test_cases
+        self.repo.save_test_cases(final_state.generated_test_cases)
+        return final_state.generated_test_cases
 
     def generate_playwright_script(self, project_id: UUID, test_case_id: UUID) -> TestCase:
         raw = self.repo._read_raw()
@@ -102,17 +107,28 @@ class WorkflowService:
         if test_case.evaluation_status != "approved":
             raise ValueError("Playwright script generation rejected: Test case is not approved")
 
+        # New LangGraph-based Orchestration:
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
+        
+        local_graph = build_graph()
         state = WorkflowState(
             requirement=requirement,
             generated_test_cases=[test_case],
             human_approved_test_case_ids=[test_case.id]
         )
-        state.add_log("Generating Playwright script from service")
+        state.add_log("Generating Playwright script from service via LangGraph")
+        
+        config = {
+            "configurable": {
+                "operation": WorkflowOperation.GENERATE_PLAYWRIGHT,
+                "test_case_id": str(test_case_id)
+            }
+        }
+        raw_result = local_graph.invoke(state, config)
+        final_state = WorkflowState(**raw_result)
 
-        agent = PlaywrightAgent()
-        state = agent.run(state)
-
-        updated_tc = state.generated_test_cases[0]
+        updated_tc = final_state.generated_test_cases[0]
         self.repo.save_test_cases([updated_tc])
         return updated_tc
 
@@ -196,10 +212,18 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
 
             log_event("Running", timeline_msg, log_line, screenshot=screenshot_file)
 
-        agent = ExecutionAgent(on_log=on_log_callback)
-        state = agent.run(state)
+        # New LangGraph-based Orchestration:
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
         
-        result = state.execution_results[0]
+        exec_agent = ExecutionAgent(on_log=on_log_callback)
+        local_graph = build_graph(execution_agent=exec_agent)
+        
+        config = {"configurable": {"operation": WorkflowOperation.EXECUTE}}
+        raw_result = local_graph.invoke(state, config)
+        final_state = WorkflowState(**raw_result)
+        
+        result = final_state.execution_results[0]
         if execution_id:
             result.id = execution_id
         

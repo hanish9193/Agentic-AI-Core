@@ -60,6 +60,9 @@ class RAGConfig(BaseModel):
     enabled: bool = False
     vector_db_provider: str = "chroma"
     vector_db_path: str = "./data/vector_store"
+    ragflow_api_base: str = "http://localhost:9380"
+    ragflow_api_key: str | None = None
+    ragflow_dataset_id: str | None = None
 
 
 class GenerationConfig(BaseModel):
@@ -151,6 +154,14 @@ class Settings(BaseSettings):
         _override(raw, "langsmith", "endpoint", "LANGSMITH_ENDPOINT")
         raw.setdefault("langsmith", {})["api_key"] = _env("LANGSMITH_API_KEY")
         _override(raw, "langsmith", "project_name", "LANGSMITH_PROJECT")
+
+        # RAGFlow settings from .env
+        raw.setdefault("rag", {})
+        _override(raw, "rag", "enabled", "RAG_ENABLED", cast=_bool)
+        _override(raw, "rag", "vector_db_provider", "RAG_VECTOR_DB_PROVIDER")
+        _override(raw, "rag", "ragflow_api_base", "RAGFLOW_API_BASE")
+        raw["rag"]["ragflow_api_key"] = _env("RAGFLOW_API_KEY")
+        _override(raw, "rag", "ragflow_dataset_id", "RAGFLOW_DATASET_ID")
 
         return cls(**raw)
 
