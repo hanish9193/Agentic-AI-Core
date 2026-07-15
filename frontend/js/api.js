@@ -1,37 +1,120 @@
 const API_BASE = '/api/v1';
 
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(token) {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
+}
+
+function handleAuthFailure() {
+  sessionStorage.clear();
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'flex';
+  const sidebar = document.getElementById('sidebar-container');
+  if (sidebar) sidebar.style.display = 'none';
+  const mainNav = document.getElementById('project-select-wrapper');
+  if (mainNav) mainNav.style.display = 'none';
+  
+  // Hide main view panels to lock down the interface
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    panel.classList.remove('active');
+  });
+}
+
 async function request(url, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
 
+  const token = sessionStorage.getItem('access_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   // If body is FormData, do not set Content-Type header manually
   if (options.body instanceof FormData) {
     delete headers['Content-Type'];
   }
 
-  const response = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers
-  });
+  try {
+    const response = await fetch(`${API_BASE}${url}`, {
+      ...options,
+      headers
+    });
 
-  if (!response.ok) {
-    let errorMsg = `HTTP error! Status: ${response.status}`;
-    try {
-      const errJson = await response.json();
-      if (errJson && errJson.detail) {
-        errorMsg = errJson.detail;
+    if (response.status === 401 && !url.includes('/auth/login') && !url.includes('/auth/refresh')) {
+      const refreshToken = sessionStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        handleAuthFailure();
+        throw new Error("Session expired. Please sign in again.");
       }
-    } catch (e) {}
-    throw new Error(errorMsg);
-  }
 
-  if (response.status === 204) {
-    return null;
-  }
+      if (!isRefreshing) {
+        isRefreshing = true;
+        try {
+          const refreshResponse = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken })
+          });
 
-  return response.json();
+          if (!refreshResponse.ok) {
+            throw new Error("Refresh token invalid or expired");
+          }
+
+          const data = await refreshResponse.json();
+          sessionStorage.setItem('access_token', data.access_token);
+          isRefreshing = false;
+          onRefreshed(data.access_token);
+        } catch (err) {
+          isRefreshing = false;
+          handleAuthFailure();
+          throw new Error("Session expired. Please sign in again.");
+        }
+      }
+
+      return new Promise((resolve) => {
+        subscribeTokenRefresh((newToken) => {
+          headers['Authorization'] = `Bearer ${newToken}`;
+          resolve(
+            fetch(`${API_BASE}${url}`, {
+              ...options,
+              headers
+            }).then(res => res.status === 204 ? null : res.json())
+          );
+        });
+      });
+    }
+
+    if (!response.ok) {
+      let errorMsg = `HTTP error! Status: ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson && errJson.detail) {
+          errorMsg = errJson.detail;
+        }
+      } catch (e) {}
+      throw new Error(errorMsg);
+    }
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error.message.includes("Session expired") || error.message.includes("Not authenticated")) {
+      handleAuthFailure();
+    }
+    throw error;
+  }
 }
 
 export const API = {
@@ -44,23 +127,35 @@ export const API = {
     return request(`/projects/${id}`);
   },
 
-  async createProject(name, description, lineOfBusiness) {
+  async createProject(name, description, lineOfBusiness, framework = 'playwright', jiraProjectKey = null) {
     return request('/projects', {
       method: 'POST',
-      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness })
+      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness, framework, jira_project_key: jiraProjectKey })
     });
   },
 
-  async updateProject(id, name, description, lineOfBusiness) {
+  async updateProject(id, name, description, lineOfBusiness, framework = 'playwright', jiraProjectKey = null) {
     return request(`/projects/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness })
+      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness, framework, jira_project_key: jiraProjectKey })
     });
   },
 
   async deleteProject(id) {
     return request(`/projects/${id}`, {
       method: 'DELETE'
+    });
+  },
+
+  async syncRequirementJira(projectId, requirementId) {
+    return request(`/projects/${projectId}/requirements/${requirementId}/sync-jira`, {
+      method: 'POST'
+    });
+  },
+
+  async syncExecutionBug(projectId, executionId) {
+    return request(`/projects/${projectId}/executions/${executionId}/sync-bug`, {
+      method: 'POST'
     });
   },
 
@@ -233,6 +328,83 @@ export const API = {
   // LangSmith Trace Logs
   async getTraces(projectId) {
     return request(`/projects/${projectId}/traces`);
+  },
+
+  // Auth & RBAC Administration
+  async login(email, password) {
+    return request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+  },
+
+  async logout(refreshToken) {
+    return request('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+  },
+
+  async getUsers() {
+    return request('/admin/users');
+  },
+
+  async createUser(fullname, email, password, role) {
+    return request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ full_name: fullname, email, password, role })
+    });
+  },
+
+  async toggleUserStatus(userId, isActive) {
+    return request(`/admin/users/${userId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: isActive })
+    });
+  },
+
+  async resetUserPassword(userId, password) {
+    return request(`/admin/users/${userId}/password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password })
+    });
+  },
+
+  async getRoles() {
+    return request('/admin/roles');
+  },
+
+  async createRole(name) {
+    return request('/admin/roles', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+  },
+
+  async getPermissions() {
+    return request('/admin/permissions');
+  },
+
+  async updatePermissions(roleId, permissionIds) {
+    return request('/admin/permissions', {
+      method: 'POST',
+      body: JSON.stringify({ role_id: roleId, permission_ids: permissionIds })
+    });
+  },
+
+  async assignProjectUser(projectId, userId, roleId) {
+    return request(`/projects/${projectId}/users`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, role_id: roleId })
+    });
+  },
+
+  async getProjectUsers(projectId) {
+    return request(`/projects/${projectId}/users`);
+  },
+
+  async getAuditLogs() {
+    return request('/admin/audit-logs');
   }
 };
 export { API_BASE };

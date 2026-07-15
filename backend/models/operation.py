@@ -10,3 +10,6 @@ class WorkflowOperation(str, Enum):
     GENERATE_PLAYWRIGHT = "generate_playwright"
     EXECUTE = "execute"
     GENERATE_REPORT = "generate_report"
+    SYNC_USER_STORY = "sync_user_story"
+    SYNC_BUG = "sync_bug"
+    RETEST_BUG = "retest_bug"

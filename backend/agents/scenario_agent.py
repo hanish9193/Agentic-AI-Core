@@ -25,6 +25,7 @@ class _GeneratedScenario(BaseModel):
     scenario_name: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1)
     priority: Priority = Priority.MEDIUM
+    confidence: float = Field(ge=0.0, le=1.0, default=0.95)
 
     @field_validator("priority", mode="before")
     @classmethod
@@ -71,6 +72,7 @@ class ScenarioAgent(BaseAgent):
                     scenario_name=item.scenario_name,
                     description=item.description,
                     priority=item.priority,
+                    confidence=item.confidence,
                 )
             )
 

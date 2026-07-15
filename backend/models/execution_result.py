@@ -33,4 +33,5 @@ class ExecutionResult(BaseModel):
     screenshot_path: str | None = None
     video_path: str | None = None
     trace_path: str | None = None
+    browser_version: str | None = None
     executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

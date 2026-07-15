@@ -31,6 +31,10 @@ class TestCaseResponse(BaseModel):
     evaluation_reason: str | None
     playwright_script: str | None
     generated_at: datetime
+    jira_issue_key: str | None = None
+    jira_issue_url: str | None = None
+    jira_sync_status: str | None = None
+    jira_last_synced_at: datetime | None = None
 
 
 class ScriptUpdatePayload(BaseModel):

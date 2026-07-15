@@ -106,6 +106,24 @@ class LangSmithConfig(BaseModel):
     project_name: str = "Enterprise-AI-TestAutomation"
 
 
+class RepositoryConfig(BaseModel):
+    provider: str = "json"
+    database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/agentic_ai"
+    pool_size: int = 10
+    max_overflow: int = 20
+    pool_timeout: int = 30
+
+
+class JiraConfig(BaseModel):
+    base_url: str = "https://your-domain.atlassian.net"
+    email: str = ""
+    api_token: str = ""
+    project_key: str = ""
+    default_issue_type: str = "Story"
+    verify_ssl: bool = True
+    resolved_statuses: list[str] = ["Done", "Closed", "Ready for Testing", "Resolved"]
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__", extra="ignore")
 
@@ -113,6 +131,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     llm: LLMConfig = LLMConfig()
+    repository: RepositoryConfig = RepositoryConfig()
     workflow: WorkflowConfig = WorkflowConfig()
     agents: AgentsConfig = AgentsConfig()
     browser: BrowserConfig = BrowserConfig()
@@ -121,6 +140,7 @@ class Settings(BaseSettings):
     evaluation: EvaluationConfig = EvaluationConfig()
     playwright: PlaywrightConfig = PlaywrightConfig()
     langsmith: LangSmithConfig = LangSmithConfig()
+    jira: JiraConfig = JiraConfig()
 
     @classmethod
     def from_yaml(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Settings":
@@ -162,6 +182,34 @@ class Settings(BaseSettings):
         _override(raw, "rag", "ragflow_api_base", "RAGFLOW_API_BASE")
         raw["rag"]["ragflow_api_key"] = _env("RAGFLOW_API_KEY")
         _override(raw, "rag", "ragflow_dataset_id", "RAGFLOW_DATASET_ID")
+
+        # Repository settings overrides from .env
+        raw.setdefault("repository", {})
+        _override(raw, "repository", "provider", "REPOSITORY_PROVIDER")
+        _override(raw, "repository", "database_url", "DATABASE_URL")
+        _override(raw, "repository", "pool_size", "DB_POOL_SIZE", cast=int)
+        _override(raw, "repository", "max_overflow", "DB_MAX_OVERFLOW", cast=int)
+        _override(raw, "repository", "pool_timeout", "DB_POOL_TIMEOUT", cast=int)
+
+        # JIRA settings overrides from .env
+        raw.setdefault("jira", {})
+        _override(raw, "jira", "base_url", "JIRA_BASE_URL")
+        _override(raw, "jira", "email", "JIRA_EMAIL")
+        _override(raw, "jira", "api_token", "JIRA_API_TOKEN")
+        _override(raw, "jira", "project_key", "JIRA_PROJECT_KEY")
+        _override(raw, "jira", "default_issue_type", "JIRA_DEFAULT_ISSUE_TYPE")
+        _override(raw, "jira", "verify_ssl", "JIRA_VERIFY_SSL", cast=_bool)
+        
+        env_resolved = _env("JIRA_RESOLVED_STATUSES")
+        if env_resolved:
+            if env_resolved.strip().startswith("["):
+                import json
+                try:
+                    raw["jira"]["resolved_statuses"] = json.loads(env_resolved)
+                except Exception:
+                    raw["jira"]["resolved_statuses"] = [s.strip() for s in env_resolved.split(",")]
+            else:
+                raw["jira"]["resolved_statuses"] = [s.strip() for s in env_resolved.split(",")]
 
         return cls(**raw)
 

@@ -86,6 +86,14 @@ addLog('All test steps completed');
 `;
 
 function PlaywrightWorkspaceContent() {
+  const getBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      return `http://${hostname}:8000`;
+    }
+    return 'http://127.0.0.1:8000';
+  };
+
   const [script, setScript] = useState(SAMPLE_SCRIPT);
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [queue, setQueue] = useState<string[]>([]);
@@ -98,6 +106,10 @@ function PlaywrightWorkspaceContent() {
   const [testCaseTitle, setTestCaseTitle] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isFrozen, setIsFrozen] = useState(false);
+  const [scenario, setScenario] = useState<{ id: string; scenario_name: string; description: string } | null>(null);
+  const [uploadTestData, setUploadTestData] = useState(false);
+  const [testDataText, setTestDataText] = useState("");
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
@@ -157,7 +169,10 @@ function PlaywrightWorkspaceContent() {
   // Fetch executions
   const fetchExecutions = useCallback(async () => {
     try {
-      const response = await fetch('/api/status');
+      const url = projectId 
+        ? `/api/status?projectId=${projectId}`
+        : '/api/status';
+      const response = await fetch(url);
       if (!response.ok) {
         console.error('[Dashboard] Status response not ok:', response.status);
         return;
@@ -174,48 +189,131 @@ function PlaywrightWorkspaceContent() {
     } catch (err) {
       console.error('[Dashboard] Fetch error:', err);
     }
-  }, []);
+  }, [projectId]);
 
   // Fetch workspace details from FastAPI on load
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const pId = params.get('project_id');
-      const tcId = params.get('test_case_id');
+      let pId = params.get('project_id');
+      let tcId = params.get('test_case_id');
       
-      setProjectId(pId);
-      setTestCaseId(tcId);
+      // Fallback to localStorage if parameters are not present in URL
+      if (!pId) {
+        pId = localStorage.getItem('project_id');
+      } else {
+        localStorage.setItem('project_id', pId);
+      }
+      
+      if (!tcId) {
+        tcId = localStorage.getItem('test_case_id');
+      } else {
+        localStorage.setItem('test_case_id', tcId);
+      }
 
-      if (pId && tcId) {
-        fetch(`http://localhost:8000/api/v1/playwright/workspace?project_id=${pId}&test_case_id=${tcId}`)
-          .then(res => {
+      const initializeWorkspace = async () => {
+        // Step 1: If project ID is still missing, fetch the first project from FastAPI
+        if (!pId) {
+          try {
+            const projectsRes = await fetch(`${getBackendUrl()}/api/v1/projects`);
+            if (projectsRes.ok) {
+              const projects = await projectsRes.json();
+              if (Array.isArray(projects) && projects.length > 0) {
+                pId = projects[0].id;
+                localStorage.setItem('project_id', pId!);
+                setProjectId(pId);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to default projects list:", err);
+          }
+        } else {
+          setProjectId(pId);
+        }
+
+        // Step 2: If we have a project ID but test case ID is still missing, fetch test cases for the project
+        if (pId && !tcId) {
+          try {
+            const testcasesRes = await fetch(`${getBackendUrl()}/api/v1/projects/${pId}/testcases`);
+            if (testcasesRes.ok) {
+              const testcases = await testcasesRes.json();
+              if (Array.isArray(testcases) && testcases.length > 0) {
+                tcId = testcases[0].id;
+                localStorage.setItem('test_case_id', tcId!);
+                setTestCaseId(tcId);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to default testcases list:", err);
+          }
+        } else {
+          setTestCaseId(tcId);
+        }
+
+        // Step 3: Fetch workspace details if we have both IDs
+        if (pId && tcId) {
+          try {
+            const res = await fetch(`${getBackendUrl()}/api/v1/playwright/workspace?project_id=${pId}&test_case_id=${tcId}`);
             if (!res.ok) throw new Error("Workspace details not found");
-            return res.json();
-          })
-          .then(data => {
+            const data = await res.json();
+            
             if (data.playwright_script !== null && data.playwright_script !== undefined) {
               setScript(data.playwright_script);
             } else {
               setScript(SAMPLE_SCRIPT);
             }
+            if (data.is_frozen !== undefined) {
+              setIsFrozen(data.is_frozen);
+            }
+            if (data.scenario) {
+              setScenario(data.scenario);
+            }
             setTestCaseTitle(`Test Case: ${tcId.substring(0, 8)}`);
-          })
-          .catch(err => {
+          } catch (err) {
             console.error("Error loading workspace data from FastAPI:", err);
             setError("Failed to load script context from the Enterprise Platform.");
-          });
-      }
+          }
+        }
+      };
+
+      initializeWorkspace();
     }
   }, []);
 
+  // Load and poll executions history on component mount
+  useEffect(() => {
+    fetchExecutions();
+    const poll = setInterval(fetchExecutions, 2000);
+    return () => clearInterval(poll);
+  }, [fetchExecutions]);
+
+  const handleFreeze = async () => {
+    if (!testCaseId) return;
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/v1/playwright/freeze`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          test_case_id: testCaseId,
+          is_frozen: true
+        })
+      });
+      if (!response.ok) throw new Error("Failed to freeze script");
+      setIsFrozen(true);
+    } catch (err: any) {
+      setError(`Freeze failed: ${err.message}`);
+    }
+  };
+
   // Save script back to FastAPI
   const handleSave = async () => {
+    if (isFrozen) return;
     if (!projectId || !testCaseId) return;
     setIsSaving(true);
     setSaveSuccess(false);
     setError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/playwright/script', {
+      const response = await fetch(`${getBackendUrl()}/api/v1/playwright/script`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -237,13 +335,15 @@ function PlaywrightWorkspaceContent() {
   };
 
   // Handle script execution
-  const handleExecute = async () => {
+  const handleExecute = async (overrideScript?: any) => {
+    const isOverride = typeof overrideScript === 'string';
+    const scriptToRun = isOverride ? overrideScript : script;
     setIsLoading(true);
     setError(null);
 
     try {
-      // Auto-save script back to FastAPI before execution to keep it authoritative
-      if (projectId && testCaseId) {
+      // Auto-save script back to FastAPI before execution to keep it authoritative (if not frozen)
+      if (projectId && testCaseId && !isFrozen && !isOverride) {
         await handleSave();
       }
 
@@ -251,10 +351,11 @@ function PlaywrightWorkspaceContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          script,
+          script: scriptToRun,
           projectId: projectId || 'demo-project',
           testCaseIds: testCaseId ? [testCaseId] : [],
           browser: 'chromium',
+          testData: uploadTestData ? testDataText : null
         }),
       });
 
@@ -356,10 +457,32 @@ function PlaywrightWorkspaceContent() {
           {/* Left Panel - Script Editor */}
           <div className="lg:col-span-1 space-y-4">
             <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-foreground">
-                <Code2 className="w-5 h-5" />
-                Monaco Editor
+              <h2 className="text-lg font-semibold mb-3 flex items-center justify-between text-foreground">
+                <span className="flex items-center gap-2">
+                  <Code2 className="w-5 h-5" />
+                  Monaco Editor
+                </span>
+                {isFrozen && <span className="text-xs bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded flex items-center gap-1 font-normal">🔒 Locked</span>}
+                {!isFrozen && testCaseId && (
+                  <Button
+                    onClick={handleFreeze}
+                    variant="outline"
+                    className="h-7 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  >
+                    Freeze Code
+                  </Button>
+                )}
               </h2>
+
+              {scenario && (
+                <div className="p-3 bg-muted/30 border border-border rounded text-sm mb-3">
+                  <div className="font-semibold text-foreground mb-1 flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground uppercase font-normal">Scenario:</span>
+                    {scenario.scenario_name}
+                  </div>
+                  <p className="text-muted-foreground text-xs">{scenario.description}</p>
+                </div>
+              )}
               
               <div className="border border-border rounded overflow-hidden">
                 <Editor
@@ -374,8 +497,49 @@ function PlaywrightWorkspaceContent() {
                     lineNumbers: 'on',
                     automaticLayout: true,
                     tabSize: 2,
+                    readOnly: isFrozen
                   }}
                 />
+              </div>
+
+              <div className="mt-4 border-t border-border pt-3">
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={uploadTestData}
+                    onChange={(e) => setUploadTestData(e.target.checked)}
+                    className="rounded border-border bg-card text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Are you willing to upload test data?</span>
+                </label>
+                
+                {uploadTestData && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept=".json,.csv,.txt"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => {
+                              setTestDataText(evt.target?.result as string || "");
+                            };
+                            reader.readAsText(file);
+                          }
+                        }}
+                        className="text-xs text-muted-foreground file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-600/10 file:text-blue-400 hover:file:bg-blue-600/20 cursor-pointer"
+                      />
+                    </div>
+                    <textarea
+                      placeholder="Paste or upload test data (JSON, CSV or plain text) here before execution..."
+                      value={testDataText}
+                      onChange={(e) => setTestDataText(e.target.value)}
+                      className="w-full h-24 p-2 bg-muted/30 border border-border rounded text-xs text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 mt-4">
@@ -423,7 +587,7 @@ function PlaywrightWorkspaceContent() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Completed</span>
                   <span className="font-mono text-green-600">
-                    {executions.filter((e) => e.metadata.status === 'completed')
+                    {executions.filter((e) => e?.metadata?.status === 'completed')
                       .length}
                   </span>
                 </div>
@@ -440,6 +604,10 @@ function PlaywrightWorkspaceContent() {
                 queue={queue}
                 current={current}
                 onStatusChange={handleStatusChange}
+                onRerun={(rerunScript) => {
+                  setScript(rerunScript);
+                  handleExecute(rerunScript);
+                }}
               />
             </div>
           </div>

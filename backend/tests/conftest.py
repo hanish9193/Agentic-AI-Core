@@ -132,11 +132,24 @@ def stub_llm_service(
     canned_scenario_batch: _GeneratedScenarioBatch,
     canned_evaluation_batch: _EvaluationBatch,
 ) -> StubLLMService:
+    from backend.agents.requirement_analyst_agent import RequirementEnrichment
+    from backend.agents.backlog_creation_agent import UserStoryResponse
+
     return StubLLMService(
         responses={
             _GeneratedScenarioBatch: canned_scenario_batch,
             TestCaseListResponse: _canned_test_case_batch(),
             _EvaluationBatch: canned_evaluation_batch,
+            RequirementEnrichment: RequirementEnrichment(
+                title="Enriched Requirement Title",
+                description="This is an enriched requirement description detailing the full flow.",
+                priority="high",
+                business_domain="Finance"
+            ),
+            UserStoryResponse: UserStoryResponse(
+                user_story="As a financial user, I want to perform a login so that I can access my accounts.",
+                acceptance_criteria=["Verify successful login redirects to dashboard.", "Verify error message on incorrect password."]
+            )
         },
         generate_response=_CANNED_PLAYWRIGHT_CODE,
     )
@@ -145,3 +158,11 @@ def stub_llm_service(
 @pytest.fixture
 def fake_playwright_runner() -> FakePlaywrightRunner:
     return FakePlaywrightRunner()
+
+@pytest.fixture
+def mock_llm_service(stub_llm_service):
+    import unittest.mock as mock
+    from backend.services.llm import LLMService
+    with mock.patch.object(LLMService, "structured_generate", side_effect=stub_llm_service.structured_generate) as m1, \
+         mock.patch.object(LLMService, "generate", side_effect=stub_llm_service.generate) as m2:
+        yield stub_llm_service

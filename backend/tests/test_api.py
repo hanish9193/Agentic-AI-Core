@@ -58,7 +58,7 @@ def test_create_and_list_projects(client):
 
 def test_create_and_get_requirements(client):
     # Create project
-    response = client.post("/api/v1/projects", json={"name": "Test Proj", "description": ""})
+    response = client.post("/api/v1/projects", json={"name": "Test Proj", "description": "A test requirement project"})
     proj_id = response.json()["id"]
 
     # Create requirement
@@ -117,7 +117,7 @@ def test_get_and_write_settings(client):
 
 def test_update_and_delete_project(client):
     # Create project
-    response = client.post("/api/v1/projects", json={"name": "Temp Project", "description": ""})
+    response = client.post("/api/v1/projects", json={"name": "Temp Project", "description": "Temporary project description"})
     proj_id = response.json()["id"]
 
     # Update project
@@ -139,7 +139,7 @@ def test_update_and_delete_project(client):
 
 def test_create_and_delete_documents(client):
     # Create project
-    response = client.post("/api/v1/projects", json={"name": "Doc Project", "description": ""})
+    response = client.post("/api/v1/projects", json={"name": "Doc Project", "description": "Doc project description"})
     proj_id = response.json()["id"]
 
     # Create document metadata
@@ -176,7 +176,7 @@ def test_create_and_delete_documents(client):
 
 def test_get_activity_traces(client):
     # Create project
-    response = client.post("/api/v1/projects", json={"name": "Trace Proj", "description": ""})
+    response = client.post("/api/v1/projects", json={"name": "Trace Proj", "description": "Trace project description"})
     proj_id = response.json()["id"]
 
     # Get traces
@@ -218,7 +218,7 @@ def test_notes_creation(client):
     assert response.status_code == 200
     notes = response.json()
     assert len(notes) == 1
-    assert notes[0] == "Scenario remark content"
+    assert "Scenario remark content" in notes[0]
 
     # Create testcase notes
     response = client.post(f"/api/v1/testcases/{tc_id}/notes", json={"note": "Test case remark content"})
@@ -229,12 +229,12 @@ def test_notes_creation(client):
     assert response.status_code == 200
     tc_notes = response.json()
     assert len(tc_notes) == 1
-    assert tc_notes[0] == "Test case remark content"
+    assert "Test case remark content" in tc_notes[0]
 
 
 def test_scenario_replacement_and_rejection_cascades(client):
     # 1. Setup project & requirement
-    response = client.post("/api/v1/projects", json={"name": "Cascade Proj", "description": ""})
+    response = client.post("/api/v1/projects", json={"name": "Cascade Proj", "description": "Cascade project description"})
     proj_id = response.json()["id"]
 
     response = client.post(
@@ -276,3 +276,15 @@ def test_scenario_replacement_and_rejection_cascades(client):
     ws = WorkflowService()
     ws.repo.clear_scenarios_for_requirement(req_id)
     assert len(repo.get_scenarios(req_id)) == 0
+
+
+def test_create_project_empty_description_validation(client):
+    # Test project creation with empty description (whitespaces)
+    response = client.post("/api/v1/projects", json={"name": "Empty Desc Proj", "description": "   "})
+    assert response.status_code == 400
+    assert "Project description cannot be empty" in response.json()["detail"]
+
+    # Test project creation with missing description field
+    response = client.post("/api/v1/projects", json={"name": "Missing Desc Proj"})
+    assert response.status_code == 422
+

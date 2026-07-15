@@ -17,6 +17,7 @@ export interface ExecutionMetadata {
   scenarioIds?: string[];
   testCaseIds?: string[];
   browser: string;
+  browserVersion?: string;
   status: ExecutionStatus;
   started: string;
   finished?: string;
@@ -179,6 +180,13 @@ class ExecutionQueueManager {
     this.addTimelineEvent(executionId, `${key} Generated`, 'success');
   }
 
+  setBrowserVersion(executionId: string, version: string): void {
+    const execution = this.executions.get(executionId);
+    if (execution) {
+      execution.metadata.browserVersion = version;
+    }
+  }
+
   addLog(executionId: string, log: string): void {
     const execution = this.executions.get(executionId);
     if (!execution) return;
@@ -217,6 +225,18 @@ class ExecutionQueueManager {
     }
 
     return executionId;
+  }
+
+  startExecution(executionId: string): void {
+    const execution = this.executions.get(executionId);
+    if (execution) {
+      this.currentExecutionId = executionId;
+      this.setStatus(executionId, 'running');
+      const idx = this.queue.indexOf(executionId);
+      if (idx > -1) {
+        this.queue.splice(idx, 1);
+      }
+    }
   }
 
   completeExecution(executionId: string): void {

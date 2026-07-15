@@ -1,0 +1,5 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Testcase" tests="11" failures="1" errors="0" time="41.111"><testcase name="TestCase_09237826-a1ea-4a30-9cab-2807bc6e08e1" classname="PlaywrightTests" time="41.111"><failure message="Assertion Failed">page.fill: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('#entermake')[22m
+</failure></testcase></testsuite></testsuites>

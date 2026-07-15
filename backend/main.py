@@ -8,12 +8,13 @@ import io
 import zipfile
 import xml.etree.ElementTree as ET
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import fitz
-from fastapi import FastAPI, HTTPException, Body, status, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, HTTPException, Body, status, BackgroundTasks, UploadFile, File, Depends
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from backend.config.settings import get_settings
 from backend.services.project_service import ProjectService
@@ -26,6 +27,11 @@ from backend.models.document import Document
 from backend.models.execution_result import ExecutionResult
 import backend.services.report_service
 
+from sqlalchemy.orm import Session
+from backend.dependencies.auth_dependencies import get_db, get_current_user, has_permission
+from backend.services.auth_service import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
+from backend.services.audit_service import log_audit
+from backend.database.db_models import UserDB, RoleDB, PermissionDB, RolePermissionDB, ProjectUserDB, RefreshTokenDB, AuditLogDB
 
 app = FastAPI(
     title="AI Test Automation Platform API",
@@ -42,9 +48,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+def on_startup():
+    from backend.database.db import SessionLocal, Base, engine, provider
+    import backend.database.db_models  # Ensure models are loaded and registered with Base metadata
+    from backend.database.db_seeder import seed_database
+    if provider == "json":
+        Base.metadata.create_all(engine)
+    db = SessionLocal()
+    try:
+        seed_database(db)
+    finally:
+        db.close()
+
 # Initialize application services
 project_service = ProjectService()
 workflow_service = WorkflowService()
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    line_of_business: str | None = None
+    framework: str | None = None
+    jira_project_key: str | None = None
 
 
 @app.get("/api/v1/projects", response_model=list[ProjectResponse])
@@ -56,8 +83,10 @@ def list_projects():
             name=p.name,
             description=p.description,
             line_of_business=p.line_of_business,
+            framework=getattr(p, "framework", "playwright"),
             created_at=p.created_at,
-            requirements=p.requirements
+            requirements=p.requirements,
+            jira_project_key=getattr(p, "jira_project_key", None)
         )
         for p in projects
     ]
@@ -65,14 +94,52 @@ def list_projects():
 
 @app.post("/api/v1/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(data: ProjectCreate):
-    p = project_service.create_project(name=data.name, description=data.description, line_of_business=data.line_of_business)
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Project name cannot be empty")
+    if not data.description.strip():
+        raise HTTPException(status_code=400, detail="Project description cannot be empty")
+    p = project_service.create_project(name=data.name, description=data.description, line_of_business=data.line_of_business, framework=data.framework)
+    if data.jira_project_key:
+        p.jira_project_key = data.jira_project_key
+        p = project_service.repo.update_project(p)
     return ProjectResponse(
         id=p.id,
         name=p.name,
         description=p.description,
         line_of_business=p.line_of_business,
+        framework=p.framework,
         created_at=p.created_at,
-        requirements=p.requirements
+        requirements=p.requirements,
+        jira_project_key=getattr(p, "jira_project_key", None)
+    )
+
+
+@app.put("/api/v1/projects/{project_id}", response_model=ProjectResponse)
+def update_project_settings(project_id: UUID, data: ProjectUpdate):
+    p = project_service.get_project(project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if data.name is not None:
+        p.name = data.name
+    if data.description is not None:
+        p.description = data.description
+    if data.line_of_business is not None:
+        p.line_of_business = data.line_of_business
+    if data.framework is not None:
+        p.framework = data.framework
+    if data.jira_project_key is not None:
+        p.jira_project_key = data.jira_project_key
+    
+    updated = project_service.repo.update_project(p)
+    return ProjectResponse(
+        id=updated.id,
+        name=updated.name,
+        description=updated.description,
+        line_of_business=updated.line_of_business,
+        framework=getattr(updated, "framework", "playwright"),
+        created_at=updated.created_at,
+        requirements=updated.requirements,
+        jira_project_key=getattr(updated, "jira_project_key", None)
     )
 
 
@@ -86,8 +153,10 @@ def get_project(project_id: UUID):
         name=p.name,
         description=p.description,
         line_of_business=p.line_of_business,
+        framework=getattr(p, "framework", "playwright"),
         created_at=p.created_at,
-        requirements=p.requirements
+        requirements=p.requirements,
+        jira_project_key=getattr(p, "jira_project_key", None)
     )
 
 
@@ -98,16 +167,8 @@ def get_requirements(project_id: UUID):
         raise HTTPException(status_code=404, detail="Project not found")
     
     reqs = project_service.get_requirements(project_id)
-    # The JSON repository stores extra metadata fields inside raw dict.
-    # We retrieve them dynamically from the database to map to Response DTO.
-    repo = project_service.repo
-    raw = repo._read_raw()
-    reqs_raw = raw.get("requirements", {})
-
     result = []
     for r in reqs:
-        r_str = str(r.id)
-        raw_metadata = reqs_raw.get(r_str, {})
         result.append(
             RequirementResponse(
                 id=r.id,
@@ -115,12 +176,16 @@ def get_requirements(project_id: UUID):
                 description=r.description,
                 source=r.source,
                 uploaded_at=r.uploaded_at,
-                priority=raw_metadata.get("priority", "medium"),
-                business_domain=raw_metadata.get("business_domain", "general"),
-                attachments=raw_metadata.get("attachments", []),
+                priority=r.priority,
+                business_domain=r.business_domain,
+                attachments=r.attachments,
                 original_filename=r.original_filename,
                 requirement_id=r.requirement_id,
-                requirement_title=r.requirement_title
+                requirement_title=r.requirement_title,
+                jira_issue_key=getattr(r, "jira_issue_key", None),
+                jira_issue_url=getattr(r, "jira_issue_url", None),
+                jira_sync_status=getattr(r, "jira_sync_status", None),
+                jira_last_synced_at=getattr(r, "jira_last_synced_at", None)
             )
         )
     return result
@@ -155,116 +220,14 @@ def create_requirement(project_id: UUID, data: RequirementCreate):
             attachments=[],
             original_filename=r.original_filename,
             requirement_id=r.requirement_id,
-            requirement_title=r.requirement_title
+            requirement_title=r.requirement_title,
+            jira_issue_key=getattr(r, "jira_issue_key", None),
+            jira_issue_url=getattr(r, "jira_issue_url", None),
+            jira_sync_status=getattr(r, "jira_sync_status", None),
+            jira_last_synced_at=getattr(r, "jira_last_synced_at", None)
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-
-
-def parse_requirements_from_text(project_id: UUID, text: str, filename: str):
-    # Regex split to look for pattern blocks like REQ-001 or Requirement 1
-    pattern = r'(REQ-\d+|Requirement\s+\d+|[A-Z]+-\d+):'
-    parts = re.split(pattern, text)
-    
-    imported = []
-    if len(parts) > 1:
-        i = 1
-        while i < len(parts):
-            req_id = parts[i].strip()
-            content = parts[i+1].strip() if i+1 < len(parts) else ""
-            description = content
-            
-            # Guess priority
-            priority = "medium"
-            if any(k in description.lower() for k in ["high", "critical", "urgent", "must"]):
-                priority = "high"
-            elif any(k in description.lower() for k in ["low", "minor", "nice to have"]):
-                priority = "low"
-                
-            # Guess line of business / domain
-            business_domain = "general"
-            for k in ["banking", "finance", "auth", "login", "profile", "billing", "payment", "checkout", "search", "upload", "insurance", "retail", "healthcare"]:
-                if k in description.lower():
-                    business_domain = k.capitalize()
-                    break
-                    
-            # Try to extract a clean requirement title from description
-            req_title = "Requirement Block"
-            title_match = re.search(r'Title\s*\n\s*([^\n]+)', description, re.IGNORECASE)
-            if title_match:
-                req_title = title_match.group(1).strip()
-            else:
-                first_line = description.split('\n')[0].strip()
-                if first_line:
-                    req_title = first_line[:50].strip()
-                    
-            title = f"{req_id}: {req_title}"
-            
-            req = project_service.create_requirement(
-                project_id=project_id,
-                title=title,
-                description=description,
-                priority=priority,
-                business_domain=business_domain,
-                attachments=[filename],
-                original_filename=filename,
-                requirement_id=req_id,
-                requirement_title=req_title
-            )
-            imported.append(req)
-            i += 2
-    else:
-        # Split by double newline (paragraph blocks)
-        blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
-        for idx, block in enumerate(blocks):
-            if len(block) < 25:
-                continue
-                
-            req_id = f"REQ-{idx+1:03d}"
-            priority = "medium"
-            if any(k in block.lower() for k in ["high", "critical", "urgent"]):
-                priority = "high"
-            elif any(k in block.lower() for k in ["low", "minor"]):
-                priority = "low"
-                
-            business_domain = "general"
-            for k in ["banking", "finance", "auth", "login", "profile", "billing", "payment", "checkout", "search", "upload", "insurance", "retail", "healthcare"]:
-                if k in block.lower():
-                    business_domain = k.capitalize()
-                    break
-                    
-            req_title = block[:50].strip() + "..."
-            title = f"{req_id}: {req_title}"
-            
-            req = project_service.create_requirement(
-                project_id=project_id,
-                title=title,
-                description=block,
-                priority=priority,
-                business_domain=business_domain,
-                attachments=[filename],
-                original_filename=filename,
-                requirement_id=req_id,
-                requirement_title=req_title
-            )
-            imported.append(req)
-            
-    if not imported:
-        # Create a single default block
-        req = project_service.create_requirement(
-            project_id=project_id,
-            title=filename,
-            description=text or "Empty file content",
-            priority="medium",
-            business_domain="general",
-            attachments=[filename],
-            original_filename=filename,
-            requirement_id="REQ-001",
-            requirement_title=filename
-        )
-        imported.append(req)
-        
-    return imported
 
 
 @app.post("/api/v1/projects/{project_id}/requirements/import", response_model=list[RequirementResponse])
@@ -275,83 +238,34 @@ async def import_requirements(project_id: UUID, file: UploadFile = File(...)):
 
     file_bytes = await file.read()
     filename = file.filename
-    ext = Path(filename).suffix.lower()
 
-    imported = []
     try:
-        if ext in [".xlsx", ".xls"]:
-            df = pd.read_excel(io.BytesIO(file_bytes))
-            cols = {col.lower().replace(" ", "").replace("_", ""): col for col in df.columns}
+        parsed_blocks = project_service.parse_requirements_from_file(filename, file_bytes)
+        
+        finalized_requirements = []
+        for block in parsed_blocks:
+            # 1. Create a draft requirement in DB
+            req = project_service.create_requirement(
+                project_id=project_id,
+                title=block["title"],
+                description=block["description"],
+                priority=block["priority"],
+                business_domain=block["business_domain"],
+                attachments=[filename],
+                original_filename=filename,
+                requirement_id=block["requirement_id"],
+                requirement_title=block["requirement_title"]
+            )
             
-            id_col = cols.get("requirementid") or cols.get("id")
-            desc_col = cols.get("requirement") or cols.get("description") or cols.get("title")
-            priority_col = cols.get("priority")
-            module_col = cols.get("module") or cols.get("businessdomain") or cols.get("domain")
+            # 2. Run the LangGraph INGEST workflow for LLM enrichment + optional Feature Inventory mapping
+            final_req = workflow_service.ingest_requirement(project_id, req)
+            finalized_requirements.append(final_req)
 
-            if not desc_col:
-                desc_col = df.columns[0]
-
-            for idx, row in df.iterrows():
-                req_id_val = str(row[id_col]) if (id_col and id_col in df.columns) else f"REQ-{idx+1:03d}"
-                desc_val = str(row[desc_col]) if (desc_col and desc_col in df.columns) else ""
-                priority_val = str(row[priority_col]).lower() if (priority_col and priority_col in df.columns) else "medium"
-                module_val = str(row[module_col]) if (module_col and module_col in df.columns) else "general"
-
-                if not desc_val.strip() or pd.isna(row[desc_col]):
-                    continue
-
-                if priority_val not in ["low", "medium", "high"]:
-                    priority_val = "medium"
-
-                req = project_service.create_requirement(
-                    project_id=project_id,
-                    title=f"{req_id_val}: {desc_val[:50]}...",
-                    description=desc_val,
-                    priority=priority_val,
-                    business_domain=module_val,
-                    attachments=[filename],
-                    original_filename=filename,
-                    requirement_id=req_id_val,
-                    requirement_title=desc_val[:50]
-                )
-                imported.append(req)
-        elif ext == ".pdf":
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            text = ""
-            for page in doc:
-                text += page.get_text()
-            imported = parse_requirements_from_text(project_id, text, filename)
-        elif ext in [".docx", ".doc"]:
-            try:
-                with zipfile.ZipFile(io.BytesIO(file_bytes)) as docx_zip:
-                    xml_content = docx_zip.read('word/document.xml')
-                    root = ET.fromstring(xml_content)
-                    
-                    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-                    paragraphs = []
-                    for para in root.findall('.//w:p', namespaces):
-                        text_elems = para.findall('.//w:t', namespaces)
-                        text = "".join([t.text for t in text_elems if t.text])
-                        if text.strip():
-                            paragraphs.append(text)
-                    full_text = "\n\n".join(paragraphs)
-            except Exception:
-                full_text = "Failed to parse Word document XML structure."
-            imported = parse_requirements_from_text(project_id, full_text, filename)
-        else:
-            text = file_bytes.decode("utf-8", errors="ignore")
-            imported = parse_requirements_from_text(project_id, text, filename)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"File import failed: {exc}")
 
-    repo = project_service.repo
-    raw_db = repo._read_raw()
-    reqs_raw = raw_db.get("requirements", {})
-
     res = []
-    for r in imported:
-        r_str = str(r.id)
-        raw_metadata = reqs_raw.get(r_str, {})
+    for r in finalized_requirements:
         res.append(
             RequirementResponse(
                 id=r.id,
@@ -359,12 +273,16 @@ async def import_requirements(project_id: UUID, file: UploadFile = File(...)):
                 description=r.description,
                 source=r.source,
                 uploaded_at=r.uploaded_at,
-                priority=raw_metadata.get("priority", "medium"),
-                business_domain=raw_metadata.get("business_domain", "general"),
-                attachments=raw_metadata.get("attachments", []),
+                priority=r.priority,
+                business_domain=r.business_domain,
+                attachments=r.attachments,
                 original_filename=r.original_filename,
                 requirement_id=r.requirement_id,
-                requirement_title=r.requirement_title
+                requirement_title=r.requirement_title,
+                jira_issue_key=getattr(r, "jira_issue_key", None),
+                jira_issue_url=getattr(r, "jira_issue_url", None),
+                jira_sync_status=getattr(r, "jira_sync_status", None),
+                jira_last_synced_at=getattr(r, "jira_last_synced_at", None)
             )
         )
     return res
@@ -388,7 +306,14 @@ def generate_scenarios(project_id: UUID, requirement_id: UUID, payload: dict = B
                 priority=s.priority,
                 confidence=s.confidence,
                 approved=s.approved,
-                generated_at=s.generated_at
+                rejected=s.rejected,
+                generated_at=s.generated_at,
+                reviewer=s.reviewer,
+                approved_at=s.approved_at,
+                jira_issue_key=getattr(s, "jira_issue_key", None),
+                jira_issue_url=getattr(s, "jira_issue_url", None),
+                jira_sync_status=getattr(s, "jira_sync_status", None),
+                jira_last_synced_at=getattr(s, "jira_last_synced_at", None)
             )
             for s in scenarios
         ]
@@ -396,6 +321,36 @@ def generate_scenarios(project_id: UUID, requirement_id: UUID, payload: dict = B
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Scenario generation failed: {exc}")
+
+
+@app.post("/api/v1/projects/{project_id}/requirements/{requirement_id}/generate-backlog", response_model=list[ScenarioResponse])
+def generate_backlog(project_id: UUID, requirement_id: UUID):
+    try:
+        scenarios = workflow_service.generate_backlog(project_id, requirement_id)
+        return [
+            ScenarioResponse(
+                id=s.id,
+                requirement_id=s.requirement_id,
+                scenario_name=s.scenario_name,
+                description=s.description,
+                priority=s.priority,
+                confidence=s.confidence,
+                approved=s.approved,
+                rejected=s.rejected,
+                generated_at=s.generated_at,
+                reviewer=s.reviewer,
+                approved_at=s.approved_at,
+                jira_issue_key=getattr(s, "jira_issue_key", None),
+                jira_issue_url=getattr(s, "jira_issue_url", None),
+                jira_sync_status=getattr(s, "jira_sync_status", None),
+                jira_last_synced_at=getattr(s, "jira_last_synced_at", None)
+            )
+            for s in scenarios
+        ]
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Backlog generation failed: {exc}")
 
 
 @app.get("/api/v1/projects/{project_id}/scenarios", response_model=list[ScenarioResponse])
@@ -411,7 +366,14 @@ def get_scenarios(project_id: UUID):
                 priority=s.priority,
                 confidence=s.confidence,
                 approved=s.approved,
-                generated_at=s.generated_at
+                rejected=s.rejected,
+                generated_at=s.generated_at,
+                reviewer=s.reviewer,
+                approved_at=s.approved_at,
+                jira_issue_key=getattr(s, "jira_issue_key", None),
+                jira_issue_url=getattr(s, "jira_issue_url", None),
+                jira_sync_status=getattr(s, "jira_sync_status", None),
+                jira_last_synced_at=getattr(s, "jira_last_synced_at", None)
             )
             for s in scenarios
         ]
@@ -426,7 +388,8 @@ def update_scenario(project_id: UUID, scenario_id: UUID, data: ScenarioUpdate):
         scenario_name=data.scenario_name,
         description=data.description,
         priority=data.priority,
-        approved=data.approved
+        approved=data.approved,
+        rejected=data.rejected
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -438,7 +401,14 @@ def update_scenario(project_id: UUID, scenario_id: UUID, data: ScenarioUpdate):
         priority=updated.priority,
         confidence=updated.confidence,
         approved=updated.approved,
-        generated_at=updated.generated_at
+        rejected=updated.rejected,
+        generated_at=updated.generated_at,
+        reviewer=updated.reviewer,
+        approved_at=updated.approved_at,
+        jira_issue_key=getattr(updated, "jira_issue_key", None),
+        jira_issue_url=getattr(updated, "jira_issue_url", None),
+        jira_sync_status=getattr(updated, "jira_sync_status", None),
+        jira_last_synced_at=getattr(updated, "jira_last_synced_at", None)
     )
 
 
@@ -463,7 +433,14 @@ def duplicate_scenario(project_id: UUID, scenario_id: UUID):
         priority=duplicated.priority,
         confidence=duplicated.confidence,
         approved=duplicated.approved,
-        generated_at=duplicated.generated_at
+        rejected=duplicated.rejected,
+        generated_at=duplicated.generated_at,
+        reviewer=duplicated.reviewer,
+        approved_at=duplicated.approved_at,
+        jira_issue_key=getattr(duplicated, "jira_issue_key", None),
+        jira_issue_url=getattr(duplicated, "jira_issue_url", None),
+        jira_sync_status=getattr(duplicated, "jira_sync_status", None),
+        jira_last_synced_at=getattr(duplicated, "jira_last_synced_at", None)
     )
 
 
@@ -485,7 +462,11 @@ def generate_test_cases(project_id: UUID, requirement_id: UUID):
                 evaluation_status=tc.evaluation_status,
                 evaluation_reason=tc.evaluation_reason,
                 playwright_script=tc.playwright_script,
-                generated_at=tc.generated_at
+                generated_at=tc.generated_at,
+                jira_issue_key=getattr(tc, "jira_issue_key", None),
+                jira_issue_url=getattr(tc, "jira_issue_url", None),
+                jira_sync_status=getattr(tc, "jira_sync_status", None),
+                jira_last_synced_at=getattr(tc, "jira_last_synced_at", None)
             )
             for tc in test_cases
         ]
@@ -513,7 +494,11 @@ def get_test_cases(project_id: UUID):
                 evaluation_status=tc.evaluation_status,
                 evaluation_reason=tc.evaluation_reason,
                 playwright_script=tc.playwright_script,
-                generated_at=tc.generated_at
+                generated_at=tc.generated_at,
+                jira_issue_key=getattr(tc, "jira_issue_key", None),
+                jira_issue_url=getattr(tc, "jira_issue_url", None),
+                jira_sync_status=getattr(tc, "jira_sync_status", None),
+                jira_last_synced_at=getattr(tc, "jira_last_synced_at", None)
             )
             for tc in test_cases
         ]
@@ -550,7 +535,11 @@ def update_test_case(project_id: UUID, test_case_id: UUID, data: TestCaseUpdate)
         evaluation_status=updated.evaluation_status,
         evaluation_reason=updated.evaluation_reason,
         playwright_script=updated.playwright_script,
-        generated_at=updated.generated_at
+        generated_at=updated.generated_at,
+        jira_issue_key=getattr(updated, "jira_issue_key", None),
+        jira_issue_url=getattr(updated, "jira_issue_url", None),
+        jira_sync_status=getattr(updated, "jira_sync_status", None),
+        jira_last_synced_at=getattr(updated, "jira_last_synced_at", None)
     )
 
 
@@ -580,7 +569,11 @@ def update_test_case_script(project_id: UUID, test_case_id: UUID, payload: Scrip
         evaluation_status=updated.evaluation_status,
         evaluation_reason=updated.evaluation_reason,
         playwright_script=updated.playwright_script,
-        generated_at=updated.generated_at
+        generated_at=updated.generated_at,
+        jira_issue_key=getattr(updated, "jira_issue_key", None),
+        jira_issue_url=getattr(updated, "jira_issue_url", None),
+        jira_sync_status=getattr(updated, "jira_sync_status", None),
+        jira_last_synced_at=getattr(updated, "jira_last_synced_at", None)
     )
 
 
@@ -626,16 +619,25 @@ def read_settings():
             "timeout": settings.playwright.timeout,
             "retries": settings.playwright.retries,
             "workspace_url": settings.playwright.workspace_url
+        },
+        "jira": {
+            "base_url": settings.jira.base_url,
+            "email": settings.jira.email,
+            "api_token": settings.jira.api_token,
+            "project_key": settings.jira.project_key,
+            "default_issue_type": settings.jira.default_issue_type,
+            "verify_ssl": settings.jira.verify_ssl,
+            "resolved_statuses": settings.jira.resolved_statuses
         }
     }
 
 
 @app.put("/api/v1/settings")
-def write_settings(payload: dict = Body(...)):
+def save_settings(payload: dict = Body(...)):
     override_path = Path(__file__).parent / "config" / "override.yaml"
     try:
         overrides = {}
-        for section in ["llm", "workflow", "browser", "rag", "generation", "evaluation", "playwright"]:
+        for section in ["llm", "workflow", "browser", "rag", "generation", "evaluation", "playwright", "jira"]:
             if section in payload:
                 overrides[section] = payload[section]
 
@@ -655,13 +657,18 @@ def update_project(project_id: UUID, data: ProjectCreate):
     updated = project_service.update_project(project_id, name=data.name, description=data.description, line_of_business=data.line_of_business)
     if not updated:
         raise HTTPException(status_code=404, detail="Project not found")
+    if data.jira_project_key is not None:
+        updated.jira_project_key = data.jira_project_key
+        updated = project_service.repo.update_project(updated)
     return ProjectResponse(
         id=updated.id,
         name=updated.name,
         description=updated.description,
         line_of_business=updated.line_of_business,
+        framework=getattr(updated, "framework", "playwright"),
         created_at=updated.created_at,
-        requirements=updated.requirements
+        requirements=updated.requirements,
+        jira_project_key=getattr(updated, "jira_project_key", None)
     )
 
 
@@ -778,7 +785,11 @@ def generate_playwright_script(project_id: UUID, test_case_id: UUID):
             evaluation_status=updated_tc.evaluation_status,
             evaluation_reason=updated_tc.evaluation_reason,
             playwright_script=updated_tc.playwright_script,
-            generated_at=updated_tc.generated_at
+            generated_at=updated_tc.generated_at,
+            jira_issue_key=getattr(updated_tc, "jira_issue_key", None),
+            jira_issue_url=getattr(updated_tc, "jira_issue_url", None),
+            jira_sync_status=getattr(updated_tc, "jira_sync_status", None),
+            jira_last_synced_at=getattr(updated_tc, "jira_last_synced_at", None)
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -789,8 +800,7 @@ def generate_playwright_script(project_id: UUID, test_case_id: UUID):
 @app.post("/api/v1/projects/{project_id}/testcases/{test_case_id}/execute")
 def execute_test_case(project_id: UUID, test_case_id: UUID, background_tasks: BackgroundTasks):
     # Ensure test case exists before firing background run
-    raw = project_service.repo._read_raw()
-    if str(test_case_id) not in raw.get("test_cases", {}):
+    if not project_service.repo.get_test_case(test_case_id):
         raise HTTPException(status_code=404, detail="Test case not found")
         
     import uuid
@@ -864,13 +874,7 @@ def get_execution_detail(project_id: UUID, execution_id: UUID):
 
     # Query report from DB repo
     repo = project_service.repo
-    raw = repo._read_raw()
-    reports_raw = raw.get("reports", {})
-    report_data = {}
-    for r_id, r_info in reports_raw.items():
-        if r_info.get("execution_id") == str(execution_id):
-            report_data = r_info
-            break
+    report_data = repo.get_report_by_execution(execution_id) or {}
 
     return {
         "execution": {
@@ -910,6 +914,7 @@ def get_execution_screenshot(project_id: UUID, execution_id: UUID, path: str = N
 
 
 @app.get("/api/v1/projects/{project_id}/executions/{execution_id}/screenshot/{filename}")
+@app.get("/api/v1/projects/{project_id}/executions/{execution_id}/screenshots/{filename}")
 def get_execution_screenshot_by_filename(project_id: UUID, execution_id: UUID, filename: str):
     file_path = Path("backend/playwrightt/public/artifacts") / str(execution_id) / "screenshots" / filename
     if not file_path.exists():
@@ -948,13 +953,11 @@ def get_execution_trace(project_id: UUID, execution_id: UUID, path: str = None):
 @app.get("/api/v1/projects/{project_id}/executions/{execution_id}/pdf")
 def get_execution_pdf(project_id: UUID, execution_id: UUID):
     repo = project_service.repo
-    raw = repo._read_raw()
-    reports_raw = raw.get("reports", {})
-    for r_id, r_info in reports_raw.items():
-        if r_info.get("execution_id") == str(execution_id):
-            pdf_path = r_info.get("pdf_path")
-            if pdf_path and Path(pdf_path).exists():
-                return FileResponse(pdf_path, filename=Path(pdf_path).name)
+    report_info = repo.get_report_by_execution(execution_id)
+    if report_info:
+        pdf_path = report_info.get("pdf_path")
+        if pdf_path and Path(pdf_path).exists():
+            return FileResponse(pdf_path, filename=Path(pdf_path).name)
                 
     # If not found, try to compile on the fly
     result = project_service.get_execution_result(project_id, execution_id)
@@ -974,13 +977,11 @@ def get_execution_pdf(project_id: UUID, execution_id: UUID):
 @app.get("/api/v1/projects/{project_id}/executions/{execution_id}/html")
 def get_execution_html(project_id: UUID, execution_id: UUID):
     repo = project_service.repo
-    raw = repo._read_raw()
-    reports_raw = raw.get("reports", {})
-    for r_id, r_info in reports_raw.items():
-        if r_info.get("execution_id") == str(execution_id):
-            html_path = r_info.get("html_path")
-            if html_path and Path(html_path).exists():
-                return FileResponse(html_path)
+    report_info = repo.get_report_by_execution(execution_id)
+    if report_info:
+        html_path = report_info.get("html_path")
+        if html_path and Path(html_path).exists():
+            return FileResponse(html_path)
                 
     # If not found, try to compile on the fly
     result = project_service.get_execution_result(project_id, execution_id)
@@ -1000,13 +1001,11 @@ def get_execution_html(project_id: UUID, execution_id: UUID):
 @app.get("/api/v1/projects/{project_id}/executions/{execution_id}/junit")
 def get_execution_junit(project_id: UUID, execution_id: UUID):
     repo = project_service.repo
-    raw = repo._read_raw()
-    reports_raw = raw.get("reports", {})
-    for r_id, r_info in reports_raw.items():
-        if r_info.get("execution_id") == str(execution_id):
-            junit_path = r_info.get("junit_path")
-            if junit_path and Path(junit_path).exists():
-                return FileResponse(junit_path, filename=Path(junit_path).name)
+    report_info = repo.get_report_by_execution(execution_id)
+    if report_info:
+        junit_path = report_info.get("junit_path")
+        if junit_path and Path(junit_path).exists():
+            return FileResponse(junit_path, filename=Path(junit_path).name)
     raise HTTPException(status_code=404, detail="JUnit XML report not found")
 
 
@@ -1015,11 +1014,15 @@ def get_activity_traces(project_id: UUID):
     # Return dynamic LLM usage logs and costs mapped to project history
     settings = get_settings()
     repo = project_service.repo
-    raw = repo._read_raw()
-    
     # Calculate mock/dynamic trace values based on generated count
-    sc_count = len([s for s in raw.get("scenarios", {}).values() if s.get("requirement_id") in raw.get("requirements", {})])
-    tc_count = len(raw.get("test_cases", {}))
+    requirements = repo.get_requirements(project_id)
+    sc_count = 0
+    tc_count = 0
+    for req in requirements:
+        scs = repo.get_scenarios(req.id)
+        sc_count += len(scs)
+        for sc in scs:
+            tc_count += len(repo.get_test_cases(sc.id))
     
     # Standard pricing model for tokens
     input_tokens = sc_count * 850 + tc_count * 1200
@@ -1101,7 +1104,11 @@ def get_test_case(project_id: UUID, test_case_id: UUID):
         evaluation_status=tc.evaluation_status,
         evaluation_reason=tc.evaluation_reason,
         playwright_script=tc.playwright_script,
-        generated_at=tc.generated_at
+        generated_at=tc.generated_at,
+        jira_issue_key=getattr(tc, "jira_issue_key", None),
+        jira_issue_url=getattr(tc, "jira_issue_url", None),
+        jira_sync_status=getattr(tc, "jira_sync_status", None),
+        jira_last_synced_at=getattr(tc, "jira_last_synced_at", None)
     )
 
 
@@ -1110,14 +1117,44 @@ def get_playwright_workspace(project_id: UUID, test_case_id: UUID):
     tc = project_service.get_test_case(test_case_id)
     if not tc:
         raise HTTPException(status_code=404, detail="Test case not found")
+    
+    # Get scenario info
+    scenario_info = None
+    if tc.scenario_id:
+        sc = project_service.repo.get_scenario(tc.scenario_id)
+        if sc:
+            scenario_info = {
+                "id": str(sc.id),
+                "scenario_name": sc.scenario_name,
+                "description": sc.description
+            }
+            
     settings = get_settings()
     return {
         "project_id": str(project_id),
         "test_case_id": str(test_case_id),
         "playwright_script": tc.playwright_script,
         "base_url": settings.playwright.base_url,
-        "browser": settings.playwright.browser
+        "browser": settings.playwright.browser,
+        "is_frozen": tc.is_frozen or tc.evaluation_status == "approved",
+        "scenario": scenario_info
     }
+
+
+@app.put("/api/v1/playwright/freeze")
+def freeze_playwright_script(payload: dict = Body(...)):
+    test_case_id = payload.get("test_case_id")
+    is_frozen = payload.get("is_frozen", True)
+    if not test_case_id:
+        raise HTTPException(status_code=400, detail="test_case_id is required")
+    
+    tc = project_service.get_test_case(UUID(test_case_id))
+    if not tc:
+        raise HTTPException(status_code=404, detail="Test case not found")
+    
+    tc.is_frozen = is_frozen
+    project_service.repo.update_test_case(tc)
+    return {"status": "success", "is_frozen": tc.is_frozen}
 
 
 @app.put("/api/v1/playwright/script")
@@ -1128,6 +1165,10 @@ def save_playwright_script(payload: dict = Body(...)):
     if not project_id or not test_case_id or script is None:
         raise HTTPException(status_code=400, detail="project_id, test_case_id, and script are required")
     
+    tc = project_service.get_test_case(UUID(test_case_id))
+    if tc and (tc.is_frozen or tc.evaluation_status == "approved"):
+        raise HTTPException(status_code=403, detail="Cannot modify script because it is frozen or approved")
+
     from uuid import UUID
     updated = project_service.update_test_case_script(UUID(test_case_id), script)
     if not updated:
@@ -1190,6 +1231,418 @@ def process_execution_webhook(project_id: UUID, payload: dict = Body(...)):
         })
         
     return {"status": "success"}
+
+
+@app.get("/api/v1/executions/{execution_id}")
+def get_execution_result_agnostic(execution_id: UUID):
+    raw = project_service.repo._read_raw()
+    execs_raw = raw.get("execution_results", {})
+    ex_id_str = str(execution_id)
+    if ex_id_str in execs_raw:
+        ex_data = execs_raw[ex_id_str]
+        cleaned = dict(ex_data)
+        return cleaned
+    raise HTTPException(status_code=404, detail="Execution not found")
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: str
+
+class UserPasswordReset(BaseModel):
+    password: str
+
+class UserStatusToggle(BaseModel):
+    is_active: bool
+
+class RoleCreate(BaseModel):
+    name: str
+
+class RolePermissionsUpdate(BaseModel):
+    role_id: str
+    permission_ids: list[str]
+
+class ProjectUserAssign(BaseModel):
+    user_id: str
+    role_id: str
+
+@app.post("/api/v1/auth/login")
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(UserDB).filter(UserDB.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is deactivated")
+        
+    access_token = create_access_token(data={"sub": user.email, "role": user.role})
+    refresh_token = create_refresh_token(data={"sub": user.email})
+    
+    from datetime import timedelta
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    db_token = RefreshTokenDB(
+        user_id=user.id,
+        token=refresh_token,
+        expires_at=expires_at,
+        revoked=False
+    )
+    db.add(db_token)
+    db.commit()
+    
+    log_audit(db, user.id, None, "LOGIN", "USER", {"email": user.email})
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role
+        }
+    }
+
+@app.post("/api/v1/auth/refresh")
+def refresh_session(payload: RefreshRequest, db: Session = Depends(get_db)):
+    db_token = db.query(RefreshTokenDB).filter(RefreshTokenDB.token == payload.refresh_token).first()
+    if not db_token or db_token.revoked or db_token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+        
+    user = db.query(UserDB).filter(UserDB.id == db_token.user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+        
+    access_token = create_access_token(data={"sub": user.email, "role": user.role})
+    return {"access_token": access_token}
+
+@app.post("/api/v1/auth/logout")
+def logout(payload: RefreshRequest, user: UserDB = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_token = db.query(RefreshTokenDB).filter(RefreshTokenDB.token == payload.refresh_token).first()
+    if db_token:
+        db_token.revoked = True
+        db.commit()
+    log_audit(db, user.id, None, "LOGOUT", "USER", {"email": user.email})
+    return {"status": "success"}
+
+@app.get("/api/v1/admin/users")
+def list_users(
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Users", "view"))
+):
+    users = db.query(UserDB).all()
+    return [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "full_name": u.full_name,
+            "role": u.role,
+            "is_active": u.is_active,
+            "created_at": u.created_at
+        }
+        for u in users
+    ]
+
+@app.post("/api/v1/admin/users")
+def create_user(
+    payload: UserCreate,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Users", "create"))
+):
+    exists = db.query(UserDB).filter(UserDB.email == payload.email).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+        
+    new_user = UserDB(
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        full_name=payload.full_name,
+        role=payload.role,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    
+    log_audit(db, user.id, None, "CREATE", "USER", {"new_user_email": payload.email, "role": payload.role})
+    return {"status": "success", "user_id": str(new_user.id)}
+
+@app.put("/api/v1/admin/users/{user_id}/status")
+def toggle_user_status(
+    user_id: UUID,
+    payload: UserStatusToggle,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Users", "edit"))
+):
+    target = db.query(UserDB).filter(UserDB.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    old_status = target.is_active
+    target.is_active = payload.is_active
+    db.commit()
+    
+    log_audit(db, user.id, None, "UPDATE", "USER", {
+        "user_email": target.email,
+        "is_active": {"old": old_status, "new": payload.is_active}
+    })
+    return {"status": "success"}
+
+@app.put("/api/v1/admin/users/{user_id}/password")
+def reset_user_password(
+    user_id: UUID,
+    payload: UserPasswordReset,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Users", "edit"))
+):
+    target = db.query(UserDB).filter(UserDB.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    target.password_hash = hash_password(payload.password)
+    db.commit()
+    
+    log_audit(db, user.id, None, "UPDATE", "USER", {"user_email": target.email, "action": "password_reset"})
+    return {"status": "success"}
+
+@app.get("/api/v1/admin/roles")
+def list_roles(
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Roles", "view"))
+):
+    roles = db.query(RoleDB).all()
+    return [{"id": str(r.id), "name": r.name} for r in roles]
+
+@app.post("/api/v1/admin/roles")
+def create_role(
+    payload: RoleCreate,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Roles", "create"))
+):
+    exists = db.query(RoleDB).filter(RoleDB.name == payload.name).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="Role name already exists")
+        
+    new_role = RoleDB(name=payload.name)
+    db.add(new_role)
+    db.commit()
+    
+    log_audit(db, user.id, None, "CREATE", "ROLE", {"role_name": payload.name})
+    return {"status": "success", "role_id": str(new_role.id)}
+
+@app.get("/api/v1/admin/permissions")
+def get_permissions_matrix(
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Permissions", "view"))
+):
+    perms = db.query(PermissionDB).all()
+    role_perms = db.query(RolePermissionDB).all()
+    return {
+        "permissions": [{"id": str(p.id), "module": p.module, "action": p.action} for p in perms],
+        "role_permissions": [{"role_id": str(rp.role_id), "permission_id": str(rp.permission_id)} for rp in role_perms]
+    }
+
+@app.post("/api/v1/admin/permissions")
+def update_role_permissions(
+    payload: RolePermissionsUpdate,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Permissions", "edit"))
+):
+    role_uuid = UUID(payload.role_id)
+    db.query(RolePermissionDB).filter(RolePermissionDB.role_id == role_uuid).delete()
+    for p_id in payload.permission_ids:
+        rp = RolePermissionDB(role_id=role_uuid, permission_id=UUID(p_id))
+        db.add(rp)
+    db.commit()
+    
+    role = db.query(RoleDB).filter(RoleDB.id == role_uuid).first()
+    log_audit(db, user.id, None, "UPDATE", "PERMISSION", {
+        "role_name": role.name if role else str(role_uuid),
+        "permission_count": len(payload.permission_ids)
+    })
+    return {"status": "success"}
+
+@app.post("/api/v1/projects/{project_id}/users")
+def assign_user_to_project(
+    project_id: UUID,
+    payload: ProjectUserAssign,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Users", "edit"))
+):
+    user_uuid = UUID(payload.user_id)
+    role_uuid = UUID(payload.role_id)
+    
+    exists = db.query(ProjectUserDB).filter(
+        ProjectUserDB.project_id == project_id,
+        ProjectUserDB.user_id == user_uuid
+    ).first()
+    
+    if exists:
+        old_role_id = exists.role_id
+        exists.role_id = role_uuid
+        action_name = "UPDATE"
+        field_changes = {"role_id": {"old": str(old_role_id), "new": str(role_uuid)}}
+    else:
+        mapping = ProjectUserDB(project_id=project_id, user_id=user_uuid, role_id=role_uuid)
+        db.add(mapping)
+        action_name = "CREATE"
+        field_changes = {"user_id": str(user_uuid), "role_id": str(role_uuid)}
+        
+    db.commit()
+    log_audit(db, user.id, project_id, action_name, "USER", field_changes)
+    return {"status": "success"}
+
+@app.get("/api/v1/projects/{project_id}/users")
+def list_project_users(
+    project_id: UUID,
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Users", "view"))
+):
+    mappings = db.query(ProjectUserDB).filter(ProjectUserDB.project_id == project_id).all()
+    results = []
+    for m in mappings:
+        u = db.query(UserDB).filter(UserDB.id == m.user_id).first()
+        r = db.query(RoleDB).filter(RoleDB.id == m.role_id).first()
+        if u and r:
+            results.append({
+                "user_id": str(u.id),
+                "email": u.email,
+                "full_name": u.full_name,
+                "role_id": str(r.id),
+                "role_name": r.name
+            })
+    return results
+
+@app.get("/api/v1/admin/audit-logs")
+def get_audit_logs(
+    user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    authorized: bool = Depends(has_permission("Settings", "view"))
+):
+    logs = db.query(AuditLogDB).order_by(AuditLogDB.timestamp.desc()).limit(100).all()
+    results = []
+    for l in logs:
+        u = db.query(UserDB).filter(UserDB.id == l.user_id).first() if l.user_id else None
+        results.append({
+            "id": str(l.id),
+            "user_email": u.email if u else "System",
+            "project_id": str(l.project_id) if l.project_id else None,
+            "action": l.action,
+            "module": l.module,
+            "field_changes": l.field_changes,
+            "timestamp": l.timestamp
+        })
+    return results
+
+
+@app.post("/api/v1/webhooks/jira")
+def jira_webhook(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Receives JIRA webhook events when bugs are updated/resolved."""
+    issue = payload.get("issue", {})
+    key = issue.get("key")
+    if not key:
+        return {"status": "ignored", "reason": "No issue key in payload"}
+        
+    status_name = issue.get("fields", {}).get("status", {}).get("name")
+    if not status_name:
+        return {"status": "ignored", "reason": "No status name in payload"}
+        
+    settings = get_settings()
+    resolved_statuses = settings.jira.resolved_statuses
+    if status_name not in resolved_statuses:
+        return {"status": "ignored", "reason": f"Status '{status_name}' is not in resolved list."}
+        
+    from backend.database.db_models import TestCaseDB
+    from backend.database.db import provider
+    
+    updated_count = 0
+    if provider in ["sql", "postgres"] or (provider == "json" and db):
+        db_tcs = db.query(TestCaseDB).filter(TestCaseDB.jira_issue_key == key, TestCaseDB.is_deleted == False).all()
+        for db_tc in db_tcs:
+            db_tc.status = "retest_pending"
+            log_audit(db, None, None, "JIRA_UPDATE", "TESTCASE", {"jira_issue_key": key, "status": "retest_pending"})
+            updated_count += 1
+        db.commit()
+        
+    return {"status": "success", "updated_count": updated_count}
+
+
+@app.post("/api/v1/projects/{project_id}/requirements/{requirement_id}/sync-jira")
+def sync_requirement_jira(project_id: UUID, requirement_id: UUID, user: UserDB = Depends(get_current_user)):
+    """Manually synchronize approved scenarios to JIRA as Stories."""
+    repo = get_project_repository()
+    requirement = repo.get_requirement(requirement_id)
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+        
+    scenarios = repo.get_scenarios(requirement_id)
+    
+    from backend.graph.workflow import build_graph
+    from backend.models.state import WorkflowState
+    
+    local_graph = build_graph()
+    state = WorkflowState(requirement=requirement, generated_scenarios=scenarios)
+    state.add_log("Triggering JIRA user story sync via service")
+    
+    config = {
+        "configurable": {
+            "operation": "sync_user_story",
+            "user_id": str(user.id)
+        }
+    }
+    raw_result = local_graph.invoke(state, config)
+    final_state = WorkflowState(**raw_result)
+    
+    return {"status": "success", "logs": final_state.logs}
+
+
+@app.post("/api/v1/projects/{project_id}/executions/{execution_id}/sync-bug")
+def sync_execution_bug(project_id: UUID, execution_id: UUID, user: UserDB = Depends(get_current_user)):
+    """Manually synchronize a failed test run to JIRA as a Bug defect."""
+    repo = get_project_repository()
+    ex = repo.get_execution_result(project_id, execution_id)
+    if not ex:
+        raise HTTPException(status_code=404, detail="Execution result not found")
+        
+    tc = repo.get_test_case(ex.test_case_id)
+    if not tc:
+        raise HTTPException(status_code=404, detail="TestCase not found")
+        
+    from backend.graph.workflow import build_graph
+    from backend.models.state import WorkflowState
+    
+    local_graph = build_graph()
+    state = WorkflowState(execution_results=[ex])
+    state.add_log("Triggering JIRA bug sync via service")
+    
+    config = {
+        "configurable": {
+            "operation": "sync_bug",
+            "user_id": str(user.id)
+        }
+    }
+    raw_result = local_graph.invoke(state, config)
+    final_state = WorkflowState(**raw_result)
+    
+    return {"status": "success", "logs": final_state.logs}
 
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="static")

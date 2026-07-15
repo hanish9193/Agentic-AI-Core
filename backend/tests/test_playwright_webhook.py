@@ -19,36 +19,37 @@ def test_playwright_webhook_flow():
     )
     
     # Create scenario
-    raw_data = project_service.repo._read_raw()
     scenario_id = uuid4()
-    raw_data.setdefault("scenarios", {})[str(scenario_id)] = {
-        "id": str(scenario_id),
-        "requirement_id": str(req.id),
-        "scenario_name": "Test Scenario",
-        "description": "Test Desc",
-        "priority": "high",
-        "confidence": 0.9,
-        "approved": True,
-        "generated_at": "2026-07-08T02:00:00Z"
-    }
+    from backend.models.scenario import Scenario
+    from backend.models.common import Priority
+    scenario = Scenario(
+        id=scenario_id,
+        requirement_id=req.id,
+        scenario_name="Test Scenario",
+        description="Test Desc",
+        priority=Priority.HIGH,
+        confidence=0.9,
+        approved=True
+    )
+    project_service.repo.save_scenarios([scenario])
     
     # Create testcase
     test_case_id = uuid4()
-    raw_data.setdefault("test_cases", {})[str(test_case_id)] = {
-        "id": str(test_case_id),
-        "scenario_id": str(scenario_id),
-        "title": "Login verification",
-        "preconditions": [],
-        "steps": ["Open page", "Verify text"],
-        "expected_result": "Logged in",
-        "priority": "high",
-        "status": "pending",
-        "confidence": 0.95,
-        "evaluation_status": "approved",
-        "playwright_script": "await page.goto('/')",
-        "generated_at": "2026-07-08T02:00:00Z"
-    }
-    project_service.repo._write_raw(raw_data)
+    from backend.models.test_case import TestCase, TestCaseStatus, EvaluationStatus
+    test_case = TestCase(
+        id=test_case_id,
+        scenario_id=scenario_id,
+        title="Login verification",
+        preconditions=[],
+        steps=["Open page", "Verify text"],
+        expected_result="Logged in",
+        priority=Priority.HIGH,
+        status=TestCaseStatus.PENDING,
+        confidence=0.95,
+        evaluation_status=EvaluationStatus.APPROVED,
+        playwright_script="await page.goto('/')"
+    )
+    project_service.repo.save_test_cases([test_case])
     
     # 2. Trigger webhook - STARTED
     execution_id = uuid4()

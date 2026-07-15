@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Testcase" tests="1" failures="0" errors="0" time="4.5"><testcase name="TestCase_1a99b8bd-98ca-47e2-bc41-93e7c3e172d6" classname="PlaywrightTests" time="4.5" /></testsuite></testsuites>

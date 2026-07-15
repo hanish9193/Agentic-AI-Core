@@ -49,6 +49,13 @@ class ReportAgent(BaseAgent):
                 reason=result.error_message if result else None,
             )
 
+        # Collect stories
+        stories_list = [s.jira_issue_key for s in state.generated_scenarios if s.jira_issue_key]
+        # Collect bugs
+        bugs_list = [tc.jira_issue_key for tc in state.generated_test_cases if tc.jira_issue_key]
+        # Count retests
+        retests_count = sum(1 for tc in state.generated_test_cases if tc.status.value in ["retest_pending", "retest_required"])
+
         report = ExecutionReport(
             requirement_title=state.requirement.title,
             scenario_count=len(state.generated_scenarios),
@@ -64,6 +71,9 @@ class ReportAgent(BaseAgent):
             total_execution_seconds=sum(r.duration_seconds for r in state.execution_results),
             failed_tests=[_entry(tc) for tc in failed],
             blocked_tests=[_entry(tc) for tc in blocked],
+            jira_stories_synced=stories_list,
+            jira_bugs_raised=bugs_list,
+            jira_retests_required=retests_count
         )
 
         state.execution_report = report

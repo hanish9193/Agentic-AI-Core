@@ -16,15 +16,15 @@ STORE_PATH = Path(__file__).parent.parent / "database" / "project_store.json"
 
 class ProjectRepository(ABC):
     @abstractmethod
-    def list_projects(self) -> list[Project]:
+    def list_projects(self, include_deleted: bool = False) -> list[Project]:
         pass
 
     @abstractmethod
-    def get_project(self, project_id: UUID) -> Project | None:
+    def get_project(self, project_id: UUID, include_deleted: bool = False) -> Project | None:
         pass
 
     @abstractmethod
-    def create_project(self, name: str, description: str, line_of_business: str = "general") -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None) -> Project:
         pass
 
     @abstractmethod
@@ -32,11 +32,11 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def delete_project(self, project_id: UUID) -> bool:
+    def delete_project(self, project_id: UUID, deleted_by: UUID | None = None) -> bool:
         pass
 
     @abstractmethod
-    def get_requirements(self, project_id: UUID) -> list[Requirement]:
+    def get_requirements(self, project_id: UUID, include_deleted: bool = False) -> list[Requirement]:
         pass
 
     @abstractmethod
@@ -55,7 +55,17 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def get_scenarios(self, requirement_id: UUID) -> list[Scenario]:
+    def save_requirement(
+        self,
+        requirement: Requirement,
+        priority: str | None = None,
+        business_domain: str | None = None,
+        attachments: list[str] | None = None
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def get_scenarios(self, requirement_id: UUID, include_deleted: bool = False) -> list[Scenario]:
         pass
 
     @abstractmethod
@@ -67,7 +77,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def delete_scenario(self, scenario_id: UUID) -> bool:
+    def delete_scenario(self, scenario_id: UUID, deleted_by: UUID | None = None) -> bool:
         pass
 
     @abstractmethod
@@ -75,7 +85,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def get_test_cases(self, scenario_id: UUID) -> list[TestCase]:
+    def get_test_cases(self, scenario_id: UUID, include_deleted: bool = False) -> list[TestCase]:
         pass
 
     @abstractmethod
@@ -87,11 +97,11 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def get_test_case(self, test_case_id: UUID) -> TestCase | None:
+    def get_test_case(self, test_case_id: UUID, include_deleted: bool = False) -> TestCase | None:
         pass
 
     @abstractmethod
-    def delete_test_case(self, test_case_id: UUID) -> bool:
+    def delete_test_case(self, test_case_id: UUID, deleted_by: UUID | None = None) -> bool:
         pass
 
     @abstractmethod
@@ -142,6 +152,34 @@ class ProjectRepository(ABC):
     def add_test_case_note(self, test_case_id: UUID, note: str) -> None:
         pass
 
+    @abstractmethod
+    def begin_transaction(self) -> None:
+        pass
+
+    @abstractmethod
+    def commit(self) -> None:
+        pass
+
+    @abstractmethod
+    def rollback(self) -> None:
+        pass
+
+    @abstractmethod
+    def get_requirement(self, requirement_id: UUID) -> Requirement | None:
+        pass
+
+    @abstractmethod
+    def get_scenario(self, scenario_id: UUID) -> Scenario | None:
+        pass
+
+    @abstractmethod
+    def get_report_by_execution(self, execution_id: UUID) -> dict | None:
+        pass
+
+    @abstractmethod
+    def save_report(self, project_id: UUID, execution_id: UUID, report_payload: dict) -> dict:
+        pass
+
 
 class JSONProjectRepository(ProjectRepository):
     def __init__(self, file_path: Path = STORE_PATH):
@@ -188,24 +226,30 @@ class JSONProjectRepository(ProjectRepository):
         with open(self.file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
-    def list_projects(self) -> list[Project]:
+    def list_projects(self, include_deleted: bool = False) -> list[Project]:
         raw = self._read_raw()
-        return [Project.model_validate(p) for p in raw.get("projects", [])]
+        return [
+            Project.model_validate(p)
+            for p in raw.get("projects", [])
+            if include_deleted or not p.get("is_deleted", False)
+        ]
 
-    def get_project(self, project_id: UUID) -> Project | None:
-        projects = self.list_projects()
+    def get_project(self, project_id: UUID, include_deleted: bool = False) -> Project | None:
+        projects = self.list_projects(include_deleted=include_deleted)
         for p in projects:
             if p.id == project_id:
                 return p
         return None
 
-    def create_project(self, name: str, description: str, line_of_business: str = "general") -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None) -> Project:
         raw = self._read_raw()
         project = Project(
             id=uuid4(),
             name=name,
             description=description,
             line_of_business=line_of_business,
+            framework=framework,
+            jira_project_key=jira_project_key,
             created_at=datetime.now(timezone.utc),
             requirements=[]
         )
@@ -224,21 +268,27 @@ class JSONProjectRepository(ProjectRepository):
                 return project
         return None
 
-    def delete_project(self, project_id: UUID) -> bool:
+    def delete_project(self, project_id: UUID, deleted_by: UUID | None = None) -> bool:
         raw = self._read_raw()
         projects = raw.setdefault("projects", [])
         p_id_str = str(project_id)
         
         project_idx = -1
         for idx, p in enumerate(projects):
-            if p["id"] == p_id_str:
+            if p["id"] == p_id_str and not p.get("is_deleted", False):
                 project_idx = idx
                 break
                 
         if project_idx == -1:
             return False
 
-        # Retrieve and clean up child elements
+        # Soft delete instead of hard delete
+        now = datetime.now(timezone.utc).isoformat()
+        projects[project_idx]["is_deleted"] = True
+        projects[project_idx]["deleted_at"] = now
+        projects[project_idx]["deleted_by"] = str(deleted_by) if deleted_by else None
+
+        # Clean up child elements
         proj = Project.model_validate(projects[project_idx])
         
         # Clean up requirements and their descendants
@@ -249,36 +299,44 @@ class JSONProjectRepository(ProjectRepository):
         for r_id in proj.requirements:
             r_str = str(r_id)
             if r_str in reqs_raw:
-                del reqs_raw[r_str]
+                reqs_raw[r_str]["is_deleted"] = True
+                reqs_raw[r_str]["deleted_at"] = now
+                reqs_raw[r_str]["deleted_by"] = str(deleted_by) if deleted_by else None
                 
             # Clean up scenarios belonging to requirement
-            sc_to_delete = [s_id for s_id, s_data in scenarios_raw.items() if s_data.get("requirement_id") == r_str]
-            for s_id in sc_to_delete:
-                del scenarios_raw[s_id]
-                # Clean up test cases belonging to scenario
-                tc_to_delete = [tc_id for tc_id, tc_data in tcs_raw.items() if tc_data.get("scenario_id") == s_id]
-                for tc_id in tc_to_delete:
-                    del tcs_raw[tc_id]
+            for s_id, s_data in scenarios_raw.items():
+                if s_data.get("requirement_id") == r_str:
+                    s_data["is_deleted"] = True
+                    s_data["deleted_at"] = now
+                    s_data["deleted_by"] = str(deleted_by) if deleted_by else None
+                    # Clean up test cases belonging to scenario
+                    for tc_id, tc_data in tcs_raw.items():
+                        if tc_data.get("scenario_id") == s_id:
+                            tc_data["is_deleted"] = True
+                            tc_data["deleted_at"] = now
+                            tc_data["deleted_by"] = str(deleted_by) if deleted_by else None
 
         # Clean up documents
         docs_raw = raw.setdefault("documents", {})
-        docs_to_delete = [d_id for d_id, d_data in docs_raw.items() if d_data.get("project_id") == p_id_str]
-        for d_id in docs_to_delete:
-            del docs_raw[d_id]
+        for d_id, d_data in docs_raw.items():
+            if d_data.get("project_id") == p_id_str:
+                d_data["is_deleted"] = True
+                d_data["deleted_at"] = now
+                d_data["deleted_by"] = str(deleted_by) if deleted_by else None
             
         # Clean up executions
         execs_raw = raw.setdefault("execution_results", {})
-        execs_to_delete = [e_id for e_id, e_data in execs_raw.items() if e_data.get("project_id") == p_id_str]
-        for e_id in execs_to_delete:
-            del execs_raw[e_id]
+        for e_id, e_data in execs_raw.items():
+            if e_data.get("project_id") == p_id_str:
+                e_data["is_deleted"] = True
+                e_data["deleted_at"] = now
+                e_data["deleted_by"] = str(deleted_by) if deleted_by else None
 
-        # Delete project itself
-        del projects[project_idx]
         self._write_raw(raw)
         return True
 
-    def get_requirements(self, project_id: UUID) -> list[Requirement]:
-        project = self.get_project(project_id)
+    def get_requirements(self, project_id: UUID, include_deleted: bool = False) -> list[Requirement]:
+        project = self.get_project(project_id, include_deleted=include_deleted)
         if not project:
             return []
         
@@ -288,7 +346,9 @@ class JSONProjectRepository(ProjectRepository):
         for r_id in project.requirements:
             r_str = str(r_id)
             if r_str in reqs_raw:
-                result.append(Requirement.model_validate(reqs_raw[r_str]))
+                req_data = reqs_raw[r_str]
+                if include_deleted or not req_data.get("is_deleted", False):
+                    result.append(Requirement.model_validate(req_data))
         return result
 
     def create_requirement(
@@ -337,13 +397,36 @@ class JSONProjectRepository(ProjectRepository):
         self._write_raw(raw)
         return req
 
-    def get_scenarios(self, requirement_id: UUID) -> list[Scenario]:
+    def save_requirement(
+        self,
+        requirement: Requirement,
+        priority: str | None = None,
+        business_domain: str | None = None,
+        attachments: list[str] | None = None
+    ) -> None:
+        raw = self._read_raw()
+        req_id_str = str(requirement.id)
+        reqs_raw = raw.setdefault("requirements", {})
+        
+        # Merge existing metadata fields (priority, business_domain, attachments) if not provided
+        existing = reqs_raw.get(req_id_str, {})
+        
+        req_dump = requirement.model_dump(mode="json")
+        req_dump["priority"] = priority or existing.get("priority", "medium")
+        req_dump["business_domain"] = business_domain or existing.get("business_domain", "general")
+        req_dump["attachments"] = attachments if attachments is not None else existing.get("attachments", [])
+        
+        reqs_raw[req_id_str] = req_dump
+        self._write_raw(raw)
+
+    def get_scenarios(self, requirement_id: UUID, include_deleted: bool = False) -> list[Scenario]:
         raw = self._read_raw()
         scenarios_raw = raw.get("scenarios", {})
         result = []
         for s_id, s_data in scenarios_raw.items():
             if s_data.get("requirement_id") == str(requirement_id):
-                result.append(Scenario.model_validate(s_data))
+                if include_deleted or not s_data.get("is_deleted", False):
+                    result.append(Scenario.model_validate(s_data))
         return result
 
     def save_scenarios(self, scenarios: list[Scenario]) -> None:
@@ -363,16 +446,23 @@ class JSONProjectRepository(ProjectRepository):
             return scenario
         return None
 
-    def delete_scenario(self, scenario_id: UUID) -> bool:
+    def delete_scenario(self, scenario_id: UUID, deleted_by: UUID | None = None) -> bool:
         raw = self._read_raw()
         scenarios_raw = raw.setdefault("scenarios", {})
         s_id_str = str(scenario_id)
-        if s_id_str in scenarios_raw:
-            del scenarios_raw[s_id_str]
+        if s_id_str in scenarios_raw and not scenarios_raw[s_id_str].get("is_deleted", False):
+            now = datetime.now(timezone.utc).isoformat()
+            scenarios_raw[s_id_str]["is_deleted"] = True
+            scenarios_raw[s_id_str]["deleted_at"] = now
+            scenarios_raw[s_id_str]["deleted_by"] = str(deleted_by) if deleted_by else None
+            
+            # Soft delete child test cases
             tcs_raw = raw.setdefault("test_cases", {})
-            to_delete = [tc_id for tc_id, tc_data in tcs_raw.items() if tc_data.get("scenario_id") == s_id_str]
-            for tc_id in to_delete:
-                del tcs_raw[tc_id]
+            for tc_id, tc_data in tcs_raw.items():
+                if tc_data.get("scenario_id") == s_id_str:
+                    tc_data["is_deleted"] = True
+                    tc_data["deleted_at"] = now
+                    tc_data["deleted_by"] = str(deleted_by) if deleted_by else None
             self._write_raw(raw)
             return True
         return False
@@ -383,25 +473,25 @@ class JSONProjectRepository(ProjectRepository):
         tcs_raw = raw.setdefault("test_cases", {})
         
         req_id_str = str(requirement_id)
-        # Find all scenario IDs linked to this requirement
-        scenario_ids_to_del = [s_id for s_id, s_data in scenarios_raw.items() if s_data.get("requirement_id") == req_id_str]
-        
-        for s_id in scenario_ids_to_del:
-            del scenarios_raw[s_id]
-            # Delete corresponding child test cases
-            tc_ids_to_del = [tc_id for tc_id, tc_data in tcs_raw.items() if tc_data.get("scenario_id") == s_id]
-            for tc_id in tc_ids_to_del:
-                del tcs_raw[tc_id]
-                
+        now = datetime.now(timezone.utc).isoformat()
+        for s_id, s_data in scenarios_raw.items():
+            if s_data.get("requirement_id") == req_id_str:
+                s_data["is_deleted"] = True
+                s_data["deleted_at"] = now
+                for tc_id, tc_data in tcs_raw.items():
+                    if tc_data.get("scenario_id") == s_id:
+                        tc_data["is_deleted"] = True
+                        tc_data["deleted_at"] = now
         self._write_raw(raw)
 
-    def get_test_cases(self, scenario_id: UUID) -> list[TestCase]:
+    def get_test_cases(self, scenario_id: UUID, include_deleted: bool = False) -> list[TestCase]:
         raw = self._read_raw()
         tcs_raw = raw.get("test_cases", {})
         result = []
         for tc_id, tc_data in tcs_raw.items():
             if tc_data.get("scenario_id") == str(scenario_id):
-                result.append(TestCase.model_validate(tc_data))
+                if include_deleted or not tc_data.get("is_deleted", False):
+                    result.append(TestCase.model_validate(tc_data))
         return result
 
     def save_test_cases(self, test_cases: list[TestCase]) -> None:
@@ -421,20 +511,25 @@ class JSONProjectRepository(ProjectRepository):
             return test_case
         return None
 
-    def get_test_case(self, test_case_id: UUID) -> TestCase | None:
+    def get_test_case(self, test_case_id: UUID, include_deleted: bool = False) -> TestCase | None:
         raw = self._read_raw()
         tcs_raw = raw.get("test_cases", {})
         tc_id_str = str(test_case_id)
         if tc_id_str in tcs_raw:
-            return TestCase.model_validate(tcs_raw[tc_id_str])
+            tc_data = tcs_raw[tc_id_str]
+            if include_deleted or not tc_data.get("is_deleted", False):
+                return TestCase.model_validate(tc_data)
         return None
 
-    def delete_test_case(self, test_case_id: UUID) -> bool:
+    def delete_test_case(self, test_case_id: UUID, deleted_by: UUID | None = None) -> bool:
         raw = self._read_raw()
         tcs_raw = raw.setdefault("test_cases", {})
         tc_id_str = str(test_case_id)
-        if tc_id_str in tcs_raw:
-            del tcs_raw[tc_id_str]
+        if tc_id_str in tcs_raw and not tcs_raw[tc_id_str].get("is_deleted", False):
+            now = datetime.now(timezone.utc).isoformat()
+            tcs_raw[tc_id_str]["is_deleted"] = True
+            tcs_raw[tc_id_str]["deleted_at"] = now
+            tcs_raw[tc_id_str]["deleted_by"] = str(deleted_by) if deleted_by else None
             self._write_raw(raw)
             return True
         return False
@@ -443,9 +538,11 @@ class JSONProjectRepository(ProjectRepository):
         raw = self._read_raw()
         tcs_raw = raw.setdefault("test_cases", {})
         s_id_str = str(scenario_id)
-        to_delete = [tc_id for tc_id, tc_data in tcs_raw.items() if tc_data.get("scenario_id") == s_id_str]
-        for tc_id in to_delete:
-            del tcs_raw[tc_id]
+        now = datetime.now(timezone.utc).isoformat()
+        for tc_id, tc_data in tcs_raw.items():
+            if tc_data.get("scenario_id") == s_id_str:
+                tc_data["is_deleted"] = True
+                tc_data["deleted_at"] = now
         self._write_raw(raw)
 
     def get_documents(self, project_id: UUID) -> list[Document]:
@@ -521,7 +618,9 @@ class JSONProjectRepository(ProjectRepository):
     def add_scenario_note(self, scenario_id: UUID, note: str) -> None:
         raw = self._read_raw()
         notes_raw = raw.setdefault("scenario_notes", {})
-        notes_raw.setdefault(str(scenario_id), []).append(note)
+        timestamp = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+        formatted = f"[{timestamp}] {note}"
+        notes_raw.setdefault(str(scenario_id), []).append(formatted)
         self._write_raw(raw)
 
     def get_test_case_notes(self, test_case_id: UUID) -> list[str]:
@@ -532,13 +631,80 @@ class JSONProjectRepository(ProjectRepository):
     def add_test_case_note(self, test_case_id: UUID, note: str) -> None:
         raw = self._read_raw()
         notes_raw = raw.setdefault("test_case_notes", {})
-        notes_raw.setdefault(str(test_case_id), []).append(note)
+        timestamp = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+        formatted = f"[{timestamp}] {note}"
+        notes_raw.setdefault(str(test_case_id), []).append(formatted)
         self._write_raw(raw)
 
+    def begin_transaction(self) -> None:
+        pass
 
-_active_project_repo: ProjectRepository = JSONProjectRepository()
+    def commit(self) -> None:
+        pass
+
+    def rollback(self) -> None:
+        pass
+
+    def get_requirement(self, requirement_id: UUID) -> Requirement | None:
+        raw = self._read_raw()
+        reqs_raw = raw.get("requirements", {})
+        req_id_str = str(requirement_id)
+        if req_id_str in reqs_raw:
+            return Requirement.model_validate(reqs_raw[req_id_str])
+        return None
+
+    def get_scenario(self, scenario_id: UUID) -> Scenario | None:
+        raw = self._read_raw()
+        scenarios_raw = raw.get("scenarios", {})
+        sc_id_str = str(scenario_id)
+        if sc_id_str in scenarios_raw:
+            return Scenario.model_validate(scenarios_raw[sc_id_str])
+        return None
+
+    def get_report_by_execution(self, execution_id: UUID) -> dict | None:
+        raw = self._read_raw()
+        reports_raw = raw.get("reports", {})
+        ex_id_str = str(execution_id)
+        for r_info in reports_raw.values():
+            if r_info.get("execution_id") == ex_id_str:
+                return r_info
+        return None
+
+    def save_report(self, project_id: UUID, execution_id: UUID, report_payload: dict) -> dict:
+        raw = self._read_raw()
+        reports_raw = raw.setdefault("reports", {})
+        report_id = report_payload.get("id") or str(uuid4())
+        payload = dict(report_payload)
+        payload["id"] = report_id
+        payload["project_id"] = str(project_id)
+        payload["execution_id"] = str(execution_id)
+        reports_raw[report_id] = payload
+        self._write_raw(raw)
+        return payload
+
+
+class RepositoryProvider:
+    _instance: ProjectRepository | None = None
+
+    @classmethod
+    def get_repository(cls) -> ProjectRepository:
+        if cls._instance is None:
+            from backend.config.settings import get_settings
+            settings = get_settings()
+            provider_name = settings.repository.provider
+            if provider_name == "postgres":
+                from backend.repository.postgres_project_repository import PostgresProjectRepository
+                cls._instance = PostgresProjectRepository()
+            else:
+                cls._instance = JSONProjectRepository()
+        return cls._instance
+
+
+_active_project_repo = None
 
 
 def get_project_repository() -> ProjectRepository:
     global _active_project_repo
-    return _active_project_repo
+    if _active_project_repo is not None:
+        return _active_project_repo
+    return RepositoryProvider.get_repository()

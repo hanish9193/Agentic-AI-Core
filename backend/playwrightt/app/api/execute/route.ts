@@ -6,6 +6,7 @@ import * as path from 'path';
 export async function POST(request: NextRequest) {
   try {
     const { script, projectId, requirementId, scenarioIds, testCaseIds, browser } = await request.json();
+    console.log(`[API Execute] Received script run request. projectId: "${projectId}", testCaseIds: ${JSON.stringify(testCaseIds)}, browser: "${browser}"`);
 
     if (!script || typeof script !== 'string') {
       return NextResponse.json(

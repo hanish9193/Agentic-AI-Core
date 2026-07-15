@@ -9,8 +9,14 @@ Respond with ONLY a JSON object in exactly this shape, with no extra text before
 
 {
   "scenarios": [
-    {"scenario_name": "short name, 3-6 words", "description": "one or two sentences describing what this scenario tests", "priority": "low"}
+    {
+      "scenario_name": "short name, 3-6 words",
+      "description": "one or two sentences describing what this scenario tests",
+      "priority": "low",
+      "confidence": 0.95
+    }
   ]
 }
 
 The "priority" field must be exactly one of: "low", "medium", "high".
+The "confidence" field must be a float between 0.0 and 1.0 representing your confidence in how well this scenario covers a testable requirement aspect.

@@ -43,3 +43,8 @@ class ExecutionReport(BaseModel):
 
     failed_tests: list[TestCaseReportEntry] = Field(default_factory=list)
     blocked_tests: list[TestCaseReportEntry] = Field(default_factory=list)
+    
+    # Jira reporting statistics
+    jira_stories_synced: list[str] = Field(default_factory=list)
+    jira_bugs_raised: list[str] = Field(default_factory=list)
+    jira_retests_required: int = 0

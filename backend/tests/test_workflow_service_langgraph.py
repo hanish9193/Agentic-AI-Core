@@ -28,12 +28,6 @@ def setup_test_db():
         os.remove(TEST_STORE_PATH)
 
 
-@pytest.fixture
-def mock_llm_service(stub_llm_service):
-    with mock.patch.object(LLMService, "structured_generate", side_effect=stub_llm_service.structured_generate) as m1, \
-         mock.patch.object(LLMService, "generate", side_effect=stub_llm_service.generate) as m2:
-        yield stub_llm_service
-
 
 def test_generate_scenarios_via_langgraph(mock_llm_service):
     ws = WorkflowService()

@@ -22,6 +22,20 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
     if not screenshot_filename and "screenshot" in event_name.lower():
         screenshot_filename = f"screenshot-{index}.png"
 
+    # Dynamic fallback for error events: scan screenshots folder
+    if not screenshot_filename and (evt_type == "error" or "error" in event_name.lower()):
+        screenshots_dir = Path("backend/playwrightt/public/artifacts") / str(execution_id) / "screenshots"
+        if screenshots_dir.exists():
+            screenshot_files = list(screenshots_dir.glob("*.png"))
+            if screenshot_files:
+                error_files = [f for f in screenshot_files if "error" in f.name.lower() or "failed" in f.name.lower()]
+                if error_files:
+                    screenshot_filename = error_files[0].name
+                else:
+                    # Fallback to last screenshot chronologically
+                    screenshot_files.sort(key=lambda x: x.stat().st_mtime if x.exists() else 0)
+                    screenshot_filename = screenshot_files[-1].name
+
     screenshot_url = None
     if screenshot_filename:
         workspace_dir = Path("backend/playwrightt/public/artifacts") / str(execution_id) / "screenshots" / screenshot_filename
@@ -34,6 +48,38 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
     observation = f"Timeline logged event of type '{evt_type}'."
     result = "Step executed successfully."
 
+    if evt_type == "error" or "error" in event_name.lower():
+        title = "Execution Failure"
+        details_lower = details.lower()
+        if "strict mode violation" in details_lower:
+            action = "Select unique target element on screen"
+            observation = "Playwright strict mode violation: The test code attempted to click or interact with an element, but the browser found multiple elements matching that description."
+            result = "The selector is ambiguous. To resolve this, update the test script locator to be more specific, such as using the exact button/link text (e.g. 'Enter Vehicle Data') or targeting its unique ID/attributes (e.g. '#entervehicledata')."
+        elif "element is not an <input>" in details_lower or "locator resolved to <select" in details_lower or "selectOption" in details or "select option" in details_lower:
+            action = "Select dropdown option value"
+            observation = "Playwright tried to type or fill text into a dropdown selection element (<select>) instead of choosing one of its options."
+            result = "A dropdown (<select>) element cannot be filled with text. The automation script must be corrected to use 'selectOption' (e.g. page.selectOption('#make', 'Toyota') or page.locator('#make').selectOption('Toyota')) instead of 'fill'."
+        elif "timeout" in details_lower or "waiting for locator" in details_lower or "waiting for selector" in details_lower:
+            action = "Wait for target element to become visible / interactive on page"
+            observation = "Playwright timed out waiting for the target element to load or appear on the page (the element remained hidden or was not rendered within the timeout period)."
+            result = "Verify if the preceding test steps executed successfully, check if the website response was slow, or confirm if the element's selector is correct."
+        elif "is hidden" in details_lower or "is not visible" in details_lower or "intercepts pointer events" in details_lower or "disabled" in details_lower:
+            action = "Interact with target element"
+            observation = "The target element was found on the page, but it was hidden, disabled, or blocked/intercepted by another page element (like a modal popup, overlay, or loading spinner)."
+            result = "Ensure the target element is fully active and visible, and close any blocking modals or overlays before interacting with it."
+        elif "net::err" in details_lower or "navigation failed" in details_lower or "page.goto" in details_lower:
+            action = "Load application landing page"
+            observation = "The browser failed to navigate to the target URL. The application server might be down, the hostname might be invalid, or the server is refusing connections."
+            result = "Verify that the target application is running locally or online, and that your local network connection / proxy settings are active."
+        elif "expect" in details_lower or "assertionerror" in details_lower or "assertion" in details_lower:
+            action = "Verify expected test condition (Assertion)"
+            observation = "The test run successfully completed its actions, but the final validation check failed. The page content or page state did not match the expected assertion criteria."
+            result = "Verify if the application behaved unexpectedly, or if the test assertion value needs to be updated."
+        else:
+            action = "Interact with target page controls / elements."
+            observation = f"Playwright runner logged error: {details}"
+            result = f"Error details: {details or 'Timeout/Assertion failure'}"
+
     # If it is a screenshot event, let's provide dynamic context mapping
     if screenshot_filename:
         import re
@@ -44,6 +90,14 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
         match = re.match(r"^(\d+)", fn_lower)
         if match:
             step_num = int(match.group(1))
+        
+        if not step_num:
+            if "initial" in fn_lower or "01-" in fn_lower:
+                step_num = 1
+            elif "form-filled" in fn_lower or "02-" in fn_lower:
+                step_num = 2
+            elif "insurant-data" in fn_lower or "03-" in fn_lower:
+                step_num = 3
 
         if test_case and step_num is not None and 1 <= step_num <= len(test_case.steps):
             step_desc = test_case.steps[step_num - 1]
@@ -57,18 +111,19 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
             else:
                 result = f"Step {step_num} verification passed."
         else:
-            # Fallback to predefined templates for Tricentis sample app
-            if "initial" in fn_lower or fn_lower.startswith("01-"):
+            # Fallback mapping
+            is_tricentis = not test_case or any("tricentis" in str(getattr(test_case, k, "")).lower() for k in ["title", "expected_result"])
+            if is_tricentis and ("initial" in fn_lower or fn_lower.startswith("01-")):
                 title = "Initial Portal Loading"
                 action = "Navigate to the Tricentis Vehicle Insurance portal and initialize the test session."
                 observation = "The application landing page loaded successfully. The vehicle data input form is displayed and interactive."
                 result = "Portal loaded and ready for automation."
-            elif "form-filled" in fn_lower or fn_lower.startswith("02-"):
+            elif is_tricentis and ("form-filled" in fn_lower or fn_lower.startswith("02-")):
                 title = "Vehicle Form Input Completion"
                 action = "Fill out all vehicle specifications: Make (BMW), Model (Scooter), Cylinder Capacity (150), Engine Performance (90), Date of Manufacture, Seats (2), Fuel (Petrol), List Price (25000), License Plate, and Annual Mileage."
                 observation = "All input fields and selection dropdowns populated with correct test data parameters. No form validation errors."
                 result = "Vehicle data form validation passed."
-            elif "insurant-data" in fn_lower or fn_lower.startswith("03-"):
+            elif is_tricentis and ("insurant-data" in fn_lower or fn_lower.startswith("03-")):
                 title = "Transition to Enter Insurant Data"
                 action = "Click the 'Next' action button to submit the vehicle form data and navigate to the Insurant details form."
                 observation = "Form submitted successfully. Browser page navigated to the Enter Insurant Data portal page view."
@@ -156,14 +211,29 @@ class ReportService:
         except Exception as tc_err:
             print(f"[ReportService] Failed to load test case {execution_result.test_case_id} for mapping: {tc_err}")
 
+        # Next.js artifacts screenshot directory
+        next_screenshots_dir = Path("backend/playwrightt/public/artifacts") / execution_id_str / "screenshots"
+        next_screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+        failure_screenshot_name = None
+        if execution_result.screenshot_path:
+            src_screenshot = Path(execution_result.screenshot_path)
+            if src_screenshot.exists():
+                failure_screenshot_name = "failure-screenshot.png"
+                dst_screenshot = next_screenshots_dir / failure_screenshot_name
+                try:
+                    import shutil
+                    shutil.copy2(src_screenshot, dst_screenshot)
+                except Exception as copy_err:
+                    print(f"[ReportService] Failed to copy failure screenshot: {copy_err}")
+
         mapped_steps = []
         for idx, evt in enumerate(raw_timeline):
-            mapped_steps.append(map_timeline_event_to_step(evt, idx, project_id, execution_result.id, test_case=test_case))
-
-        # Filter to only steps that actually contain screenshots
-        screenshot_steps = [s for s in mapped_steps if s["screenshot_url"]]
-        if screenshot_steps:
-            mapped_steps = screenshot_steps
+            step_mapped = map_timeline_event_to_step(evt, idx, project_id, execution_result.id, test_case=test_case)
+            if step_mapped["title"] == "Execution Failure" and failure_screenshot_name:
+                step_mapped["screenshot_name"] = failure_screenshot_name
+                step_mapped["screenshot_url"] = str((next_screenshots_dir / failure_screenshot_name).absolute())
+            mapped_steps.append(step_mapped)
 
         # Determine target web URL
         from backend.config.settings import get_settings
@@ -175,7 +245,7 @@ class ReportService:
         root = ET.Element("testsuites")
         suite = ET.SubElement(
             root, "testsuite", 
-            name="Playwright Test Suite", 
+            name="Playwright Testcase", 
             tests=str(max(1, len(mapped_steps))), 
             failures="1" if execution_result.status.value == "failed" else "0",
             errors="1" if execution_result.status.value == "error" else "0",
@@ -204,7 +274,7 @@ class ReportService:
         for idx, step in enumerate(mapped_steps):
             screenshot_tag = ""
             if step["screenshot_url"]:
-                img_src = f"screenshot/{step['screenshot_name']}"
+                img_src = f"screenshots/{step['screenshot_name']}"
                 screenshot_tag = f"""
                 <div class="step-image">
                     <img src="{img_src}" alt="Screenshot {idx + 1}" />
@@ -249,15 +319,43 @@ class ReportService:
         steps_html_str = "\n".join(steps_html)
         if not steps_html_str:
             steps_html_str = "<div class='step-card'><p>No execution timeline events recorded.</p></div>"
-            
+
         summary_outcome_text = (
-            "The automated test suite completed successfully on the target application. "
+            "The automated testcase completed successfully on the target application. "
             f"A total of {len(mapped_steps)} steps were executed, verifying form element interactions. "
             "Visual screenshots were captured at critical checkpoints to verify correctness."
             if execution_result.status.value == "passed" else
             "The automated test execution encountered errors or assertions failed. "
             f"Verification aborted at step {len(mapped_steps)}. Visual logs have been persisted for failure diagnostics."
         )
+
+        banner_html = ""
+        is_error = execution_result.status.value in ("failed", "error")
+        escaped_error_msg = ""
+        if execution_result.error_message:
+            escaped_error_msg = execution_result.error_message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+        if is_error:
+            banner_html = f"""
+        <div class="error-banner">
+            <div class="error-title">❌ Test Execution Failed</div>
+            <div class="error-msg">{escaped_error_msg}</div>
+            <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
+                <button class="btn-rerun" onclick="rerunTestCase('{execution_result.test_case_id}')">🔄 Rerun Execution</button>
+                <a href="http://localhost:3000/execution/{execution_id_str}" target="_blank" class="btn-workspace">🖥 Open in Playwright Workspace</a>
+            </div>
+        </div>
+        """
+        else:
+            banner_html = f"""
+        <div class="success-banner">
+            <div class="success-title">✓ Test Execution Passed</div>
+            <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
+                <button class="btn-rerun" onclick="rerunTestCase('{execution_result.test_case_id}')">🔄 Rerun Execution</button>
+                <a href="http://localhost:3000/execution/{execution_id_str}" target="_blank" class="btn-workspace">🖥 Open in Playwright Workspace</a>
+            </div>
+        </div>
+        """
 
         html_content = f"""<!DOCTYPE html>
 <html>
@@ -315,7 +413,7 @@ class ReportService:
         }}
         .meta-grid {{
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 16px;
         }}
         @media (max-width: 600px) {{
@@ -355,6 +453,77 @@ class ReportService:
         .badge-failed {{ background-color: #ef4444; color: #ffffff; }}
         .badge-error {{ background-color: #f59e0b; color: #ffffff; }}
         
+        .error-banner {{
+            background-color: #7f1d1d;
+            border: 1px solid #ef4444;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }}
+        .error-title {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #fca5a5;
+            margin-bottom: 8px;
+        }}
+        .error-msg {{
+            font-family: monospace;
+            font-size: 13px;
+            color: #fecaca;
+            white-space: pre-wrap;
+            background-color: #450a0a;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #991b1b;
+            overflow-x: auto;
+        }}
+        .success-banner {{
+            background-color: #064e3b;
+            border: 1px solid #10b981;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }}
+        .success-title {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #a7f3d0;
+        }}
+        .btn-rerun {{
+            background-color: #3b82f6;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }}
+        .btn-rerun:hover {{
+            background-color: #2563eb;
+        }}
+        .btn-rerun:disabled {{
+            background-color: #4b5563;
+            cursor: not-allowed;
+        }}
+        .btn-workspace {{
+            background-color: #1e293b;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.2s, border-color 0.2s;
+        }}
+        .btn-workspace:hover {{
+            background-color: #334155;
+            border-color: #64748b;
+        }}
+
         h2 {{
             font-size: 20px;
             color: #f1f5f9;
@@ -500,12 +669,18 @@ class ReportService:
                         <span class="meta-value">{execution_result.duration_seconds:.2f} seconds</span>
                     </div>
                     <div class="meta-item">
+                        <span class="meta-label">Browser</span>
+                        <span class="meta-value">Chromium {execution_result.browser_version or ""}</span>
+                    </div>
+                    <div class="meta-item">
                         <span class="meta-label">Total Steps</span>
                         <span class="meta-value">{len(mapped_steps)}</span>
                     </div>
                 </div>
             </div>
         </div>
+
+        {banner_html}
         
         <h2>Step-by-Step Walkthrough</h2>
         <div class="steps-container">
@@ -519,9 +694,39 @@ class ReportService:
             </div>
         </div>
     </div>
+
+    <script>
+    async function rerunTestCase(testCaseId) {{
+        const btn = document.querySelector('.btn-rerun');
+        if (!btn) return;
+        btn.disabled = true;
+        btn.innerHTML = '🔄 Re-running...';
+        try {{
+            const port = window.location.port;
+            const backendUrl = port === '3000' ? 'http://localhost:8000' : '';
+            const projectId = '{project_id}';
+            const response = await fetch(`${{backendUrl}}/api/v1/projects/${{projectId}}/testcases/${{testCaseId}}/execute`, {{
+                method: 'POST'
+            }});
+            if (response.ok) {{
+                const data = await response.json();
+                alert('Test case execution started! Redirecting to live simulation...');
+                window.open(`http://localhost:3000/execution/${{data.execution_id}}`, '_blank');
+            }} else {{
+                alert('Failed to trigger execution. Please try again from the dashboard.');
+            }}
+        }} catch (err) {{
+            alert('Error: ' + err.message);
+        }} finally {{
+            btn.disabled = false;
+            btn.innerHTML = '🔄 Rerun Execution';
+        }}
+    }}
+    </script>
 </body>
 </html>
 """
+        html_path = reports_dir / f"report_{execution_id_str}.html"
         html_path.write_text(html_content, encoding="utf-8")
 
         # Overwrite Next.js artifact report.html as well for local browser viewing
@@ -669,22 +874,12 @@ class ReportService:
             print(f"[PDF compile error]: {pdf_err}")
             pdf_path.write_bytes(b"%PDF-1.4 ...")
 
-        # Save report details in repo raw storage
-        raw = self.repo._read_raw()
-        reports_raw = raw.setdefault("reports", {})
-        
-        report_id = str(uuid4())
         report_payload = {
-            "id": report_id,
-            "project_id": str(project_id),
-            "execution_id": execution_id_str,
             "junit_path": str(junit_path),
             "html_path": str(html_path),
-            "pdf_path": str(pdf_path),
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "pdf_path": str(pdf_path)
         }
-        reports_raw[report_id] = report_payload
-        self.repo._write_raw(raw)
+        report_payload = self.repo.save_report(project_id, UUID(execution_id_str), report_payload)
 
         return report_payload
 

@@ -9,6 +9,7 @@ class ScenarioUpdate(BaseModel):
     description: str | None = None
     priority: Priority | None = None
     approved: bool | None = None
+    rejected: bool | None = None
 
 
 class ScenarioResponse(BaseModel):
@@ -19,4 +20,11 @@ class ScenarioResponse(BaseModel):
     priority: Priority
     confidence: float
     approved: bool
+    rejected: bool
     generated_at: datetime
+    reviewer: str | None = None
+    approved_at: datetime | None = None
+    jira_issue_key: str | None = None
+    jira_issue_url: str | None = None
+    jira_sync_status: str | None = None
+    jira_last_synced_at: datetime | None = None

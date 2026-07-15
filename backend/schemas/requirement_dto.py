@@ -23,3 +23,7 @@ class RequirementResponse(BaseModel):
     original_filename: str | None = None
     requirement_id: str | None = None
     requirement_title: str | None = None
+    jira_issue_key: str | None = None
+    jira_issue_url: str | None = None
+    jira_sync_status: str | None = None
+    jira_last_synced_at: datetime | None = None

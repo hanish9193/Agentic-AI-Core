@@ -44,3 +44,10 @@ playwright:
   timeout: 60
   retries: 0
   workspace_url: http://localhost:3000
+
+repository:
+  provider: json           # json | postgres
+  database_url: postgresql+psycopg2://postgres:postgres@localhost:5432/agentic_ai
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30

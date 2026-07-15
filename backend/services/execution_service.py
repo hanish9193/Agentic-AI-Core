@@ -65,6 +65,7 @@ class ExecutionService:
             screenshot_path=payload.get("screenshot_path"),
             video_path=payload.get("video_path"),
             trace_path=payload.get("trace_path"),
+            browser_version=payload.get("browser_version"),
             executed_at=datetime.now(timezone.utc)
         )
 
@@ -76,11 +77,8 @@ class ExecutionService:
 
         # 2. Update at-a-glance run outcome status on the TestCase model.
         # Human approval and evaluation metadata fields remain completely IMMUTABLE.
-        raw = self.repo._read_raw()
-        tcs_raw = raw.setdefault("test_cases", {})
-        tc_id_str = str(test_case_id)
-        if tc_id_str in tcs_raw:
-            tc = TestCase.model_validate(tcs_raw[tc_id_str])
+        tc = self.repo.get_test_case(test_case_id)
+        if tc:
             if status == ExecutionStatus.PASSED:
                 tc.status = TestCaseStatus.PASSED
             elif status == ExecutionStatus.FAILED:

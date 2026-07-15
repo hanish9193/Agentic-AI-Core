@@ -18,6 +18,20 @@ class WorkflowService:
     def repo(self):
         return get_project_repository()
 
+    def ingest_requirement(self, project_id: UUID, requirement: Requirement) -> Requirement:
+        """Orchestrate requirement ingestion, LLM enrichment, and optional feature mapping via LangGraph."""
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
+
+        local_graph = build_graph()
+        state = WorkflowState(requirement=requirement)
+        state.add_log("Starting requirement ingestion via LangGraph")
+
+        config = {"configurable": {"operation": WorkflowOperation.INGEST}}
+        raw_result = local_graph.invoke(state, config)
+        final_state = WorkflowState(**raw_result)
+
+        return final_state.requirement
 
     def generate_scenarios(self, project_id: UUID, requirement_id: UUID, count: int, mode: str = "append") -> list[Scenario]:
         project = self.repo.get_project(project_id)
@@ -48,6 +62,34 @@ class WorkflowService:
         
         # Persist scenarios
         self.repo.save_scenarios(final_state.generated_scenarios)
+        return final_state.generated_scenarios
+
+    def generate_backlog(self, project_id: UUID, requirement_id: UUID) -> list[Scenario]:
+        """Orchestrate backlog generation from scenarios via LangGraph."""
+        project = self.repo.get_project(project_id)
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+
+        requirements = self.repo.get_requirements(project_id)
+        requirement = next((r for r in requirements if r.id == requirement_id), None)
+        if not requirement:
+            raise ValueError(f"Requirement {requirement_id} not found in project {project_id}")
+
+        scenarios = self.repo.get_scenarios(requirement_id)
+        if not scenarios:
+            raise ValueError("No scenarios found. Cannot generate backlog items.")
+
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
+
+        local_graph = build_graph()
+        state = WorkflowState(requirement=requirement, generated_scenarios=scenarios)
+        state.add_log("Starting backlog creation via LangGraph")
+
+        config = {"configurable": {"operation": WorkflowOperation.BACKLOG}}
+        raw_result = local_graph.invoke(state, config)
+        final_state = WorkflowState(**raw_result)
+
         return final_state.generated_scenarios
 
     def generate_test_cases(self, project_id: UUID, requirement_id: UUID) -> list[TestCase]:
@@ -85,23 +127,18 @@ class WorkflowService:
         # Persist generated test cases
         self.repo.save_test_cases(final_state.generated_test_cases)
         return final_state.generated_test_cases
-
     def generate_playwright_script(self, project_id: UUID, test_case_id: UUID) -> TestCase:
-        raw = self.repo._read_raw()
-        tc_data = raw.get("test_cases", {}).get(str(test_case_id))
-        if not tc_data:
+        test_case = self.repo.get_test_case(test_case_id)
+        if not test_case:
             raise ValueError(f"TestCase {test_case_id} not found")
-        test_case = TestCase.model_validate(tc_data)
 
-        sc_data = raw.get("scenarios", {}).get(str(test_case.scenario_id))
-        if not sc_data:
+        scenario = self.repo.get_scenario(test_case.scenario_id)
+        if not scenario:
             raise ValueError(f"Scenario {test_case.scenario_id} not found for TestCase {test_case_id}")
-        scenario = Scenario.model_validate(sc_data)
 
-        req_data = raw.get("requirements", {}).get(str(scenario.requirement_id))
-        if not req_data:
+        requirement = self.repo.get_requirement(scenario.requirement_id)
+        if not requirement:
             raise ValueError(f"Requirement {scenario.requirement_id} not found for Scenario {scenario.id}")
-        requirement = Requirement.model_validate(req_data)
 
         # Human approval gate: PlaywrightAgent must reject requests for unapproved test cases.
         if test_case.evaluation_status != "approved":
@@ -111,7 +148,7 @@ class WorkflowService:
         from backend.graph.workflow import build_graph
         from backend.models.operation import WorkflowOperation
         
-        local_graph = build_graph()
+        local_graph = build_graph(playwright_agent=PlaywrightAgent(repo=self.repo))
         state = WorkflowState(
             requirement=requirement,
             generated_test_cases=[test_case],
@@ -154,21 +191,17 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
     try:
         log_event("Generating", "Generating execution runner environment", "Initiating process group for Playwright...")
         
-        raw = workflow_service.repo._read_raw()
-        tc_data = raw.get("test_cases", {}).get(tc_id_str)
-        if not tc_data:
+        test_case = workflow_service.repo.get_test_case(test_case_id)
+        if not test_case:
             raise ValueError(f"TestCase {test_case_id} not found")
-        test_case = TestCase.model_validate(tc_data)
 
-        sc_data = raw.get("scenarios", {}).get(str(test_case.scenario_id))
-        if not sc_data:
+        scenario = workflow_service.repo.get_scenario(test_case.scenario_id)
+        if not scenario:
             raise ValueError(f"Scenario {test_case.scenario_id} not found")
-        scenario = Scenario.model_validate(sc_data)
 
-        req_data = raw.get("requirements", {}).get(str(scenario.requirement_id))
-        if not req_data:
+        requirement = workflow_service.repo.get_requirement(scenario.requirement_id)
+        if not requirement:
             raise ValueError(f"Requirement {scenario.requirement_id} not found")
-        requirement = Requirement.model_validate(req_data)
 
         log_event("Running", "Running Playwright TypeScript tests", "npx playwright test --reporter=json --trace=on")
 

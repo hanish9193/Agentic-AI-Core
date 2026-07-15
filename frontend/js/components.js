@@ -12,6 +12,53 @@ export function escapeHTML(str) {
   );
 }
 
+// Helper to safely render simple Markdown markups
+export function renderMarkup(text) {
+  if (!text) return '';
+  let html = escapeHTML(text);
+  
+  // Format review comment timestamps beautifully
+  html = html.replace(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2} [AP]M)\]/i, "<span style='color: var(--text-muted); font-size: 0.72rem; font-weight: 500; font-family: monospace; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; margin-right: 6px; border: 1px solid var(--border-color);'>$1</span>");
+
+  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+  html = html.replace(/_(.*?)_/g, "<em>$1</em>");
+  html = html.replace(/`(.*?)`/g, "<code style='background: var(--bg-secondary); padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.85em; border: 1px solid var(--border-color);'>$1</code>");
+  html = html.replace(/\[x\]/gi, "<span style='color: var(--color-success); font-weight: bold;'>✔</span>");
+  html = html.replace(/\[ \]/g, "<span style='color: var(--text-muted); font-weight: bold;'>☐</span>");
+  return html;
+}
+
+
+window.toggleScenarioRow = (id) => {
+  const detailRow = document.getElementById(`expanded-row-${id}`);
+  const caret = document.getElementById(`caret-${id}`);
+  if (detailRow) {
+    if (detailRow.style.display === 'none') {
+      detailRow.style.display = 'table-row';
+      if (caret) caret.style.transform = 'rotate(90deg)';
+    } else {
+      detailRow.style.display = 'none';
+      if (caret) caret.style.transform = 'rotate(0deg)';
+    }
+  }
+};
+
+window.toggleTestCaseRow = (id) => {
+  const detailRow = document.getElementById(`tc-expanded-row-${id}`);
+  const caret = document.getElementById(`tc-caret-${id}`);
+  if (detailRow) {
+    if (detailRow.style.display === 'none') {
+      detailRow.style.display = 'table-row';
+      if (caret) caret.style.transform = 'rotate(90deg)';
+    } else {
+      detailRow.style.display = 'none';
+      if (caret) caret.style.transform = 'rotate(0deg)';
+    }
+  }
+};
+
 export function formatBytes(bytes) {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -115,7 +162,7 @@ export const Components = {
   },
 
   // Scenarios component with comments / notes list
-  ScenariosTable(scenarios, handlers, notesMap = {}) {
+  ScenariosTable(scenarios, handlers, notesMap = {}, requirements = []) {
     if (!scenarios || scenarios.length === 0) {
       return this.EmptyState("No Scenarios", "Select a requirement and generate scenarios to begin.");
     }
@@ -123,73 +170,162 @@ export const Components = {
     window._scenarioActions = handlers;
 
     const rows = scenarios.map(sc => {
-      const statusBadge = sc.approved 
-        ? `<span class="badge badge-approved">Approved</span>`
-        : `<span class="badge badge-pending">Review Pending</span>`;
+      const req = requirements.find(r => r.id === sc.requirement_id);
+      const reqIdText = req ? (req.requirement_id || "REQ") : "REQ";
+      const reqTitleText = req ? (req.requirement_title || req.title) : "";
+      
+      const parentReqRefCollapsed = reqIdText;
+      const parentReqRefExpanded = `${reqIdText} - ${reqTitleText}`;
+
+      const confidenceColor = sc.confidence >= 0.8 ? 'var(--color-success)' : (sc.confidence >= 0.6 ? 'var(--color-warning)' : 'var(--color-danger)');
+
+      let statusBadge = "";
+      if (sc.approved) {
+        let details = "";
+        if (sc.reviewer) {
+          const formattedDate = sc.approved_at ? new Date(sc.approved_at).toLocaleDateString() : "";
+          details = `<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">by ${escapeHTML(sc.reviewer)} ${formattedDate ? 'on ' + formattedDate : ''}</div>`;
+        }
+        statusBadge = `
+          <div style="display: flex; flex-direction: column; align-items: flex-start;">
+            <span class="badge badge-approved" style="display: inline-flex; align-items: center; gap: 4px;">✔ Approved</span>
+            ${details}
+          </div>
+        `;
+      } else if (sc.rejected) {
+        statusBadge = `<span class="badge badge-rejected" style="display: inline-flex; align-items: center; gap: 4px;">✖ Rejected</span>`;
+      } else {
+        statusBadge = `<span class="badge badge-pending">Review Pending</span>`;
+      }
 
       // Render notes for scenario
       const notes = notesMap[sc.id] || [];
       const notesHtml = notes.map(n => `
         <div style="font-size: 0.75rem; background-color: var(--bg-primary); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid var(--accent-primary); color: var(--text-secondary);">
-          💬 <strong>Note:</strong> ${escapeHTML(n)}
+          💬 <strong>Note:</strong> ${renderMarkup(n)}
         </div>
       `).join('');
 
       return `
-        <tr>
-          <td><input type="checkbox" class="scenario-checkbox" data-id="${sc.id}" /></td>
-          <td style="font-weight: 600; min-width: 150px;">
-            <div class="scenario-name-text" id="name-txt-${sc.id}">${escapeHTML(sc.scenario_name)}</div>
-            <input type="text" class="form-control" id="name-in-${sc.id}" value="${escapeHTML(sc.scenario_name)}" style="display: none; padding: 4px 8px; font-size: 0.85rem;" />
-            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; font-weight: 400;">
-              <div>Reviewer: <strong style="color: var(--text-secondary);">${sc.approved ? "Lead QA Engineer" : "AI ScenarioAgent"}</strong></div>
-              <div style="margin-top: 2px;">Time: <span>${new Date(sc.generated_at).toLocaleString()}</span></div>
+        <tr style="cursor: pointer;" onclick="window.toggleScenarioRow('${sc.id}')">
+          <td onclick="event.stopPropagation();"><input type="checkbox" class="scenario-checkbox" data-id="${sc.id}" /></td>
+          <td style="font-weight: 600; min-width: 200px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="caret-${sc.id}" style="display: inline-block; transition: transform var(--transition-fast); transform: rotate(0deg); color: var(--text-secondary);">▶</span>
+              <span class="scenario-name-text" id="name-txt-${sc.id}">${escapeHTML(sc.scenario_name)}</span>
             </div>
+            <input type="text" class="form-control" id="name-in-${sc.id}" value="${escapeHTML(sc.scenario_name)}" style="display: none; padding: 4px 8px; font-size: 0.85rem;" onclick="event.stopPropagation();" />
           </td>
-          <td style="color: var(--text-secondary); min-width: 250px;">
-            <div class="scenario-desc-text" id="desc-txt-${sc.id}">${escapeHTML(sc.description)}</div>
-            <textarea class="form-control" id="desc-in-${sc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem; width: 100%; min-height: 50px;">${escapeHTML(sc.description)}</textarea>
-            
-            <!-- Comment Section -->
-            <div style="margin-top: 8px;">
-              ${notesHtml}
-              <div style="margin-top: 6px; display: flex; gap: 8px; align-items: center;">
-                <input type="text" class="form-control" id="note-add-in-${sc.id}" placeholder="Attach a review note..." style="padding: 4px 8px; font-size: 0.75rem; flex-grow: 1;" />
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="if(document.getElementById('note-add-in-${sc.id}').value.trim()) { window._scenarioActions.onAddNote('${sc.id}', document.getElementById('note-add-in-${sc.id}').value); document.getElementById('note-add-in-${sc.id}').value=''; }">Add Note</button>
-              </div>
+          <td>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;">
+              ${escapeHTML(parentReqRefCollapsed)}
             </div>
           </td>
           <td>
-            <div class="scenario-priority-text" id="prio-txt-${sc.id}"><span class="badge badge-${sc.priority.toLowerCase()}">${escapeHTML(sc.priority)}</span></div>
-            <select class="form-control" id="prio-in-${sc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem;">
-              <option value="low" ${sc.priority === 'low' ? 'selected' : ''}>Low</option>
-              <option value="medium" ${sc.priority === 'medium' ? 'selected' : ''}>Medium</option>
-              <option value="high" ${sc.priority === 'high' ? 'selected' : ''}>High</option>
+            <div style="font-size: 0.8rem; font-weight: 600; color: ${confidenceColor};">
+              ${(sc.confidence * 100).toFixed(0)}%
+            </div>
+          </td>
+          <td>
+            <div class="scenario-priority-text" id="prio-txt-${sc.id}">
+              <span class="badge badge-${sc.priority.toLowerCase() === 'low' ? 'negative' : 'positive'}">
+                ${sc.priority.toLowerCase() === 'low' ? 'Negative' : 'Positive'}
+              </span>
+            </div>
+            <select class="form-control" id="prio-in-${sc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem;" onclick="event.stopPropagation();">
+              <option value="low" ${sc.priority === 'low' ? 'selected' : ''}>Negative</option>
+              <option value="medium" ${sc.priority === 'medium' ? 'selected' : ''}>Positive</option>
+              <option value="high" ${sc.priority === 'high' ? 'selected' : ''}>Positive</option>
             </select>
           </td>
           <td>${statusBadge}</td>
-          <td style="text-align: right;">
-            <div class="cell-actions" id="actions-view-${sc.id}">
-              <button class="btn-icon btn-icon-success" title="Approve" onclick="window._scenarioActions.onApprove('${sc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
-              </button>
-              <button class="btn-icon btn-icon-danger" title="Reject / Disapprove" onclick="window._scenarioActions.onReject('${sc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              <button class="btn-icon" title="Edit" onclick="document.getElementById('name-txt-${sc.id}').style.display='none'; document.getElementById('name-in-${sc.id}').style.display='block'; document.getElementById('desc-txt-${sc.id}').style.display='none'; document.getElementById('desc-in-${sc.id}').style.display='block'; document.getElementById('prio-txt-${sc.id}').style.display='none'; document.getElementById('prio-in-${sc.id}').style.display='block'; document.getElementById('actions-view-${sc.id}').style.display='none'; document.getElementById('actions-edit-${sc.id}').style.display='flex';">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </button>
-              <button class="btn-icon" title="Duplicate" onclick="window._scenarioActions.onDuplicate('${sc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-              </button>
-              <button class="btn-icon btn-icon-danger" title="Delete" onclick="window._scenarioActions.onDelete('${sc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              </button>
-            </div>
-            
-            <div class="cell-actions" id="actions-edit-${sc.id}" style="display: none;">
-              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="window._scenarioActions.onSave('${sc.id}', document.getElementById('name-in-${sc.id}').value, document.getElementById('desc-in-${sc.id}').value, document.getElementById('prio-in-${sc.id}').value)">Save</button>
-              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="document.getElementById('name-txt-${sc.id}').style.display='block'; document.getElementById('name-in-${sc.id}').style.display='none'; document.getElementById('desc-txt-${sc.id}').style.display='block'; document.getElementById('desc-in-${sc.id}').style.display='none'; document.getElementById('prio-txt-${sc.id}').style.display='block'; document.getElementById('prio-in-${sc.id}').style.display='none'; document.getElementById('actions-view-${sc.id}').style.display='flex'; document.getElementById('actions-edit-${sc.id}').style.display='none';">Cancel</button>
+        </tr>
+        
+        <tr id="expanded-row-${sc.id}" style="display: none; background-color: rgba(255, 255, 255, 0.01);">
+          <td></td>
+          <td colspan="5" style="padding: 16px 24px; border-top: 1px dashed var(--border-color); border-bottom: 1px solid var(--border-color);">
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              
+              <!-- Description / Gherkin Steps -->
+              <div>
+                <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">Scenario Description / Steps</h4>
+                <div class="scenario-desc-text" id="desc-txt-${sc.id}" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-secondary); white-space: pre-line;">${escapeHTML(sc.description)}</div>
+                <textarea class="form-control" id="desc-in-${sc.id}" style="display: none; padding: 8px; font-size: 0.85rem; width: 100%; min-height: 100px;">${escapeHTML(sc.description)}</textarea>
+              </div>
+
+              <!-- Requirement & Score detailed metadata -->
+              <div style="display: flex; gap: 32px; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px; flex-wrap: wrap;">
+                <div>
+                  <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">Requirement</h4>
+                  <div style="font-size: 0.85rem; color: var(--text-primary); font-weight: 500;">
+                    ${escapeHTML(parentReqRefExpanded)}
+                  </div>
+                </div>
+                <div>
+                  <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">Confidence Score</h4>
+                  <div style="font-size: 0.85rem; font-weight: 600; color: ${confidenceColor};">
+                    Confidence: ${(sc.confidence * 100).toFixed(0)}%
+                  </div>
+                </div>
+                <div>
+                  <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">JIRA Traceability</h4>
+                  <div style="font-size: 0.85rem;">
+                    ${sc.jira_issue_key ? `
+                      <a href="${escapeHTML(sc.jira_issue_url)}" target="_blank" style="color: var(--accent-primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                        🔗 ${escapeHTML(sc.jira_issue_key)}
+                      </a>
+                      <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 6px;">(${escapeHTML(sc.jira_sync_status)})</span>
+                    ` : (sc.approved ? `
+                      <button class="btn btn-secondary" onclick="event.stopPropagation(); window._scenarioActions.onSyncJira('${sc.id}')" style="padding: 4px 8px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;">
+                        🔄 Sync to JIRA
+                      </button>
+                    ` : `<span style="font-size: 0.72rem; color: var(--text-muted);">Sync pending approval</span>`)}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Comment Section -->
+              <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                <h5 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Review Comments</h5>
+                <div id="notes-container-${sc.id}">
+                  ${notesHtml}
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation();">
+                  <input type="text" class="form-control" id="note-add-in-${sc.id}" placeholder="Attach a review note..." style="padding: 6px 12px; font-size: 0.8rem; flex-grow: 1;" />
+                  <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="if(document.getElementById('note-add-in-${sc.id}').value.trim()) { window._scenarioActions.onAddNote('${sc.id}', document.getElementById('note-add-in-${sc.id}').value); document.getElementById('note-add-in-${sc.id}').value=''; }">Add Note</button>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px;" onclick="event.stopPropagation();">
+                <!-- Action buttons (visible if NOT approved) -->
+                <div class="cell-actions" id="actions-view-${sc.id}" style="display: flex; gap: 8px;">
+                  ${sc.approved ? '' : `
+                    <button class="btn btn-secondary btn-icon-success" title="Approve" onclick="window._scenarioActions.onApprove('${sc.id}')" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg> Approve
+                    </button>
+                    <button class="btn btn-secondary btn-icon-danger" title="Reject / Disapprove" onclick="window._scenarioActions.onReject('${sc.id}')" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg> Reject
+                    </button>
+                  `}
+                  <button class="btn btn-secondary" title="Edit" onclick="document.getElementById('name-txt-${sc.id}').style.display='none'; document.getElementById('name-in-${sc.id}').style.display='block'; document.getElementById('desc-txt-${sc.id}').style.display='none'; document.getElementById('desc-in-${sc.id}').style.display='block'; document.getElementById('prio-txt-${sc.id}').style.display='none'; document.getElementById('prio-in-${sc.id}').style.display='block'; document.getElementById('actions-view-${sc.id}').style.display='none'; document.getElementById('actions-edit-${sc.id}').style.display='flex';" style="padding: 6px 12px;">
+                    Edit
+                  </button>
+                  <button class="btn btn-secondary" title="Duplicate" onclick="window._scenarioActions.onDuplicate('${sc.id}')" style="padding: 6px 12px;">
+                    Duplicate
+                  </button>
+                  <button class="btn btn-secondary btn-icon-danger" title="Delete" onclick="window._scenarioActions.onDelete('${sc.id}')" style="padding: 6px 12px;">
+                    Delete
+                  </button>
+                </div>
+                
+                <!-- Save/Cancel buttons when in edit mode -->
+                <div class="cell-actions" id="actions-edit-${sc.id}" style="display: none; gap: 8px;">
+                  <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._scenarioActions.onSave('${sc.id}', document.getElementById('name-in-${sc.id}').value, document.getElementById('desc-in-${sc.id}').value, document.getElementById('prio-in-${sc.id}').value)">Save</button>
+                  <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="document.getElementById('name-txt-${sc.id}').style.display='block'; document.getElementById('name-in-${sc.id}').style.display='none'; document.getElementById('desc-txt-${sc.id}').style.display='block'; document.getElementById('desc-in-${sc.id}').style.display='none'; document.getElementById('prio-txt-${sc.id}').style.display='block'; document.getElementById('prio-in-${sc.id}').style.display='none'; document.getElementById('actions-view-${sc.id}').style.display='flex'; document.getElementById('actions-edit-${sc.id}').style.display='none';">Cancel</button>
+                </div>
+              </div>
+
             </div>
           </td>
         </tr>
@@ -201,12 +337,12 @@ export const Components = {
         <table class="custom-table">
           <thead>
             <tr>
-              <th style="width: 40px;"><input type="checkbox" id="bulk-sc-select-all" onclick="const checked = this.checked; document.querySelectorAll('.scenario-checkbox').forEach(cb => cb.checked = checked);" /></th>
+              <th style="width: 40px;"><input type="checkbox" id="bulk-sc-select-all" onclick="const checked = this.checked; event.stopPropagation(); document.querySelectorAll('.scenario-checkbox').forEach(cb => cb.checked = checked);" /></th>
               <th>Scenario Name</th>
-              <th>Description & Review Comments</th>
-              <th>Priority</th>
+              <th>Requirement</th>
+              <th>Score</th>
+              <th>Scenario Type</th>
               <th>Status</th>
-              <th style="text-align: right; width: 180px;">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -243,39 +379,23 @@ export const Components = {
       const notes = notesMap[tc.id] || [];
       const notesHtml = notes.map(n => `
         <div style="font-size: 0.75rem; background-color: var(--bg-primary); padding: 4px 8px; border-radius: 4px; margin-top: 4px; border-left: 2px solid var(--accent-primary); color: var(--text-secondary);">
-          💬 <strong>Note:</strong> ${escapeHTML(n)}
+          💬 <strong>Note:</strong> ${renderMarkup(n)}
         </div>
       `).join('');
       
       return `
-        <tr id="tc-row-${tc.id}">
-          <td><input type="checkbox" class="tc-checkbox" data-id="${tc.id}" /></td>
-          <td style="font-weight: 600; min-width: 150px;">
-            <div class="tc-title-text" id="tc-title-txt-${tc.id}">${escapeHTML(tc.title)}</div>
-            <input type="text" class="form-control" id="tc-title-in-${tc.id}" value="${escapeHTML(tc.title)}" style="display: none; padding: 4px 8px; font-size: 0.85rem;" />
-          </td>
-          <td style="color: var(--text-secondary); min-width: 250px;">
-            <div class="tc-steps-text" id="tc-steps-txt-${tc.id}">
-              ${tc.steps.map((s, idx) => `<div>${idx + 1}. ${escapeHTML(s)}</div>`).join('')}
+        <tr style="cursor: pointer;" onclick="window.toggleTestCaseRow('${tc.id}')">
+          <td onclick="event.stopPropagation();"><input type="checkbox" class="tc-checkbox" data-id="${tc.id}" /></td>
+          <td style="font-weight: 600; min-width: 200px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="tc-caret-${tc.id}" style="display: inline-block; transition: transform var(--transition-fast); transform: rotate(0deg); color: var(--text-secondary);">▶</span>
+              <span class="tc-title-text" id="tc-title-txt-${tc.id}">${escapeHTML(tc.title)}</span>
             </div>
-            <textarea class="form-control" id="tc-steps-in-${tc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem; width: 100%; min-height: 80px;">${escapeHTML(tc.steps.join('\n'))}</textarea>
-            
-            <!-- Comment Section -->
-            <div style="margin-top: 10px;">
-              ${notesHtml}
-              <div style="margin-top: 6px; display: flex; gap: 8px; align-items: center;">
-                <input type="text" class="form-control" id="tc-note-add-in-${tc.id}" placeholder="Attach note..." style="padding: 4px 8px; font-size: 0.75rem; flex-grow: 1;" />
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="if(document.getElementById('tc-note-add-in-${tc.id}').value.trim()) { window._testCaseActions.onAddNote('${tc.id}', document.getElementById('tc-note-add-in-${tc.id}').value); document.getElementById('tc-note-add-in-${tc.id}').value=''; }">Add Note</button>
-              </div>
-            </div>
-          </td>
-          <td style="min-width: 180px;">
-            <div class="tc-expected-text" id="tc-expected-txt-${tc.id}">${escapeHTML(tc.expected_result)}</div>
-            <textarea class="form-control" id="tc-expected-in-${tc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem; width: 100%; min-height: 50px;">${escapeHTML(tc.expected_result)}</textarea>
+            <input type="text" class="form-control" id="tc-title-in-${tc.id}" value="${escapeHTML(tc.title)}" style="display: none; padding: 4px 8px; font-size: 0.85rem;" onclick="event.stopPropagation();" />
           </td>
           <td>
             <div class="tc-status-text" id="tc-eval-status-txt-${tc.id}"><span class="badge ${badgeClass}">${escapeHTML(tc.evaluation_status)}</span></div>
-            <select class="form-control" id="tc-eval-status-in-${tc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem;">
+            <select class="form-control" id="tc-eval-status-in-${tc.id}" style="display: none; padding: 4px 8px; font-size: 0.85rem;" onclick="event.stopPropagation();">
               <option value="pending" ${tc.evaluation_status === 'pending' ? 'selected' : ''}>Pending</option>
               <option value="approved" ${tc.evaluation_status === 'approved' ? 'selected' : ''}>Approved</option>
               <option value="needs_review" ${tc.evaluation_status === 'needs_review' ? 'selected' : ''}>Needs Review</option>
@@ -287,40 +407,120 @@ export const Components = {
           </td>
           <td>
             <div class="tc-conf-text" id="tc-conf-txt-${tc.id}">${confidencePct}%</div>
-            <input type="number" step="0.01" min="0" max="1" class="form-control" id="tc-conf-in-${tc.id}" value="${tc.confidence}" style="display: none; padding: 4px 8px; font-size: 0.85rem; width: 70px;" />
+            <input type="number" step="0.01" min="0" max="1" class="form-control" id="tc-conf-in-${tc.id}" value="${tc.confidence}" style="display: none; padding: 4px 8px; font-size: 0.85rem; width: 70px;" onclick="event.stopPropagation();" />
           </td>
-          <td style="min-width: 140px;">
+          <td>
             ${tc.evaluation_status === 'approved' ? `
-              ${hasScript ? `
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="window._testCaseActions.onViewScript('${tc.id}')">Edit Script</button>
-              ` : `
-                <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="window._testCaseActions.onGenerateScript('${tc.id}', this)">Generate Script</button>
-              `}
-              <a href="javascript:void(0)" onclick="window._testCaseActions.onViewScript('${tc.id}')" style="display: block; font-size: 0.7rem; color: var(--accent-primary); margin-top: 4px; font-weight: 600; text-decoration: none;">→ Open in Playwright Workspace</a>
+              <span style="color: var(--color-success); font-weight: 600; font-size: 0.8rem;">✓ Approved</span>
+            ` : tc.evaluation_status === 'rejected' ? `
+              <span style="color: var(--color-danger); font-weight: 600; font-size: 0.8rem;">✖ Rejected</span>
             ` : `
-              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" disabled>Generate Script</button>
-              <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">Approve test case first</div>
+              <span style="color: var(--text-muted); font-size: 0.8rem;">Review Pending</span>
             `}
           </td>
-          <td style="text-align: right;">
-            <div class="cell-actions" id="tc-actions-view-${tc.id}">
-              <button class="btn-icon btn-icon-success" title="Approve" onclick="window._testCaseActions.onApprove('${tc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
-              </button>
-              <button class="btn-icon btn-icon-danger" title="Reject" onclick="window._testCaseActions.onReject('${tc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              <button class="btn-icon" title="Edit" onclick="document.getElementById('tc-title-txt-${tc.id}').style.display='none'; document.getElementById('tc-title-in-${tc.id}').style.display='block'; document.getElementById('tc-steps-txt-${tc.id}').style.display='none'; document.getElementById('tc-steps-in-${tc.id}').style.display='block'; document.getElementById('tc-expected-txt-${tc.id}').style.display='none'; document.getElementById('tc-expected-in-${tc.id}').style.display='block'; document.getElementById('tc-eval-status-txt-${tc.id}').style.display='none'; document.getElementById('tc-eval-status-in-${tc.id}').style.display='block'; document.getElementById('tc-conf-txt-${tc.id}').style.display='none'; document.getElementById('tc-conf-in-${tc.id}').style.display='block'; document.getElementById('tc-actions-view-${tc.id}').style.display='none'; document.getElementById('tc-actions-edit-${tc.id}').style.display='flex';">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-              </button>
-              <button class="btn-icon btn-icon-danger" title="Delete" onclick="window._testCaseActions.onDelete('${tc.id}')">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              </button>
-            </div>
-            
-            <div class="cell-actions" id="tc-actions-edit-${tc.id}" style="display: none;">
-              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="window._testCaseActions.onSave('${tc.id}', { title: document.getElementById('tc-title-in-${tc.id}').value, steps: document.getElementById('tc-steps-in-${tc.id}').value.split('\\n'), expected_result: document.getElementById('tc-expected-in-${tc.id}').value, evaluation_status: document.getElementById('tc-eval-status-in-${tc.id}').value, confidence: parseFloat(document.getElementById('tc-conf-in-${tc.id}').value) })">Save</button>
-              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="document.getElementById('tc-title-txt-${tc.id}').style.display='block'; document.getElementById('tc-title-in-${tc.id}').style.display='none'; document.getElementById('tc-steps-txt-${tc.id}').style.display='block'; document.getElementById('tc-steps-in-${tc.id}').style.display='none'; document.getElementById('tc-expected-txt-${tc.id}').style.display='block'; document.getElementById('tc-expected-in-${tc.id}').style.display='none'; document.getElementById('tc-eval-status-txt-${tc.id}').style.display='block'; document.getElementById('tc-eval-status-in-${tc.id}').style.display='none'; document.getElementById('tc-conf-txt-${tc.id}').style.display='block'; document.getElementById('tc-conf-in-${tc.id}').style.display='none'; document.getElementById('tc-actions-view-${tc.id}').style.display='flex'; document.getElementById('tc-actions-edit-${tc.id}').style.display='none';">Cancel</button>
+        </tr>
+
+        <tr id="tc-expanded-row-${tc.id}" style="display: none; background-color: rgba(255, 255, 255, 0.01);">
+          <td></td>
+          <td colspan="5" style="padding: 16px 24px; border-top: 1px dashed var(--border-color); border-bottom: 1px solid var(--border-color);">
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              
+              <!-- Preconditions -->
+              ${tc.preconditions && tc.preconditions.length > 0 ? `
+                <div>
+                  <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">Preconditions</h4>
+                  <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
+                    ${tc.preconditions.map(p => `• ${escapeHTML(p)}`).join('<br/>')}
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Steps -->
+              <div>
+                <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">Steps</h4>
+                <div class="tc-steps-text" id="tc-steps-txt-${tc.id}" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-secondary);">
+                  ${tc.steps.map((s, idx) => `<div>${idx + 1}. ${escapeHTML(s)}</div>`).join('')}
+                </div>
+                <textarea class="form-control" id="tc-steps-in-${tc.id}" style="display: none; padding: 8px; font-size: 0.85rem; width: 100%; min-height: 100px;">${escapeHTML(tc.steps.join('\n'))}</textarea>
+              </div>
+
+              <!-- Expected Result -->
+              <div>
+                <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">Expected Result</h4>
+                <div class="tc-expected-text" id="tc-expected-txt-${tc.id}" style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">${escapeHTML(tc.expected_result)}</div>
+                <textarea class="form-control" id="tc-expected-in-${tc.id}" style="display: none; padding: 8px; font-size: 0.85rem; width: 100%; min-height: 60px;">${escapeHTML(tc.expected_result)}</textarea>
+              </div>
+
+              <!-- Playwright Script / JIRA Integration -->
+              <div style="border-top: 1px solid var(--border-color); padding-top: 12px; display: flex; gap: 32px; flex-wrap: wrap;">
+                <div>
+                  <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">Playwright Automation Script</h4>
+                  <div style="display: flex; align-items: center; gap: 12px;" onclick="event.stopPropagation();">
+                    ${tc.evaluation_status === 'approved' ? `
+                      ${hasScript ? `
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._testCaseActions.onViewScript('${tc.id}')">Edit Script</button>
+                      ` : `
+                        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._testCaseActions.onGenerateScript('${tc.id}', this)">Generate Script</button>
+                      `}
+                      <a href="javascript:void(0)" onclick="window._testCaseActions.onViewScript('${tc.id}')" style="font-size: 0.8rem; color: var(--accent-primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center;">Open in Playwright Workspace →</a>
+                    ` : `
+                      <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" disabled>Generate Script</button>
+                      <span style="font-size: 0.75rem; color: var(--text-muted);">Approve test case to enable script generation</span>
+                    `}
+                  </div>
+                </div>
+                <div>
+                  <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.5px;">JIRA Defect Trace</h4>
+                  <div style="font-size: 0.85rem;" onclick="event.stopPropagation();">
+                    ${tc.jira_issue_key ? `
+                      <a href="${escapeHTML(tc.jira_issue_url)}" target="_blank" style="color: var(--color-danger); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                        🐞 ${escapeHTML(tc.jira_issue_key)}
+                      </a>
+                      <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 6px;">(${escapeHTML(tc.jira_sync_status)})</span>
+                    ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">No open defects</span>`}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Comment Section -->
+              <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                <h5 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Review Comments</h5>
+                <div id="tc-notes-container-${tc.id}">
+                  ${notesHtml}
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation();">
+                  <input type="text" class="form-control" id="tc-note-add-in-${tc.id}" placeholder="Attach note..." style="padding: 6px 12px; font-size: 0.8rem; flex-grow: 1;" />
+                  <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="if(document.getElementById('tc-note-add-in-${tc.id}').value.trim()) { window._testCaseActions.onAddNote('${tc.id}', document.getElementById('tc-note-add-in-${tc.id}').value); document.getElementById('tc-note-add-in-${tc.id}').value=''; }">Add Note</button>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px;" onclick="event.stopPropagation();">
+                <!-- Action buttons (visible if NOT approved) -->
+                <div class="cell-actions" id="tc-actions-view-${tc.id}" style="display: flex; gap: 8px;">
+                  ${tc.evaluation_status === 'approved' ? '' : `
+                    <button class="btn btn-secondary btn-icon-success" title="Approve" onclick="window._testCaseActions.onApprove('${tc.id}')" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg> Approve
+                    </button>
+                    <button class="btn btn-secondary btn-icon-danger" title="Reject" onclick="window._testCaseActions.onReject('${tc.id}')" style="padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg> Reject
+                    </button>
+                  `}
+                  <button class="btn btn-secondary" title="Edit" onclick="document.getElementById('tc-title-txt-${tc.id}').style.display='none'; document.getElementById('tc-title-in-${tc.id}').style.display='block'; document.getElementById('tc-steps-txt-${tc.id}').style.display='none'; document.getElementById('tc-steps-in-${tc.id}').style.display='block'; document.getElementById('tc-expected-txt-${tc.id}').style.display='none'; document.getElementById('tc-expected-in-${tc.id}').style.display='block'; document.getElementById('tc-eval-status-txt-${tc.id}').style.display='none'; document.getElementById('tc-eval-status-in-${tc.id}').style.display='block'; document.getElementById('tc-conf-txt-${tc.id}').style.display='none'; document.getElementById('tc-conf-in-${tc.id}').style.display='block'; document.getElementById('tc-actions-view-${tc.id}').style.display='none'; document.getElementById('tc-actions-edit-${tc.id}').style.display='flex';" style="padding: 6px 12px;">
+                    Edit
+                  </button>
+                  <button class="btn btn-secondary btn-icon-danger" title="Delete" onclick="window._testCaseActions.onDelete('${tc.id}')" style="padding: 6px 12px;">
+                    Delete
+                  </button>
+                </div>
+                
+                <!-- Save/Cancel buttons when in edit mode -->
+                <div class="cell-actions" id="tc-actions-edit-${tc.id}" style="display: none; gap: 8px;">
+                  <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._testCaseActions.onSave('${tc.id}', { title: document.getElementById('tc-title-in-${tc.id}').value, steps: document.getElementById('tc-steps-in-${tc.id}').value.split('\\n'), expected_result: document.getElementById('tc-expected-in-${tc.id}').value, evaluation_status: document.getElementById('tc-eval-status-in-${tc.id}').value, confidence: parseFloat(document.getElementById('tc-conf-in-${tc.id}').value) })">Save</button>
+                  <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="document.getElementById('tc-title-txt-${tc.id}').style.display='block'; document.getElementById('tc-title-in-${tc.id}').style.display='none'; document.getElementById('tc-steps-txt-${tc.id}').style.display='block'; document.getElementById('tc-steps-in-${tc.id}').style.display='none'; document.getElementById('tc-expected-txt-${tc.id}').style.display='block'; document.getElementById('tc-expected-in-${tc.id}').style.display='none'; document.getElementById('tc-eval-status-txt-${tc.id}').style.display='block'; document.getElementById('tc-eval-status-in-${tc.id}').style.display='none'; document.getElementById('tc-conf-txt-${tc.id}').style.display='block'; document.getElementById('tc-conf-in-${tc.id}').style.display='none'; document.getElementById('tc-actions-view-${tc.id}').style.display='flex'; document.getElementById('tc-actions-edit-${tc.id}').style.display='none';">Cancel</button>
+                </div>
+              </div>
+
             </div>
           </td>
         </tr>
@@ -334,13 +534,10 @@ export const Components = {
             <tr>
               <th style="width: 40px;"><input type="checkbox" id="bulk-tc-select-all" onclick="const checked = this.checked; document.querySelectorAll('.tc-checkbox').forEach(cb => cb.checked = checked);" /></th>
               <th>Test Case Title</th>
-              <th>Steps & Comments</th>
-              <th>Expected Result</th>
               <th>Evaluation Status</th>
               <th>Run Status</th>
               <th>Confidence</th>
-              <th>Script</th>
-              <th style="text-align: right; width: 140px;">Actions</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>

@@ -18,6 +18,7 @@ export default function ExecutionDetailPage() {
   const [execution, setExecution] = useState<Execution | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'results' | 'browser' | 'timeline' | 'artifacts'>('results');
+  const [isRerunning, setIsRerunning] = useState(false);
 
   const fetchExecution = useCallback(async () => {
     try {
@@ -108,6 +109,43 @@ export default function ExecutionDetailPage() {
   const isRunning = execution.metadata.status === 'running';
   const isPaused = execution.metadata.status === 'paused';
 
+  const handleRerun = async () => {
+    if (!execution || !execution.script) {
+      alert("Execution script is not available to rerun. Rerun can only be triggered for active workspace runs.");
+      return;
+    }
+    setIsRerunning(true);
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          script: execution.script,
+          projectId: execution.metadata.projectId,
+          requirementId: execution.metadata.requirementId,
+          scenarioIds: execution.metadata.scenarioIds,
+          testCaseIds: execution.metadata.testCaseIds,
+          browser: execution.metadata.browser || 'chromium',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        router.push(`/execution/${data.executionId}`);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        alert(`Failed to rerun test execution: ${errData.error || response.statusText}`);
+      }
+    } catch (error: any) {
+      console.error('[ExecutionDetail] Rerun error:', error);
+      alert(`Error rerunning execution: ${error.message}`);
+    } finally {
+      setIsRerunning(false);
+    }
+  };
+
   const handleStatusChange = async (action: string) => {
     try {
       const response = await fetch(`/api/status?id=${executionId}&action=${action}`, {
@@ -130,7 +168,15 @@ export default function ExecutionDetailPage() {
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
-              onClick={() => router.push('/')}
+              onClick={() => {
+                const projectId = execution.metadata.projectId;
+                const testCaseId = execution.metadata.testCaseIds?.[0];
+                if (projectId && testCaseId) {
+                  router.push(`/?project_id=${projectId}&test_case_id=${testCaseId}`);
+                } else {
+                  router.push('/');
+                }
+              }}
               className="text-muted-foreground"
             >
               <ChevronLeft className="w-5 h-5 text-foreground" />
@@ -142,15 +188,24 @@ export default function ExecutionDetailPage() {
               </p>
             </div>
           </div>
-          <a
-            href={`/api/artifacts/${executionId}/report`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white"
-          >
-            <Download className="w-4 h-4" />
-            Report
-          </a>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleRerun}
+              disabled={isRerunning || !execution?.script}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-2"
+            >
+              🔄 {isRerunning ? 'Rerunning...' : 'Rerun'}
+            </Button>
+            <a
+              href={`/api/artifacts/${executionId}/report`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 border border-slate-600 rounded-lg text-white font-semibold"
+            >
+              <Download className="w-4 h-4" />
+              Report
+            </a>
+          </div>
         </div>
 
         {/* Metadata */}
@@ -175,7 +230,9 @@ export default function ExecutionDetailPage() {
           </div>
           <div className="bg-card rounded-lg p-4 border border-border shadow-sm">
             <p className="text-muted-foreground text-sm">Browser</p>
-            <p className="text-lg font-semibold text-foreground capitalize">{execution.metadata.browser}</p>
+            <p className="text-lg font-semibold text-foreground capitalize">
+              {execution.metadata.browser} {execution.metadata.browserVersion ? `(${execution.metadata.browserVersion})` : ''}
+            </p>
           </div>
         </div>
 
@@ -203,11 +260,7 @@ export default function ExecutionDetailPage() {
               status={execution.metadata.status as any}
               duration={execution.metadata.duration || 0}
               screenshots={execution.artifacts?.screenshots || []}
-              timelineEvents={(execution.timeline || []).map((evt: any) => ({
-                event: evt.event || '',
-                time: evt.timestamp || 0,
-                type: evt.type,
-              }))}
+              timeline={execution.timeline || []}
               executionId={executionId}
             />
           )}

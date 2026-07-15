@@ -16,6 +16,8 @@ class Project(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="")
     line_of_business: str = Field(default="general")
+    framework: str = Field(default="playwright")
+    jira_project_key: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     requirements: list[UUID] = Field(default_factory=list)
 

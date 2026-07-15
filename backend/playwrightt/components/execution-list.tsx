@@ -10,6 +10,7 @@ interface ExecutionListProps {
   queue: string[];
   current: string | null;
   onStatusChange: (executionId: string, action: string) => void;
+  onRerun?: (script: string) => void;
 }
 
 function getStatusColor(status: ExecutionStatus): string {
@@ -42,6 +43,7 @@ export function ExecutionList({
   queue,
   current,
   onStatusChange,
+  onRerun,
 }: ExecutionListProps) {
   const router = useRouter();
 
@@ -78,68 +80,88 @@ export function ExecutionList({
             ) : (
               executions.map((execution) => (
                 <tr
-                  key={execution.metadata.executionId}
+                  key={execution?.metadata?.executionId || Math.random().toString()}
                   className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
-                  onClick={() =>
-                    router.push(`/execution/${execution.metadata.executionId}`)
-                  }
+                  onClick={() => {
+                    if (execution?.metadata?.executionId) {
+                      router.push(`/execution/${execution.metadata.executionId}`);
+                    }
+                  }}
                 >
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {execution.metadata.executionId.slice(0, 8)}...
+                    {execution?.metadata?.executionId ? `${execution.metadata.executionId.slice(0, 8)}...` : 'unknown'}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                        execution.metadata.status
+                        execution?.metadata?.status || 'queued'
                       )}`}
                     >
-                      {execution.metadata.status}
+                      {execution?.metadata?.status || 'queued'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-foreground">
-                    {formatDuration(execution.metadata.duration)}
+                    {formatDuration(execution?.metadata?.duration)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {new Date(execution.metadata.started).toLocaleTimeString()}
+                    {execution?.metadata?.started ? new Date(execution.metadata.started).toLocaleTimeString() : '-'}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div
                       className="flex gap-2 justify-end"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {execution.metadata.status === 'running' && (
+                      {execution?.metadata?.status === 'running' && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() =>
-                            onStatusChange(execution.metadata.executionId, 'pause')
-                          }
+                          onClick={() => {
+                            if (execution?.metadata?.executionId) {
+                              onStatusChange(execution.metadata.executionId, 'pause');
+                            }
+                          }}
                         >
                           <Pause className="w-4 h-4 text-foreground" />
                         </Button>
                       )}
-                      {execution.metadata.status === 'paused' && (
+                      {execution?.metadata?.status === 'paused' && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() =>
-                            onStatusChange(execution.metadata.executionId, 'resume')
-                          }
+                          onClick={() => {
+                            if (execution?.metadata?.executionId) {
+                              onStatusChange(execution.metadata.executionId, 'resume');
+                            }
+                          }}
                         >
                           <Play className="w-4 h-4 text-foreground" />
                         </Button>
                       )}
-                      {(execution.metadata.status === 'running' ||
-                        execution.metadata.status === 'paused' ||
-                        execution.metadata.status === 'queued') && (
+                      {(execution?.metadata?.status === 'running' ||
+                        execution?.metadata?.status === 'paused' ||
+                        execution?.metadata?.status === 'queued') && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() =>
-                            onStatusChange(execution.metadata.executionId, 'stop')
-                          }
+                          onClick={() => {
+                            if (execution?.metadata?.executionId) {
+                              onStatusChange(execution.metadata.executionId, 'stop');
+                            }
+                          }}
                         >
                           <X className="w-4 h-4 text-foreground" />
+                        </Button>
+                      )}
+                      {(execution?.metadata?.status === 'completed' ||
+                        execution?.metadata?.status === 'failed' ||
+                        execution?.metadata?.status === 'stopped') && onRerun && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onRerun(execution.script)}
+                          title="Rerun Execution"
+                        >
+                          <RotateCw className="w-4 h-4 text-foreground" />
                         </Button>
                       )}
                     </div>
