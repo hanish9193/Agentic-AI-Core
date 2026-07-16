@@ -9,6 +9,7 @@ class RequirementCreate(BaseModel):
     description: str
     priority: str = "medium"
     business_domain: str = "general"
+    release_id: UUID | None = None
 
 
 class RequirementResponse(BaseModel):
@@ -27,3 +28,4 @@ class RequirementResponse(BaseModel):
     jira_issue_url: str | None = None
     jira_sync_status: str | None = None
     jira_last_synced_at: datetime | None = None
+    release_id: UUID | None = None

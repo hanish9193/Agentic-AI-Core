@@ -94,23 +94,66 @@ class PlaywrightAgent(BaseAgent):
 
         # Resolve project framework via repository
         framework = "playwright"
+        target_url = None
+        target_username = None
+        target_password = None
+
         if self.repo and state.requirement:
-            raw = self.repo._read_raw()
-            req_id_str = str(state.requirement.id)
-            for proj in raw.get("projects", []):
-                if req_id_str in proj.get("requirements", []):
-                    framework = proj.get("framework", "playwright")
+            req_id = state.requirement.id
+            projects = self.repo.list_projects()
+            target_proj = None
+            for proj in projects:
+                if req_id in proj.requirements:
+                    target_proj = proj
+                    framework = proj.framework or "playwright"
                     break
+            
+            if target_proj:
+                target_url = target_proj.target_url
+                target_username = target_proj.target_username
+                if target_proj.target_password_enc:
+                    from backend.utils.crypto import decrypt_value
+                    target_password = decrypt_value(target_proj.target_password_enc)
 
         for test_case in approved:
-            test_case.playwright_script = self._generate_script(test_case, framework)
+            test_case.playwright_script = self._generate_script(test_case, framework, target_url, target_username, target_password)
 
         state.add_log(f"{self.name} finished: generated {len(approved)} {framework.capitalize()} script(s)")
         return state
 
-    def _generate_script(self, test_case: TestCase, framework: str = "playwright") -> str:
+    def _generate_script(self, test_case: TestCase, framework: str = "playwright", target_url: str | None = None, target_username: str | None = None, target_password: str | None = None) -> str:
+        import os
+        import json
         settings = get_settings()
-        base_url = settings.playwright.base_url
+        base_url = target_url or settings.playwright.base_url
+
+        # Override framework if configured at test case level
+        if getattr(test_case, "automation_framework", None):
+            framework = test_case.automation_framework.lower()
+
+        framework_context_str = "None specified"
+        if "imported" in framework or "existing" in framework:
+            # Locate and load the imported POM classes index
+            # Look up project directory path from test case scenario requirement
+            project_id_str = None
+            if self.repo:
+                scenario = self.repo.get_scenario(test_case.scenario_id)
+                if scenario:
+                    req_id = scenario.requirement_id
+                    projects = self.repo.list_projects()
+                    for proj in projects:
+                        if req_id in proj.requirements:
+                            project_id_str = str(proj.id)
+                            break
+            if project_id_str:
+                pom_path = os.path.join("data", "projects", project_id_str, "pom_index.json")
+                if os.path.exists(pom_path):
+                    try:
+                        with open(pom_path, "r", encoding="utf-8") as f:
+                            pom_data = json.load(f)
+                            framework_context_str = json.dumps(pom_data, indent=2)
+                    except Exception:
+                        pass
 
         if framework == "selenium":
             system_prompt = (
@@ -123,8 +166,19 @@ class PlaywrightAgent(BaseAgent):
                 preconditions=_format_preconditions(test_case.preconditions),
                 steps=_format_steps(test_case.steps),
                 expected_result=test_case.expected_result,
-                base_url=base_url
+                base_url=base_url,
+                framework_context=framework_context_str
             )
+            if target_username and target_password:
+                prompt += (
+                    f"\n\nAt the start of the test, after navigating to the base URL, you MUST log in. "
+                    f"Load the credentials securely from environment variables at the top of the test code block: "
+                    f"import os\n"
+                    f"BASE_URL = os.environ.get('TARGET_URL', '{base_url}')\n"
+                    f"USERNAME = os.environ.get('TARGET_USERNAME', 'default_username')\n"
+                    f"PASSWORD = os.environ.get('TARGET_PASSWORD', 'default_password')\n"
+                    f"Navigate to BASE_URL. Type USERNAME into the username field, PASSWORD into the password field, and click login before proceeding with rest of steps."
+                )
             prompt += "\n\nWrite this test case using Selenium Python with pytest instead of Playwright."
         elif framework == "cucumber":
             system_prompt = (
@@ -138,8 +192,14 @@ class PlaywrightAgent(BaseAgent):
                 preconditions=_format_preconditions(test_case.preconditions),
                 steps=_format_steps(test_case.steps),
                 expected_result=test_case.expected_result,
-                base_url=base_url
+                base_url=base_url,
+                framework_context=framework_context_str
             )
+            if target_username and target_password:
+                prompt += (
+                    f"\n\nAt the start of the test, after navigating to the base URL, you MUST log in. "
+                    f"Retrieve the username and password from environment variables `TARGET_USERNAME` and `TARGET_PASSWORD` in your behave steps."
+                )
             prompt += "\n\nWrite this test case using Gherkin feature syntax and Python step definitions instead of Playwright."
         else:
             system_prompt = _SYSTEM_PROMPT
@@ -149,8 +209,18 @@ class PlaywrightAgent(BaseAgent):
                 preconditions=_format_preconditions(test_case.preconditions),
                 steps=_format_steps(test_case.steps),
                 expected_result=test_case.expected_result,
-                base_url=base_url
+                base_url=base_url,
+                framework_context=framework_context_str
             )
+            if target_username and target_password:
+                prompt += (
+                    f"\n\nAt the start of the test, after navigating to the base URL, you MUST log in. "
+                    f"Load the credentials securely from environment variables at the top of the test code block: "
+                    f"const BASE_URL = process.env.TARGET_URL || '{base_url}';\n"
+                    f"const USERNAME = process.env.TARGET_USERNAME || 'default_username';\n"
+                    f"const PASSWORD = process.env.TARGET_PASSWORD || 'default_password';\n"
+                    f"Navigate to BASE_URL. Type USERNAME into the username field, PASSWORD into the password field, and click login before proceeding with rest of steps."
+                )
 
         raw_output = self.llm_service.generate(system=system_prompt, user=prompt)
         code = _strip_code_fences(raw_output)

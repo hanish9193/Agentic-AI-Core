@@ -16,6 +16,7 @@ export interface ExecutionMetadata {
   requirementId?: string;
   scenarioIds?: string[];
   testCaseIds?: string[];
+  testCycleId?: string;
   browser: string;
   browserVersion?: string;
   status: ExecutionStatus;
@@ -60,6 +61,7 @@ class ExecutionQueueManager {
         requirementId: metadata?.requirementId,
         scenarioIds: metadata?.scenarioIds,
         testCaseIds: metadata?.testCaseIds,
+        testCycleId: metadata?.testCycleId,
         browser: metadata?.browser || 'chromium',
         status: 'queued',
         started: now,

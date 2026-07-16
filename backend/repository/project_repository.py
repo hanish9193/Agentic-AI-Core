@@ -10,6 +10,8 @@ from backend.models.scenario import Scenario
 from backend.models.test_case import TestCase
 from backend.models.document import Document
 from backend.models.execution_result import ExecutionResult
+from backend.models.release import Release
+from backend.models.test_cycle import TestCycle
 
 STORE_PATH = Path(__file__).parent.parent / "database" / "project_store.json"
 
@@ -24,7 +26,7 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
-    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None) -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None, target_url: str | None = "https://adactinhotelapp.com/", target_username: str | None = None, target_password_enc: str | None = None) -> Project:
         pass
 
     @abstractmethod
@@ -50,7 +52,8 @@ class ProjectRepository(ABC):
         attachments: list[str] | None = None,
         original_filename: str | None = None,
         requirement_id: str | None = None,
-        requirement_title: str | None = None
+        requirement_title: str | None = None,
+        release_id: UUID | None = None
     ) -> Requirement:
         pass
 
@@ -180,6 +183,44 @@ class ProjectRepository(ABC):
     def save_report(self, project_id: UUID, execution_id: UUID, report_payload: dict) -> dict:
         pass
 
+    @abstractmethod
+    def list_releases(self, project_id: UUID) -> list[Release]:
+        pass
+
+    @abstractmethod
+    def create_release(self, project_id: UUID, name: str, description: str | None = None, status: str = "Active", start_date: datetime | None = None, end_date: datetime | None = None) -> Release:
+        pass
+
+    @abstractmethod
+    def get_release(self, release_id: UUID) -> Release | None:
+        pass
+
+    @abstractmethod
+    def list_test_cycles(self, release_id: UUID) -> list[TestCycle]:
+        pass
+
+    @abstractmethod
+    def create_test_cycle(self, release_id: UUID, name: str, description: str | None = None, status: str = "Active") -> TestCycle:
+        pass
+
+    @abstractmethod
+    def get_test_cycle(self, cycle_id: UUID) -> TestCycle | None:
+        pass
+
+    def get_scenarios_for_project(self, project_id: UUID) -> list[Scenario]:
+        reqs = self.get_requirements(project_id)
+        scs = []
+        for r in reqs:
+            scs.extend(self.get_scenarios(r.id))
+        return scs
+
+    def get_test_cases_for_project(self, project_id: UUID) -> list[TestCase]:
+        scs = self.get_scenarios_for_project(project_id)
+        tcs = []
+        for s in scs:
+            tcs.extend(self.get_test_cases(s.id))
+        return tcs
+
 
 class JSONProjectRepository(ProjectRepository):
     def __init__(self, file_path: Path = STORE_PATH):
@@ -197,13 +238,20 @@ class JSONProjectRepository(ProjectRepository):
                 "documents": {},
                 "execution_results": {},
                 "scenario_notes": {},
-                "test_case_notes": {}
+                "test_case_notes": {},
+                "releases": {},
+                "test_cycles": {}
             })
 
     def _read_raw(self) -> dict:
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                raw = json.load(f)
+            if "releases" not in raw:
+                raw["releases"] = {}
+            if "test_cycles" not in raw:
+                raw["test_cycles"] = {}
+            return raw
         except json.JSONDecodeError as jde:
             print(f"[ERROR] JSON decode error reading {self.file_path}: {jde}")
             if self.file_path.exists() and self.file_path.stat().st_size > 0:
@@ -216,15 +264,28 @@ class JSONProjectRepository(ProjectRepository):
                 "documents": {},
                 "execution_results": {},
                 "scenario_notes": {},
-                "test_case_notes": {}
+                "test_case_notes": {},
+                "releases": {},
+                "test_cycles": {}
             }
         except Exception as e:
             print(f"[ERROR] Failed to read {self.file_path}: {e}")
             raise e
 
     def _write_raw(self, data: dict) -> None:
-        with open(self.file_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, default=str)
+        import os
+        temp_path = self.file_path.with_suffix(".tmp")
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str)
+            os.replace(temp_path, self.file_path)
+        except Exception as e:
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
+            raise e
 
     def list_projects(self, include_deleted: bool = False) -> list[Project]:
         raw = self._read_raw()
@@ -241,7 +302,7 @@ class JSONProjectRepository(ProjectRepository):
                 return p
         return None
 
-    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None) -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None, target_url: str | None = "https://adactinhotelapp.com/", target_username: str | None = None, target_password_enc: str | None = None) -> Project:
         raw = self._read_raw()
         project = Project(
             id=uuid4(),
@@ -250,6 +311,9 @@ class JSONProjectRepository(ProjectRepository):
             line_of_business=line_of_business,
             framework=framework,
             jira_project_key=jira_project_key,
+            target_url=target_url,
+            target_username=target_username,
+            target_password_enc=target_password_enc,
             created_at=datetime.now(timezone.utc),
             requirements=[]
         )
@@ -361,7 +425,8 @@ class JSONProjectRepository(ProjectRepository):
         attachments: list[str] | None = None,
         original_filename: str | None = None,
         requirement_id: str | None = None,
-        requirement_title: str | None = None
+        requirement_title: str | None = None,
+        release_id: UUID | None = None
     ) -> Requirement:
         raw = self._read_raw()
         projects = raw.setdefault("projects", [])
@@ -383,7 +448,8 @@ class JSONProjectRepository(ProjectRepository):
             uploaded_at=datetime.now(timezone.utc),
             original_filename=original_filename,
             requirement_id=requirement_id,
-            requirement_title=requirement_title
+            requirement_title=requirement_title,
+            release_id=release_id
         )
         
         req_dump = req.model_dump(mode="json")
@@ -681,6 +747,70 @@ class JSONProjectRepository(ProjectRepository):
         reports_raw[report_id] = payload
         self._write_raw(raw)
         return payload
+
+    def list_releases(self, project_id: UUID) -> list[Release]:
+        raw = self._read_raw()
+        releases_raw = raw.get("releases", {})
+        results = []
+        for r_id_str, r_data in releases_raw.items():
+            if r_data.get("project_id") == str(project_id):
+                results.append(Release.model_validate(r_data))
+        return results
+
+    def create_release(self, project_id: UUID, name: str, description: str | None = None, status: str = "Active", start_date: datetime | None = None, end_date: datetime | None = None) -> Release:
+        raw = self._read_raw()
+        releases_raw = raw.setdefault("releases", {})
+        release = Release(
+            id=uuid4(),
+            project_id=project_id,
+            name=name,
+            description=description,
+            status=status,
+            start_date=start_date,
+            end_date=end_date
+        )
+        releases_raw[str(release.id)] = release.model_dump(mode="json")
+        self._write_raw(raw)
+        return release
+
+    def get_release(self, release_id: UUID) -> Release | None:
+        raw = self._read_raw()
+        releases_raw = raw.get("releases", {})
+        r_data = releases_raw.get(str(release_id))
+        if r_data:
+            return Release.model_validate(r_data)
+        return None
+
+    def list_test_cycles(self, release_id: UUID) -> list[TestCycle]:
+        raw = self._read_raw()
+        cycles_raw = raw.get("test_cycles", {})
+        results = []
+        for c_id_str, c_data in cycles_raw.items():
+            if c_data.get("release_id") == str(release_id):
+                results.append(TestCycle.model_validate(c_data))
+        return results
+
+    def create_test_cycle(self, release_id: UUID, name: str, description: str | None = None, status: str = "Active") -> TestCycle:
+        raw = self._read_raw()
+        cycles_raw = raw.setdefault("test_cycles", {})
+        cycle = TestCycle(
+            id=uuid4(),
+            release_id=release_id,
+            name=name,
+            description=description,
+            status=status
+        )
+        cycles_raw[str(cycle.id)] = cycle.model_dump(mode="json")
+        self._write_raw(raw)
+        return cycle
+
+    def get_test_cycle(self, cycle_id: UUID) -> TestCycle | None:
+        raw = self._read_raw()
+        cycles_raw = raw.get("test_cycles", {})
+        c_data = cycles_raw.get(str(cycle_id))
+        if c_data:
+            return TestCycle.model_validate(c_data)
+        return None
 
 
 class RepositoryProvider:

@@ -25,8 +25,11 @@ class ProjectService:
     def get_project(self, project_id: UUID) -> Project | None:
         return self.repo.get_project(project_id)
 
-    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright") -> Project:
-        return self.repo.create_project(name, description, line_of_business, framework)
+    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None, target_url: str | None = "https://adactinhotelapp.com/", target_username: str | None = None, target_password_enc: str | None = None) -> Project:
+        return self.repo.create_project(
+            name, description, line_of_business, framework, jira_project_key,
+            target_url, target_username, target_password_enc
+        )
 
     def get_requirements(self, project_id: UUID) -> list[Requirement]:
         return self.repo.get_requirements(project_id)
@@ -41,11 +44,12 @@ class ProjectService:
         attachments: list[str] | None = None,
         original_filename: str | None = None,
         requirement_id: str | None = None,
-        requirement_title: str | None = None
+        requirement_title: str | None = None,
+        release_id: UUID | None = None
     ) -> Requirement:
         return self.repo.create_requirement(
             project_id, title, description, priority, business_domain, attachments,
-            original_filename, requirement_id, requirement_title
+            original_filename, requirement_id, requirement_title, release_id
         )
 
     def save_requirement(
@@ -61,11 +65,7 @@ class ProjectService:
         return self.repo.get_scenarios(requirement_id)
 
     def get_scenarios_for_project(self, project_id: UUID) -> list[Scenario]:
-        requirements = self.get_requirements(project_id)
-        scenarios = []
-        for req in requirements:
-            scenarios.extend(self.get_scenarios_for_requirement(req.id))
-        return scenarios
+        return self.repo.get_scenarios_for_project(project_id)
 
     def update_scenario(
         self,
@@ -127,11 +127,7 @@ class ProjectService:
         return self.repo.get_test_cases(scenario_id)
 
     def get_test_cases_for_project(self, project_id: UUID) -> list[TestCase]:
-        scenarios = self.get_scenarios_for_project(project_id)
-        test_cases = []
-        for sc in scenarios:
-            test_cases.extend(self.get_test_cases_for_scenario(sc.id))
-        return test_cases
+        return self.repo.get_test_cases_for_project(project_id)
 
     def get_test_case(self, test_case_id: UUID) -> TestCase | None:
         return self.repo.get_test_case(test_case_id)
@@ -247,6 +243,143 @@ class ProjectService:
     def get_execution_result(self, project_id: UUID, execution_id: UUID) -> ExecutionResult | None:
         return self.repo.get_execution_result(project_id, execution_id)
 
+    def parse_swagger_spec(self, file_bytes: bytes, filename: str) -> list[dict]:
+        import json
+        parsed_blocks = []
+        try:
+            content_str = file_bytes.decode("utf-8", errors="ignore")
+            data = None
+            if filename.endswith(".json"):
+                data = json.loads(content_str)
+            elif filename.endswith((".yaml", ".yml")):
+                try:
+                    import yaml
+                    data = yaml.safe_load(content_str)
+                except ImportError:
+                    pass
+            
+            if data and isinstance(data, dict) and "paths" in data:
+                paths = data.get("paths", {})
+                idx = 1
+                for path, methods in paths.items():
+                    for method, details in methods.items():
+                        if method.lower() not in ["get", "post", "put", "delete", "patch", "options", "head"]:
+                            continue
+                        
+                        summary = details.get("summary") or details.get("description") or f"API Endpoint {method.upper()} {path}"
+                        description = f"API Endpoint: {method.upper()} {path}\nSummary: {summary}\n"
+                        
+                        req_body = details.get("requestBody")
+                        if req_body:
+                            description += f"Request Body: {json.dumps(req_body)}\n"
+                        responses = details.get("responses")
+                        if responses:
+                            description += f"Responses: {json.dumps(responses)}\n"
+                            
+                        parsed_blocks.append({
+                            "requirement_id": f"API-{idx:03d}",
+                            "title": f"API: {method.upper()} {path}",
+                            "description": description,
+                            "priority": "medium",
+                            "business_domain": "API Automation",
+                            "requirement_title": f"{method.upper()} {path}"
+                        })
+                        idx += 1
+        except Exception as e:
+            print(f"[ERROR] Failed to parse Swagger/OpenAPI spec: {e}")
+        return parsed_blocks
+
+    def parse_postman_collection(self, file_bytes: bytes, filename: str) -> list[dict]:
+        import json
+        parsed_blocks = []
+        try:
+            content_str = file_bytes.decode("utf-8", errors="ignore")
+            data = json.loads(content_str)
+            
+            is_postman = False
+            if isinstance(data, dict):
+                info = data.get("info", {})
+                schema = info.get("schema", "") if isinstance(info, dict) else ""
+                if "postman" in schema or "item" in data:
+                    is_postman = True
+            
+            if not is_postman:
+                return []
+                
+            collection_name = data.get("info", {}).get("name", "Postman Collection") if isinstance(data.get("info"), dict) else "Postman Collection"
+            
+            def extract_requests(items, folder_path=""):
+                if not isinstance(items, list):
+                    return
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    name = item.get("name", "Request")
+                    current_path = f"{folder_path}/{name}" if folder_path else name
+                    
+                    if "item" in item:
+                        extract_requests(item["item"], current_path)
+                    elif "request" in item:
+                        req = item.get("request")
+                        if not isinstance(req, dict):
+                            if isinstance(req, str):
+                                req = {"url": req, "method": "GET"}
+                            else:
+                                continue
+                        
+                        method = req.get("method", "GET")
+                        url_info = req.get("url", "")
+                        url_str = ""
+                        if isinstance(url_info, dict):
+                            url_str = url_info.get("raw", "")
+                        elif isinstance(url_info, str):
+                            url_str = url_info
+                            
+                        desc = req.get("description") or f"Execute API Request: {method} {url_str}"
+                        if isinstance(desc, dict):
+                            desc = desc.get("content", "")
+                        
+                        body_str = ""
+                        body_info = req.get("body")
+                        if isinstance(body_info, dict):
+                            mode = body_info.get("mode")
+                            if mode == "raw":
+                                body_str = body_info.get("raw", "")
+                            elif mode in ["formdata", "urlencoded"]:
+                                params = body_info.get(mode, [])
+                                if isinstance(params, list):
+                                    body_str = json.dumps({p.get("key"): p.get("value") for p in params if isinstance(p, dict)})
+                                    
+                        headers = req.get("header", [])
+                        headers_str = ""
+                        if isinstance(headers, list):
+                            headers_str = json.dumps({h.get("key"): h.get("value") for h in headers if isinstance(h, dict)})
+                            
+                        full_description = (
+                            f"Postman Ingestion Source\n"
+                            f"Collection: {collection_name}\n"
+                            f"Path: {current_path}\n"
+                            f"Method: {method}\n"
+                            f"URL: {url_str}\n"
+                            f"Headers: {headers_str}\n"
+                            f"Body: {body_str}\n\n"
+                            f"Description:\n{desc}"
+                        )
+                        
+                        parsed_blocks.append({
+                            "requirement_id": f"PM-{len(parsed_blocks) + 1:03d}",
+                            "title": f"API Request: {name}",
+                            "description": full_description,
+                            "priority": "medium",
+                            "business_domain": "API Ingestion",
+                            "requirement_title": f"{method} {name}"
+                        })
+            
+            extract_requests(data.get("item", []))
+        except Exception as e:
+            print(f"[ERROR] Failed to parse Postman collection: {e}")
+        return parsed_blocks
+
     def parse_requirements_from_file(self, filename: str, file_bytes: bytes) -> list[dict]:
         import re
         import io
@@ -259,7 +392,16 @@ class ProjectService:
         ext = Path(filename).suffix.lower()
         parsed_blocks = []
 
-        if ext in [".xlsx", ".xls"]:
+        if ext in [".json", ".yaml", ".yml"]:
+            # First try Postman collection format
+            parsed_blocks = self.parse_postman_collection(file_bytes, filename)
+            if not parsed_blocks:
+                # Fallback to Swagger/OpenAPI spec
+                parsed_blocks = self.parse_swagger_spec(file_bytes, filename)
+            if not parsed_blocks:
+                text = file_bytes.decode("utf-8", errors="ignore")
+                parsed_blocks = self._parse_requirements_from_text(text, filename)
+        elif ext in [".xlsx", ".xls"]:
             df = pd.read_excel(io.BytesIO(file_bytes))
             cols = {col.lower().replace(" ", "").replace("_", ""): col for col in df.columns}
             

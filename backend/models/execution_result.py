@@ -35,3 +35,17 @@ class ExecutionResult(BaseModel):
     trace_path: str | None = None
     browser_version: str | None = None
     executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    test_cycle_id: UUID | None = None
+    timeline: list[dict] | None = None
+    screenshots: list[str] | None = None
+    # Triage and Analysis Fields (populated by ExecutionAnalysisAgent)
+    failure_category: str | None = None
+    root_cause_summary: str | None = None
+    trace_analysis: str | None = None
+    screenshot_findings: str | None = None
+    suggest_retry: bool | None = None
+    retest_pending_candidate: bool | None = None
+
+    # Jira Bug Link (populated by DefectManagementAgent)
+    jira_bug_id: str | None = None
+    jira_bug_url: str | None = None

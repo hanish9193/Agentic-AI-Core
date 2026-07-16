@@ -21,11 +21,15 @@ every other test case that hadn't run yet - the batch should keep going
 and report what happened to each one individually.
 """
 
+import datetime
+from uuid import uuid4
 from backend.agents.base import BaseAgent
 from backend.models.execution_result import ExecutionResult, ExecutionStatus
 from backend.models.state import WorkflowState
 from backend.models.test_case import TestCase, TestCaseStatus
 from backend.services.playwright_runner import PlaywrightRunner, PlaywrightRunnerError
+from backend.models.batch_context import BatchContext, QueueItem
+from backend.services.batch_queue_manager import BatchQueueManager
 
 _STATUS_MAP = {
     "passed": TestCaseStatus.PASSED,
@@ -53,34 +57,80 @@ class ExecutionAgent(BaseAgent):
 
         state.add_log(f"{self.name} started")
 
-        for test_case in runnable:
-            state.execution_results.append(self._execute(test_case))
+        # Compile queue items
+        queue = []
+        for i, tc in enumerate(runnable):
+            required_state = "LOGIN"
+            title_lower = tc.title.lower()
+            if "search" in title_lower:
+                required_state = "SEARCH"
+            elif "select" in title_lower or "result" in title_lower:
+                required_state = "RESULTS"
+            elif "book" in title_lower:
+                required_state = "BOOKING"
+            elif "confirm" in title_lower:
+                required_state = "CONFIRMATION"
+
+            item = QueueItem(
+                task_id=f"TASK-{i+1}",
+                requirement_id=state.requirement.id,
+                testcase_id=tc.id,
+                required_state=required_state,
+                playwright_script=tc.playwright_script,
+                dataset_row=i,
+                priority=1,
+                estimated_duration=30.0,
+                status="queued"
+            )
+            queue.append(item)
+
+        # Initialize BatchContext
+        batch_id = f"BATCH-{datetime.date.today().strftime('%Y%m%d')}-{int(datetime.datetime.now().timestamp()) % 1000:03d}"
+        context = BatchContext(
+            batch_id=batch_id,
+            project_id=uuid4(),
+            queue=queue
+        )
+
+        # Execute using the queue manager
+        qm = BatchQueueManager(runner=self.runner, on_log=self.on_log)
+        result_context = qm.run_batch(context)
+
+        # Adapt result_context back to workflow state
+        for item in result_context.queue:
+            tc = next((t for t in runnable if t.id == item.testcase_id), None)
+            if not tc:
+                continue
+
+            tc.status = _STATUS_MAP.get(item.status, TestCaseStatus.BLOCKED)
+
+            artifacts = result_context.artifacts.get(item.task_id, {})
+            screenshot_path = artifacts["screenshots"][0]["path"] if artifacts.get("screenshots") else None
+            video_path = artifacts.get("video")
+            trace_path = artifacts.get("trace")
+
+            error_message = item.error_message
+            if not error_message and item.status in ["failed", "error"]:
+                error_message = "Test execution failed."
+
+            # Extract first trace/video/screenshot path
+            res = ExecutionResult(
+                test_case_id=tc.id,
+                status=ExecutionStatus(item.status) if item.status in ["passed", "failed"] else ExecutionStatus.ERROR,
+                duration_seconds=item.duration,
+                error_message=error_message,
+                screenshot_path=screenshot_path,
+                video_path=video_path,
+                trace_path=trace_path
+            )
+            # Attach timeline & console logs to the raw payload of ExecutionResult
+            res._raw_payload = {
+                "timeline": artifacts.get("timeline", []),
+                "logs": artifacts.get("logs", []),
+                "console": artifacts.get("console", [])
+            }
+            state.execution_results.append(res)
 
         passed = sum(1 for r in state.execution_results[-len(runnable):] if r.status == ExecutionStatus.PASSED)
         state.add_log(f"{self.name} finished: {passed}/{len(runnable)} passed")
-        return state
-
-    def _execute(self, test_case: TestCase) -> ExecutionResult:
-        try:
-            try:
-                raw = self.runner.run(test_case.playwright_script, run_id=str(test_case.id), on_log=self.on_log)
-            except TypeError as exc:
-                if "unexpected keyword argument 'on_log'" in str(exc) or "got an unexpected keyword argument" in str(exc):
-                    raw = self.runner.run(test_case.playwright_script, run_id=str(test_case.id))
-                else:
-                    raise
-        except PlaywrightRunnerError as exc:
-            test_case.status = TestCaseStatus.BLOCKED
-            return ExecutionResult(test_case_id=test_case.id, status=ExecutionStatus.ERROR, error_message=str(exc))
-
-        test_case.status = _STATUS_MAP.get(raw.status, TestCaseStatus.BLOCKED)
-
-        return ExecutionResult(
-            test_case_id=test_case.id,
-            status=ExecutionStatus(raw.status),
-            duration_seconds=raw.duration_seconds,
-            error_message=raw.error_message,
-            screenshot_path=raw.screenshot_path,
-            video_path=raw.video_path,
-            trace_path=raw.trace_path,
-        )
+        return state

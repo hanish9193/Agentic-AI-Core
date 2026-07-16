@@ -11,8 +11,8 @@ client = TestClient(app)
 @pytest.fixture(scope="module")
 def setup_db():
     db = SessionLocal()
-    # Seeder has already run in on_startup when we initialized the test client,
-    # but we will fetch the seeded users and roles to test with them.
+    from backend.database.db_seeder import seed_database
+    seed_database(db)
     yield db
     db.close()
 

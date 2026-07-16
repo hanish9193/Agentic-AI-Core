@@ -50,7 +50,7 @@ from typing import Callable
 
 from pydantic import BaseModel
 
-ARTIFACTS_ROOT = Path(__file__).parent.parent / "playwright" / "artifacts"
+ARTIFACTS_ROOT = Path(__file__).parent.parent / "playwrightt" / "artifacts"
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 _IS_WINDOWS = platform.system() == "Windows"
@@ -67,9 +67,15 @@ _CONFIG_TEMPLATE = """\
 import {{ defineConfig }} from '@playwright/test';
 export default defineConfig({{
   use: {{
+    headless: {headless_js},
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    {storage_state_config}
   }},
+  reporter: [
+    ['line'],
+    ['json', {{ outputFile: 'report.json' }}]
+  ],
   outputDir: '{output_dir}',
   timeout: {timeout_ms},
 }});
@@ -122,7 +128,15 @@ class PlaywrightRunner:
     def __init__(self, timeout_seconds: int = 60):
         self.timeout_seconds = timeout_seconds
 
-    def run(self, script: str, run_id: str, on_log: Callable[[str], None] | None = None) -> PlaywrightRunResult:
+    def run(
+        self,
+        script: str,
+        run_id: str,
+        on_log: Callable[[str], None] | None = None,
+        storage_state_path: str | None = None,
+        project_id: str | None = None,
+        headless: bool | None = None
+    ) -> PlaywrightRunResult:
         npx = shutil.which("npx")
         if npx is None:
             raise PlaywrightRunnerError(
@@ -130,6 +144,14 @@ class PlaywrightRunner:
                 "and @playwright/test must be installed in this project "
                 "(npm install --save-dev @playwright/test)."
             )
+
+        # Resolve headless configuration dynamically from settings
+        if headless is None:
+            try:
+                from backend.config.settings import get_settings
+                headless = get_settings().playwright.headless
+            except Exception:
+                headless = True
 
         run_dir = ARTIFACTS_ROOT / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -141,15 +163,52 @@ class PlaywrightRunner:
             except OSError:
                 pass
 
-        (run_dir / "test.spec.ts").write_text(script)
+        spec_content = script
+        if storage_state_path:
+            escaped_state_path = storage_state_path.replace("\\", "/")
+            spec_content += f"\n\ntest.afterEach(async ({{ page }}) => {{\n  try {{\n    await page.context().storageState({{ path: '{escaped_state_path}' }});\n  }} catch (e) {{\n    console.error('Failed to save storage state:', e);\n  }}\n}});\n"
+        
+        (run_dir / "test.spec.ts").write_text(spec_content)
         config_path = run_dir / "playwright.config.ts"
+
+        storage_state_config = ""
+        if storage_state_path and os.path.exists(storage_state_path):
+            escaped_path = storage_state_path.replace("\\", "/")
+            storage_state_config = f"storageState: '{escaped_path}',"
+
         config_path.write_text(
-            _CONFIG_TEMPLATE.format(output_dir=str(run_dir / "test-results"), timeout_ms=self.timeout_seconds * 1000)
+            _CONFIG_TEMPLATE.format(
+                output_dir=str(run_dir / "test-results").replace("\\", "/"),
+                timeout_ms=self.timeout_seconds * 1000,
+                storage_state_config=storage_state_config,
+                headless_js="true" if headless else "false"
+            )
         )
 
         hard_timeout = self.timeout_seconds + 15
-        args = [npx, "playwright", "test", "--config", str(config_path), "--reporter=line,json=report.json", "--trace=on"]
-        popen_kwargs = {"cwd": run_dir, "stdout": subprocess.PIPE, "stderr": subprocess.STDOUT, "text": True}
+        args = [npx, "playwright", "test", "--config", str(config_path), "--trace=on"]
+        
+        # Load vault credentials into child process environment
+        child_env = os.environ.copy()
+        if project_id:
+            try:
+                from backend.services.vault_service import VaultService
+                username, password = VaultService().get_credentials(project_id)
+                if username:
+                    child_env["TARGET_USERNAME"] = username
+                if password:
+                    child_env["TARGET_PASSWORD"] = password
+            except Exception as e:
+                if on_log:
+                    on_log(f"[Warning] Failed to load credentials from vault: {e}")
+
+        popen_kwargs = {
+            "cwd": Path(__file__).parent.parent / "playwrightt",
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "env": child_env
+        }
         if _IS_WINDOWS:
             popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:

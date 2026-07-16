@@ -83,7 +83,7 @@ class EvaluationConfig(BaseModel):
 
 
 class PlaywrightConfig(BaseModel):
-    base_url: str = "https://sampleapp.tricentis.com/101/app.php"
+    base_url: str = "https://adactinhotelapp.com/"
     browser: str = "chromium"
     headless: bool = True
     timeout: int = 60

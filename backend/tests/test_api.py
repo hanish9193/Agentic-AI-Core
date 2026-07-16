@@ -288,3 +288,105 @@ def test_create_project_empty_description_validation(client):
     response = client.post("/api/v1/projects", json={"name": "Missing Desc Proj"})
     assert response.status_code == 422
 
+
+def test_postman_ingestion(client):
+    # 1. Setup project
+    response = client.post("/api/v1/projects", json={"name": "Postman Proj", "description": "Postman project description"})
+    proj_id = response.json()["id"]
+
+    # 2. Upload dummy Postman collection JSON
+    postman_data = {
+        "info": {
+            "name": "Dummy Collection",
+            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+        },
+        "item": [
+            {
+                "name": "Auth",
+                "item": [
+                    {
+                        "name": "Login User",
+                        "request": {
+                            "method": "POST",
+                            "header": [
+                                {"key": "Content-Type", "value": "application/json"}
+                            ],
+                            "body": {
+                                "mode": "raw",
+                                "raw": '{"username": "user", "password": "pwd"}'
+                            },
+                            "url": {
+                                "raw": "https://api.test.com/login"
+                            },
+                            "description": "Log in to retrieve bearer token."
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    
+    import json
+    file_content = json.dumps(postman_data).encode("utf-8")
+    
+    response = client.post(
+        f"/api/v1/projects/{proj_id}/requirements/import",
+        files={"file": ("collection.json", file_content, "application/json")}
+    )
+    assert response.status_code == 200
+    reqs = response.json()
+    assert len(reqs) == 1
+    assert reqs[0]["title"] == "API Request: Login User"
+    assert "Postman Ingestion Source" in reqs[0]["description"]
+    assert "https://api.test.com/login" in reqs[0]["description"]
+    assert "Log in to retrieve bearer token." in reqs[0]["description"]
+
+
+def test_batch_execution_endpoints(client):
+    # 1. Setup project
+    response = client.post("/api/v1/projects", json={"name": "Batch API Proj", "description": "Batch API project"})
+    assert response.status_code == 201
+    proj_id = response.json()["id"]
+
+    # 2. Setup requirement and testcase
+    from backend.repository.project_repository import get_project_repository
+    from backend.models.scenario import Scenario
+    from backend.models.test_case import TestCase
+    from uuid import uuid4
+
+    repo = get_project_repository()
+    sc_id = uuid4()
+    scenario = Scenario(id=sc_id, requirement_id=uuid4(), scenario_name="API Scenario", description="desc", approved=True)
+    repo.save_scenarios([scenario])
+
+    tc_id = uuid4()
+    tc = TestCase(
+        id=tc_id, 
+        scenario_id=sc_id, 
+        title="API Test Case", 
+        steps=["Step 1"], 
+        expected_result="Done", 
+        evaluation_status="approved", 
+        confidence=1.0,
+        playwright_script="await page.goto('https://google.com');"
+    )
+    repo.save_test_cases([tc])
+
+    # 3. Trigger batch execution
+    response = client.post(
+        f"/api/v1/projects/{proj_id}/batches/execute",
+        json=[str(tc_id)]
+    )
+    assert response.status_code == 200
+    res = response.json()
+    assert res["status"] == "started"
+    assert "batch_id" in res
+    batch_id = res["batch_id"]
+
+    # 4. Read stream connection event
+    response = client.get(f"/api/v1/projects/{proj_id}/batches/{batch_id}/stream")
+    assert response.status_code == 200
+    assert "Connecting" in response.text
+
+
+

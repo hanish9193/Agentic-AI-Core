@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Testcase" tests="2" failures="0" errors="1" time="0.0"><testcase name="TestCase_fda8340e-3024-4c28-b531-61e538f649f6" classname="PlaywrightTests" time="0.0"><error message="Execution Error">SyntaxError: await is only valid in async functions and the top level bodies of modules</error></testcase></testsuite></testsuites>

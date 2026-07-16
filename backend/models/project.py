@@ -18,6 +18,9 @@ class Project(BaseModel):
     line_of_business: str = Field(default="general")
     framework: str = Field(default="playwright")
     jira_project_key: str | None = None
+    target_url: str | None = "https://adactinhotelapp.com/"
+    target_username: str | None = None
+    target_password_enc: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     requirements: list[UUID] = Field(default_factory=list)
 

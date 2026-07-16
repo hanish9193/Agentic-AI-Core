@@ -9,6 +9,8 @@ from backend.agents.playwright_agent import PlaywrightAgent
 from backend.agents.execution_agent import ExecutionAgent
 from backend.models.execution_result import ExecutionResult
 from backend.models.requirement import Requirement
+from backend.agents.execution_analysis_agent import ExecutionAnalysisAgent
+from backend.agents.defect_management_agent import DefectManagementAgent
 from backend.repository.project_repository import get_project_repository
 
 
@@ -127,7 +129,7 @@ class WorkflowService:
         # Persist generated test cases
         self.repo.save_test_cases(final_state.generated_test_cases)
         return final_state.generated_test_cases
-    def generate_playwright_script(self, project_id: UUID, test_case_id: UUID) -> TestCase:
+    def generate_playwright_script(self, project_id: UUID, test_case_id: UUID, automation_framework: str = "Playwright") -> TestCase:
         test_case = self.repo.get_test_case(test_case_id)
         if not test_case:
             raise ValueError(f"TestCase {test_case_id} not found")
@@ -144,17 +146,33 @@ class WorkflowService:
         if test_case.evaluation_status != "approved":
             raise ValueError("Playwright script generation rejected: Test case is not approved")
 
-        # New LangGraph-based Orchestration:
-        from backend.graph.workflow import build_graph
-        from backend.models.operation import WorkflowOperation
-        
-        local_graph = build_graph(playwright_agent=PlaywrightAgent(repo=self.repo))
+        # Classify the automation pathway using QA Automation Orchestrator
+        from backend.agents.automation_orchestrator_agent import QAAutomationOrchestratorAgent
+        test_case.automation_framework = automation_framework
         state = WorkflowState(
             requirement=requirement,
             generated_test_cases=[test_case],
             human_approved_test_case_ids=[test_case.id]
         )
-        state.add_log("Generating Playwright script from service via LangGraph")
+        orchestrator = QAAutomationOrchestratorAgent()
+        state = orchestrator.run(state)
+        classified_tc = state.generated_test_cases[0]
+
+        if classified_tc.execution_type == "Manual Testing":
+            classified_tc.playwright_script = (
+                f"// Manual Execution Pathway\n"
+                f"// Framework: {automation_framework}\n"
+                f"// Steps to perform:\n" +
+                "\n".join(f"// - {step}" for step in classified_tc.steps)
+            )
+            self.repo.save_test_cases([classified_tc])
+            return classified_tc
+
+        # New LangGraph-based Orchestration:
+        from backend.graph.workflow import build_graph
+        from backend.models.operation import WorkflowOperation
+        
+        local_graph = build_graph(playwright_agent=PlaywrightAgent(repo=self.repo))
         
         config = {
             "configurable": {
@@ -189,7 +207,8 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
         })
 
     try:
-        log_event("Generating", "Generating execution runner environment", "Initiating process group for Playwright...")
+        log_event("Queued", "Queued in runner pipeline", "Waiting for runner slot allocation...")
+        log_event("Preparing Environment", "Preparing execution runner environment", "Initiating process group for Playwright...")
         
         test_case = workflow_service.repo.get_test_case(test_case_id)
         if not test_case:
@@ -228,7 +247,6 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
                 desc = timeline_match.group(2).strip() if timeline_match.group(2) else ""
                 timeline_msg = f"{title}: {desc}" if desc else title
             
-            # Scan for newly created screenshots
             screenshot_file = None
             try:
                 run_dir = ARTIFACTS_ROOT / tc_id_str
@@ -245,12 +263,26 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
 
             log_event("Running", timeline_msg, log_line, screenshot=screenshot_file)
 
+        class LoggingExecutionAnalysisAgent(ExecutionAnalysisAgent):
+            def run(self, state: WorkflowState) -> WorkflowState:
+                log_event("Execution Analysis", "Analyzing execution failure", "Identifying root cause and flakiness...")
+                return super().run(state)
+
+        class LoggingDefectManagementAgent(DefectManagementAgent):
+            def run(self, state: WorkflowState) -> WorkflowState:
+                log_event("Jira Sync", "Checking Jira duplicates", "Searching or raising defect tickets...")
+                return super().run(state)
+
         # New LangGraph-based Orchestration:
         from backend.graph.workflow import build_graph
         from backend.models.operation import WorkflowOperation
         
         exec_agent = ExecutionAgent(on_log=on_log_callback)
-        local_graph = build_graph(execution_agent=exec_agent)
+        local_graph = build_graph(
+            execution_agent=exec_agent,
+            execution_analysis_agent=LoggingExecutionAnalysisAgent(),
+            defect_management_agent=LoggingDefectManagementAgent()
+        )
         
         config = {"configurable": {"operation": WorkflowOperation.EXECUTE}}
         raw_result = local_graph.invoke(state, config)
@@ -269,8 +301,7 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
         report_service = ReportService(workflow_service.repo)
         report_service.compile_reports(project_id, result)
         
-        log_event("Capturing Screenshots", "Capturing run artifacts", "Collecting trace.zip and screenshot logs...")
-        log_event("Collecting Trace", "Finalizing execution report", "Exporting JUnit XML and JSON report format...")
+        log_event("Reporting", "Finalizing execution report", "Exporting JUnit XML and JSON report format...")
         
         log_event(
             "Completed", 
@@ -282,7 +313,11 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
                 "status": result.status.value,
                 "screenshot": result.screenshot_path,
                 "video": result.video_path,
-                "trace": result.trace_path
+                "trace": result.trace_path,
+                "failure_category": result.failure_category,
+                "root_cause_summary": result.root_cause_summary,
+                "jira_bug_id": result.jira_bug_id,
+                "jira_bug_url": result.jira_bug_url
             }
         )
     except Exception as exc:

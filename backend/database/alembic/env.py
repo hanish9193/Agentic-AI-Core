@@ -9,6 +9,8 @@ from backend.database.db_models import Base
 
 settings = get_settings()
 db_url = settings.repository.database_url
+if settings.repository.provider == "json" or "sqlite" in db_url:
+    db_url = "sqlite:///./backend/database/local_fallback.db"
 
 config = context.config
 

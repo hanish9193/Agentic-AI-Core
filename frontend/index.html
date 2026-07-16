@@ -89,7 +89,7 @@
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        Playwright
+        Test Automation
       </div>
 
       <div class="nav-item" data-view="executions">
@@ -134,6 +134,14 @@
         <select id="project-select" class="project-dropdown">
           <option value="" disabled selected>▼ Select Project</option>
         </select>
+        <select id="release-select" class="project-dropdown" style="width: 130px; display: none;">
+          <option value="" disabled selected>▼ Select Release</option>
+          <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create Release</option>
+        </select>
+        <select id="cycle-select" class="project-dropdown" style="width: 130px; display: none;">
+          <option value="" disabled selected>▼ Select Cycle</option>
+          <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create Cycle</option>
+        </select>
         <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; margin-left: 8px;">Framework:</span>
         <select id="project-framework-select" class="form-control" style="width: 120px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
           <option value="playwright">Playwright</option>
@@ -169,6 +177,9 @@
     <!-- Main Workspace Container -->
     <div class="workspace" id="workspace-container">
       
+      <!-- VIEW: Project Start -->
+      <div class="view-panel" id="project-start-view"></div>
+
       <!-- VIEW: Dashboard -->
       <div class="view-panel active" id="dashboard-view">
         
@@ -185,6 +196,12 @@
               <span>Last Execution: <strong id="dashboard-last-exec-lbl" style="color: var(--text-primary);">Today 09:35 AM</strong></span>
             </div>
           </div>
+        </div>
+
+        <div class="dashboard-scope-tabs" style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <button id="btn-db-scope-project" class="tab-btn active" onclick="window.switchDashboardScope('project')" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 6px 16px; font-weight: 600; font-size: 0.85rem; border-bottom: 2px solid var(--accent-primary); border-radius: 0;">Project Overview</button>
+          <button id="btn-db-scope-release" class="tab-btn" onclick="window.switchDashboardScope('release')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 16px; font-weight: 500; font-size: 0.85rem; border-radius: 0;">Release Scope</button>
+          <button id="btn-db-scope-cycle" class="tab-btn" onclick="window.switchDashboardScope('cycle')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 16px; font-weight: 500; font-size: 0.85rem; border-radius: 0;">Cycle Scope</button>
         </div>
 
         <!-- Row 1: KPI Cards -->
@@ -333,7 +350,11 @@
       <div class="view-panel" id="requirements-view">
         <div class="page-header">
           <h1>Requirements</h1>
-          <div class="gap-12">
+          <div class="gap-12" style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: var(--border-radius); overflow: hidden; height: 38px;">
+              <input type="text" id="jira-story-key-input" placeholder="JIRA Story Key (e.g. QA-101)" style="border: none; padding: 0 12px; font-size: 0.85rem; background: var(--bg-secondary); color: var(--text-primary); outline: none; width: 220px; height: 100%;" />
+              <button class="btn btn-primary" id="btn-import-jira-story" style="border: none; border-radius: 0; height: 100%; display: flex; align-items: center; padding: 0 16px; font-size: 0.85rem;">Import JIRA Story</button>
+            </div>
             <button class="btn btn-secondary" onclick="document.getElementById('import-req-file').click()">Import Requirement File</button>
             <input type="file" id="import-req-file" style="display: none;" accept=".xlsx,.xls,.pdf,.docx,.doc,.txt" />
           </div>
@@ -406,8 +427,9 @@
           <!-- Loaded dynamically -->
         </div>
 
-        <div id="testcase-bulk-script-container" style="display: none; margin-top: 24px; text-align: right;">
-          <button class="btn btn-primary" id="btn-generate-all-scripts" style="padding: 10px 20px; font-size: 0.9rem;">⚡ Generate Playwright Scripts for All Approved Test Cases</button>
+        <div id="testcase-bulk-script-container" style="display: none; margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+          <button class="btn btn-primary" id="btn-generate-all-scripts" style="padding: 10px 20px; font-size: 0.9rem;">Generate Playwright Scripts for All Approved Test Cases</button>
+          <button class="btn btn-primary" id="btn-run-selected-batch" style="padding: 10px 20px; font-size: 0.9rem; background-color: var(--color-success); border-color: var(--color-success);">Run Selected Batch</button>
         </div>
       </div>
 
@@ -458,9 +480,9 @@
       <!-- VIEW: Playwright Workspace -->
       <div class="view-panel" id="playwright-view">
         <div class="page-header">
-          <h1>Playwright Workspace</h1>
+          <h1>Test Automation Workspace</h1>
         </div>
-        <p class="page-description">Author, edit, and run automated script executions in the dedicated Playwright Workspace.</p>
+        <p class="page-description">Author, edit, and run automated script executions in the dedicated Test Automation Workspace.</p>
         
         <div style="display: flex; justify-content: center; align-items: center; min-height: 400px; padding: 20px;">
           <div class="metric-card" style="max-width: 500px; text-align: center; padding: 40px; display: flex; flex-direction: column; align-items: center; gap: 20px;">
@@ -469,12 +491,12 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
             </div>
-            <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--text-primary);">Playwright Execution Subsystem</h2>
+            <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--text-primary);">Test Automation Execution Subsystem</h2>
             <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin: 0;">
               Execute browser automation scripts with real-time browser preview, interactive timelines, console logs, and video/trace collection.
             </p>
             <button class="btn btn-primary" id="btn-launch-playwright-workspace" style="padding: 12px 24px; font-size: 0.95rem; margin-top: 8px;">
-              Open Playwright Workspace
+              Open Test Automation Workspace
             </button>
           </div>
         </div>
@@ -486,7 +508,7 @@
           <h1>Execution Workspace Observer</h1>
           <button class="btn btn-secondary" onclick="window.location.hash = '#/executions'">Back to History</button>
         </div>
-        <p class="page-description" id="obs-title-desc">Monitoring Playwright automation stream in real-time. Survives page refreshes.</p>
+        <p class="page-description" id="obs-title-desc">Monitoring test automation stream in real-time. Survives page refreshes.</p>
         <div id="execution-observer-body">
           <!-- 5-panels layout loaded dynamically -->
         </div>
@@ -497,7 +519,7 @@
         <div class="page-header">
           <h1>Executions History</h1>
         </div>
-        <p class="page-description">Chronological log of Playwright automation executions, statuses, timing parameters, and test replays.</p>
+        <p class="page-description">Chronological log of test automation executions, statuses, timing parameters, and test replays.</p>
         <div id="executions-list-container">
           <!-- Table loaded dynamically -->
         </div>
@@ -552,10 +574,11 @@
         </div>
         
         <div class="settings-tabs" style="display: flex; gap: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-          <button class="tab-btn active" onclick="switchSettingsTab('general')" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; border-bottom: 2px solid var(--accent-primary); position: relative; bottom: -9px;">General Settings</button>
-          <button class="tab-btn" onclick="switchSettingsTab('rbac')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px;">Access Rights (RBAC)</button>
-          <button class="tab-btn" onclick="switchSettingsTab('users')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px;">User Management</button>
-          <button class="tab-btn" onclick="switchSettingsTab('audit')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px;">Audit Logs</button>
+          <button class="tab-btn active" onclick="switchSettingsTab('general')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">General Settings</button>
+          <button class="tab-btn" onclick="switchSettingsTab('project')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Project Settings</button>
+          <button class="tab-btn" onclick="switchSettingsTab('rbac')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Access Rights (RBAC)</button>
+          <button class="tab-btn" onclick="switchSettingsTab('users')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">User Management</button>
+          <button class="tab-btn" onclick="switchSettingsTab('audit')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Audit Logs</button>
         </div>
 
         <!-- Tab 1: General Settings Form -->
@@ -635,7 +658,7 @@
                 </div>
                 
                 <div class="settings-section">
-                  <div class="settings-section-title">Playwright Browser Settings</div>
+                  <div class="settings-section-title">Test Automation Browser Settings</div>
                   <div class="form-group">
                     <label for="settings-browser-type">Browser Target</label>
                     <select id="settings-browser-type" class="form-control">
@@ -725,6 +748,32 @@
           </form>
         </div>
 
+        <!-- Tab 5: Project Settings (Target Application Credentials) -->
+        <div id="settings-tab-project" class="settings-tab-content">
+          <p class="page-description">Configure target URL and automation credentials for the currently selected project workspace.</p>
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 24px; max-width: 600px; margin: 0 auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <h2 style="font-size: 1.1rem; font-weight: 600;">Project Target Application Settings</h2>
+            </div>
+            
+            <form id="project-settings-form" onsubmit="saveProjectSettings(event)">
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label for="project-settings-url" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">Target Application Base URL</label>
+                <input type="text" id="project-settings-url" class="form-control" placeholder="https://adactinhotelapp.com" style="width: 100%;" required />
+              </div>
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label for="project-settings-username" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">Target Application Username</label>
+                <input type="text" id="project-settings-username" class="form-control" placeholder="e.g. adactin_user" style="width: 100%;" />
+              </div>
+              <div class="form-group" style="margin-bottom: 24px;">
+                <label for="project-settings-password" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">Target Application Password</label>
+                <input type="password" id="project-settings-password" class="form-control" placeholder="••••••••" style="width: 100%;" />
+              </div>
+              <button type="submit" class="btn btn-primary w-100" style="padding: 12px; font-weight: 600;">Save Project Settings</button>
+            </form>
+          </div>
+        </div>
+
         <!-- Tab 2: Access Rights (RBAC) -->
         <div id="settings-tab-rbac" class="settings-tab-content">
           <p class="page-description">Manage access permissions across different modules. Select checkboxes to assign permissions dynamically.</p>
@@ -792,7 +841,7 @@
           <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
               <h2 style="font-size: 1.1rem; font-weight: 600;">Operation Logs</h2>
-              <button class="btn btn-secondary" onclick="loadAuditLogsTab()">🔄 Refresh</button>
+              <button class="btn btn-secondary" onclick="loadAuditLogsTab()">Refresh</button>
             </div>
             <div class="table-container">
               <table class="custom-table">
@@ -854,18 +903,8 @@
             <input type="hidden" id="new-proj-lob" value="general">
           </div>
         </div>
-        <div class="form-group">
-          <label for="new-proj-framework">Automation Framework <span style="color: var(--color-danger);">*</span></label>
-          <select id="new-proj-framework" class="form-control">
-            <option value="playwright" selected>Playwright (TypeScript)</option>
-            <option value="selenium">Selenium (Python)</option>
-            <option value="cucumber">Cucumber (BDD - Gherkin)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="new-proj-jira-key">JIRA Project Key (Optional)</label>
-          <input type="text" id="new-proj-jira-key" class="form-control" placeholder="e.g. QA, PROJ" />
-        </div>
+        <input type="hidden" id="new-proj-framework" value="playwright" />
+        <input type="hidden" id="new-proj-jira-key" value="" />
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="closeModal('create-project-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Create Workspace</button>
@@ -932,7 +971,7 @@
   <div class="modal-overlay" id="script-workspace-modal">
     <div class="modal-container" style="width: 720px; max-width: 95%;">
       <div class="modal-header">
-        <h3>Playwright Automation script</h3>
+        <h3>Test Automation Script</h3>
         <button class="modal-close" onclick="closeModal('script-workspace-modal')">✕</button>
       </div>
       <div id="script-modal-workspace-body">
@@ -951,6 +990,69 @@
       <div id="execution-workspace-modal-body">
         <!-- Loaded dynamically -->
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Release -->
+  <div class="modal-overlay" id="create-release-modal">
+    <div class="modal-container" style="width: 440px; max-width: 95%;">
+      <div class="modal-header">
+        <h3>Create New Release</h3>
+        <button class="modal-close" onclick="closeModal('create-release-modal')">✕</button>
+      </div>
+      <form id="create-release-form">
+        <div class="form-group">
+          <label for="new-release-name">Release Name</label>
+          <input type="text" id="new-release-name" class="form-control" placeholder="e.g. Release 1.0" required />
+        </div>
+        <div class="form-group">
+          <label for="new-release-desc">Description</label>
+          <textarea id="new-release-desc" class="form-control" placeholder="Describe the release scope..." rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="new-release-status">Status</label>
+          <select id="new-release-status" class="form-control">
+            <option value="Active" selected>Active</option>
+            <option value="Planned">Planned</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('create-release-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Release</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Test Cycle -->
+  <div class="modal-overlay" id="create-cycle-modal">
+    <div class="modal-container" style="width: 440px; max-width: 95%;">
+      <div class="modal-header">
+        <h3>Create New Test Cycle</h3>
+        <button class="modal-close" onclick="closeModal('create-cycle-modal')">✕</button>
+      </div>
+      <form id="create-cycle-form">
+        <div class="form-group">
+          <label for="new-cycle-name">Test Cycle Name</label>
+          <input type="text" id="new-cycle-name" class="form-control" placeholder="e.g. Cycle 1" required />
+        </div>
+        <div class="form-group">
+          <label for="new-cycle-desc">Description</label>
+          <textarea id="new-cycle-desc" class="form-control" placeholder="Describe the cycle focus..." rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="new-cycle-status">Status</label>
+          <select id="new-cycle-status" class="form-control">
+            <option value="Active" selected>Active</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('create-cycle-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Cycle</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1019,6 +1121,6 @@
     </div>
   </div>
 
-  <script type="module" src="/js/app.js?v=2"></script>
+  <script type="module" src="/js/app.js?v=3"></script>
 </body>
 </html>

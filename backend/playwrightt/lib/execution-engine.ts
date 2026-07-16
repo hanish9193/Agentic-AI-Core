@@ -1,6 +1,9 @@
 import { chromium, firefox, webkit, Browser, Page } from 'playwright';
 import { executionQueue } from './execution-queue';
 import { wsManager } from './websocket-manager';
+import { ApplicationStateResolver } from './app-state-resolver';
+import { NavigationPlanner } from './navigation-planner';
+import { RecoveryManager } from './recovery-manager';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -14,7 +17,16 @@ interface ExecutionRunnerOptions {
 
 async function sendWebhook(projectId: string | undefined, payload: any) {
   const testCaseId = payload.test_case_id || (payload.timeline && payload.timeline[0]?.test_case_id);
-  console.log(`[Webhook DEBUG] sendWebhook invoked. projectId: "${projectId}", testCaseId: "${testCaseId}", event: "${payload.event}"`);
+  
+  // Automatically retrieve test_cycle_id from execution queue metadata
+  if (payload.execution_id) {
+    const execution = executionQueue.getExecution(payload.execution_id);
+    if (execution && execution.metadata.testCycleId) {
+      payload.test_cycle_id = execution.metadata.testCycleId;
+    }
+  }
+
+  console.log(`[Webhook DEBUG] sendWebhook invoked. projectId: "${projectId}", testCaseId: "${testCaseId}", event: "${payload.event}", testCycleId: "${payload.test_cycle_id}"`);
   
   if (!projectId || projectId === 'demo-project') {
     console.warn(`[Webhook DEBUG] Aborting webhook send because projectId is invalid: "${projectId}"`);
@@ -37,6 +49,11 @@ async function sendWebhook(projectId: string | undefined, payload: any) {
 }
 
 export class ExecutionEngine {
+  private static sharedBrowser: Browser | null = null;
+  private static sharedContext: any = null;
+  private static sharedPage: Page | null = null;
+  private static activeBrowserType: string | null = null;
+
   private browser: Browser | null = null;
   private page: Page | null = null;
   private screenshotInterval: NodeJS.Timeout | null = null;
@@ -84,6 +101,7 @@ export class ExecutionEngine {
     const screenshotDir = path.join(artifactDir, 'screenshots');
     const videoDir = path.join(artifactDir, 'video');
     const traceDir = path.join(artifactDir, 'trace');
+    const storageStatePath = path.join(process.cwd(), 'public', 'artifacts', projectId || 'default', 'storage_state.json');
 
     try {
       executionQueue.startExecution(executionId);
@@ -98,256 +116,419 @@ export class ExecutionEngine {
 
       // Create artifact directory
       await fs.mkdir(artifactDir, { recursive: true });
+      await fs.mkdir(path.dirname(storageStatePath), { recursive: true });
 
       await fs.mkdir(screenshotDir, { recursive: true });
       if (recordVideo) await fs.mkdir(videoDir, { recursive: true });
       if (recordTrace) await fs.mkdir(traceDir, { recursive: true });
 
-      // Launch browser
-      executionQueue.addTimelineEvent(executionId, 'Launching browser', 'info');
-      await sendWebhook(projectId, {
-        execution_id: executionId,
-        test_case_id: testCaseId,
-        event: 'updated',
-        status: 'running',
-        timeline_event: { event: 'Launching browser', type: 'info' }
-      });
+      let browser: Browser | null = null;
+      let context: any = null;
+      let page: Page | null = null;
 
-      wsManager.broadcast({
-        type: 'update',
-        executionId,
-        data: { status: 'launching_browser' },
-        timestamp: new Date().toISOString(),
-      });
+      let retryCount = 0;
+      let maxRetries = 2;
+      let success = false;
 
-      const launchOptions: any = {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      };
+      while (!success && retryCount <= maxRetries) {
+        try {
+          // ALWAYS create a fresh context and page for each execution to ensure strict test isolation
+          const currentBrowserType = execution.metadata.browser || 'chromium';
+          let isBrowserHealthy = false;
+          if (ExecutionEngine.sharedBrowser) {
+            try {
+              // Check browser version to verify health
+              await ExecutionEngine.sharedBrowser.version();
+              isBrowserHealthy = true;
+            } catch (e) {
+              isBrowserHealthy = false;
+            }
+          }
 
-      // In sandboxed environments, only chromium works
-      let browser;
-      try {
-        browser = await chromium.launch(launchOptions);
-        this.browser = browser;
-        const version = browser.version();
-        executionQueue.setBrowserVersion(executionId, version);
-      } catch (launchError: any) {
-        executionQueue.addTimelineEvent(executionId, `Browser launch failed: ${launchError.message}`, 'error');
-        await sendWebhook(projectId, {
-          execution_id: executionId,
-          test_case_id: testCaseId,
-          event: 'updated',
-          status: 'running',
-          timeline_event: { event: `Browser launch failed: ${launchError.message}`, type: 'error' }
-        });
-        throw launchError;
-      }
+          if (!isBrowserHealthy || !ExecutionEngine.sharedBrowser || ExecutionEngine.activeBrowserType !== currentBrowserType) {
+            if (ExecutionEngine.sharedBrowser) {
+              await ExecutionEngine.sharedBrowser.close().catch(() => {});
+            }
 
-      // Create context and page
-      const context = recordTrace
-        ? await browser.newContext({ recordVideo: recordVideo ? { dir: videoDir } : undefined })
-        : await browser.newContext();
-
-      if (recordTrace) {
-        await context.tracing.start({ screenshots: true, snapshots: true });
-      }
-
-      const page = await context.newPage();
-      this.page = page;
-
-      executionQueue.addTimelineEvent(executionId, 'Browser opened successfully', 'success');
-      await sendWebhook(projectId, {
-        execution_id: executionId,
-        test_case_id: testCaseId,
-        event: 'updated',
-        status: 'running',
-        timeline_event: { event: 'Browser opened successfully', type: 'success' }
-      });
-
-      wsManager.broadcast({
-        type: 'status',
-        executionId,
-        data: { status: 'running', currentEvent: 'Browser opened' },
-        timestamp: new Date().toISOString(),
-      });
-
-      // Start screenshot capture
-      this.startScreenshotCapture(executionId, page, screenshotDir);
-
-      const testPromises: Promise<void>[] = [];
-
-      // Setup console listener
-      page.on('console', (msg) => {
-        const text = `[${msg.type()}] ${msg.text()}`;
-        executionQueue.addConsole(executionId, text);
-        sendWebhook(projectId, {
-          execution_id: executionId,
-          test_case_id: testCaseId,
-          event: 'updated',
-          status: 'running',
-          log_line: text
-        });
-      });
-
-      // Setup error listener
-      page.on('pageerror', (err) => {
-        const text = `[error] ${err.message}`;
-        executionQueue.addConsole(executionId, text);
-        sendWebhook(projectId, {
-          execution_id: executionId,
-          test_case_id: testCaseId,
-          event: 'updated',
-          status: 'running',
-          log_line: text
-        });
-      });
-
-      // Create execution context with page utilities
-      const executionContext = {
-        page,
-        browser,
-        context,
-        screenshot: async (name?: string) => {
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-          const filename = `${name || 'screenshot'}-${timestamp}.png`;
-          const filepath = path.join(screenshotDir, filename);
-          await page.screenshot({ path: filepath });
-          executionQueue.addScreenshot(executionId, filename);
-
-          // Webhook update for screenshot capture
-          await sendWebhook(projectId, {
-            execution_id: executionId,
-            test_case_id: testCaseId,
-            event: 'updated',
-            status: 'running',
-            live_screenshot: path.join(artifactDir, 'screenshots', filename)
-          });
-
-          return filepath;
-        },
-        addLog: (message: string) => {
-          executionQueue.addLog(executionId, message);
-          sendWebhook(projectId, {
-            execution_id: executionId,
-            test_case_id: testCaseId,
-            event: 'updated',
-            status: 'running',
-            log_line: message
-          });
-        },
-        addTimelineEvent: (event: string, type?: string) => {
-          executionQueue.addTimelineEvent(executionId, event, type as any);
-          sendWebhook(projectId, {
-            execution_id: executionId,
-            test_case_id: testCaseId,
-            event: 'updated',
-            status: 'running',
-            timeline_event: { event, type }
-          });
-        },
-        test: (name: string, fn: any) => {
-          const runPromise = (async () => {
-            executionQueue.addTimelineEvent(executionId, `Running: ${name}`, 'info');
+            executionQueue.addTimelineEvent(executionId, 'Launching browser', 'info');
             await sendWebhook(projectId, {
               execution_id: executionId,
               test_case_id: testCaseId,
               event: 'updated',
               status: 'running',
-              timeline_event: { event: `Running: ${name}`, type: 'info' }
+              timeline_event: { event: 'Launching browser', type: 'info' }
             });
-            await fn(executionContext);
-          })();
-          testPromises.push(runPromise);
-          return runPromise;
-        },
-        expect: (actual: any) => {
-          const assertions = {
-            toBeVisible: async () => {
-              if (actual && typeof actual.isVisible === 'function') {
-                const visible = await actual.isVisible();
-                if (!visible) throw new Error('Element is not visible');
-              } else if (actual && actual.click) {
-                const visible = await actual.isVisible();
-                if (!visible) throw new Error('Element is not visible');
-              }
-            },
-            toBeHidden: async () => {
-              if (actual && typeof actual.isHidden === 'function') {
-                const hidden = await actual.isHidden();
-                if (!hidden) throw new Error('Element is not hidden');
-              }
-            },
-            toBeEnabled: async () => {
-              if (actual && typeof actual.isEnabled === 'function') {
-                const enabled = await actual.isEnabled();
-                if (!enabled) throw new Error('Element is not enabled');
-              }
-            },
-            toContainText: async (text: string) => {
-              if (actual && typeof actual.textContent === 'function') {
-                const content = await actual.textContent();
-                if (!content || !content.includes(text)) {
-                  throw new Error(`Element does not contain text: "${text}"`);
+
+            wsManager.broadcast({
+              type: 'update',
+              executionId,
+              data: { status: 'running' },
+              timestamp: new Date().toISOString(),
+            });
+
+            let headless = true;
+            try {
+              const settingsRes = await fetch('http://127.0.0.1:8000/api/v1/settings');
+              if (settingsRes.ok) {
+                const settings = await settingsRes.json();
+                if (settings && settings.playwright && typeof settings.playwright.headless === 'boolean') {
+                  headless = settings.playwright.headless;
                 }
               }
+            } catch (e) {
+              console.warn('Failed to fetch settings from backend:', e);
+            }
+
+            const launchOptions: any = {
+              headless: headless,
+              args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            };
+
+            try {
+              browser = await chromium.launch(launchOptions);
+              ExecutionEngine.sharedBrowser = browser;
+              ExecutionEngine.activeBrowserType = currentBrowserType;
+              const version = browser.version();
+              executionQueue.setBrowserVersion(executionId, version);
+            } catch (launchError: any) {
+              executionQueue.addTimelineEvent(executionId, `Browser launch failed: ${launchError.message}`, 'error');
+              await sendWebhook(projectId, {
+                execution_id: executionId,
+                test_case_id: testCaseId,
+                event: 'updated',
+                status: 'running',
+                timeline_event: { event: `Browser launch failed: ${launchError.message}`, type: 'error' }
+              });
+              throw launchError;
+            }
+          } else {
+            browser = ExecutionEngine.sharedBrowser;
+          }
+
+          // Create context and page fresh for test isolation
+          const contextOptions: any = {};
+          if (recordVideo) {
+            contextOptions.recordVideo = { dir: videoDir };
+          }
+          
+          const hasState = await fs.access(storageStatePath).then(() => true).catch(() => false);
+          if (hasState) {
+            contextOptions.storageState = storageStatePath;
+            executionQueue.addTimelineEvent(executionId, 'Session restored from storage state', 'success');
+          }
+
+          context = await browser.newContext(contextOptions);
+          if (recordTrace) {
+            await context.tracing.start({ screenshots: true, snapshots: true });
+          }
+
+          page = await context.newPage();
+          
+          // Clear shared page/context references to prevent leaks/reuse
+          ExecutionEngine.sharedContext = null;
+          ExecutionEngine.sharedPage = null;
+
+          executionQueue.addTimelineEvent(executionId, 'Browser opened with clean context', 'success');
+
+          this.browser = browser;
+          this.page = page;
+
+          wsManager.broadcast({
+            type: 'status',
+            executionId,
+            data: { status: 'running', currentEvent: 'Browser opened / reused' },
+            timestamp: new Date().toISOString(),
+          });
+
+          // Start screenshot capture
+          this.startScreenshotCapture(executionId, page, screenshotDir);
+
+          const testPromises: Promise<void>[] = [];
+          const screenshotPromises: Promise<void>[] = [];
+
+          // Setup console listener
+          page.on('console', (msg) => {
+            const text = `[${msg.type()}] ${msg.text()}`;
+            executionQueue.addConsole(executionId, text);
+            sendWebhook(projectId, {
+              execution_id: executionId,
+              test_case_id: testCaseId,
+              event: 'updated',
+              status: 'running',
+              log_line: text
+            });
+          });
+
+          // Setup error listener
+          page.on('pageerror', (err) => {
+            const text = `[error] ${err.message}`;
+            executionQueue.addConsole(executionId, text);
+            sendWebhook(projectId, {
+              execution_id: executionId,
+              test_case_id: testCaseId,
+              event: 'updated',
+              status: 'running',
+              log_line: text
+            });
+          });
+
+          // Create execution context with page utilities
+          const executionContext = {
+            page,
+            browser,
+            context,
+            screenshot: async (name?: string) => {
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+              const filename = `${name || 'screenshot'}-${timestamp}.png`;
+              const filepath = path.join(screenshotDir, filename);
+              await page.screenshot({ path: filepath });
+              executionQueue.addScreenshot(executionId, filename);
+              
+              // Log a timeline event for report generation
+              executionQueue.addTimelineEvent(executionId, `Screenshot: ${name || 'step'}`, 'success', filename);
+
+              await sendWebhook(projectId, {
+                execution_id: executionId,
+                test_case_id: testCaseId,
+                event: 'updated',
+                status: 'running',
+                live_screenshot: path.join(artifactDir, 'screenshots', filename)
+              });
+
+              return filepath;
             },
-            toBe: (expected: any) => {
-              if (actual !== expected) {
-                throw new Error(`Expected ${actual} to be ${expected}`);
-              }
+            addLog: (message: string) => {
+              executionQueue.addLog(executionId, message);
+              sendWebhook(projectId, {
+                execution_id: executionId,
+                test_case_id: testCaseId,
+                event: 'updated',
+                status: 'running',
+                log_line: message
+              });
             },
-            toEqual: (expected: any) => {
-              if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-                throw new Error(`Expected ${actual} to equal ${expected}`);
-              }
+            addTimelineEvent: (event: string, type?: string) => {
+              const timestamp = Date.now();
+              const filename = `step-${timestamp}.png`;
+              const filepath = path.join(screenshotDir, filename);
+
+              const promise = page.screenshot({ path: filepath }).then(async () => {
+                executionQueue.addScreenshot(executionId, filename);
+                executionQueue.addTimelineEvent(executionId, event, type as any, filename);
+                await sendWebhook(projectId, {
+                  execution_id: executionId,
+                  test_case_id: testCaseId,
+                  event: 'updated',
+                  status: 'running',
+                  timeline_event: { event, type, details: filename }
+                });
+              }).catch(async () => {
+                executionQueue.addTimelineEvent(executionId, event, type as any);
+                await sendWebhook(projectId, {
+                  execution_id: executionId,
+                  test_case_id: testCaseId,
+                  event: 'updated',
+                  status: 'running',
+                  timeline_event: { event, type }
+                });
+              });
+              screenshotPromises.push(promise);
             },
-            not: {
-              toBe: (expected: any) => {
-                if (actual === expected) {
-                  throw new Error(`Expected ${actual} not to be ${expected}`);
+            test: (name: string, fn: any) => {
+              const runPromise = (async () => {
+                executionQueue.addTimelineEvent(executionId, `Running: ${name}`, 'info');
+                await sendWebhook(projectId, {
+                  execution_id: executionId,
+                  test_case_id: testCaseId,
+                  event: 'updated',
+                  status: 'running',
+                  timeline_event: { event: `Running: ${name}`, type: 'info' }
+                });
+                await fn(executionContext);
+              })();
+              testPromises.push(runPromise);
+              return runPromise;
+            },
+            expect: (actual: any) => {
+              const assertions = {
+                toBe: (expected: any) => {
+                  if (actual !== expected) {
+                    throw new Error(`Expected ${actual} to be ${expected}`);
+                  }
+                },
+                toBeDefined: () => {
+                  if (actual === undefined) {
+                    throw new Error(`Expected value to be defined`);
+                  }
+                },
+                toBeTruthy: () => {
+                  if (!actual) {
+                    throw new Error(`Expected ${actual} to be truthy`);
+                  }
+                },
+                toBeFalsy: () => {
+                  if (actual) {
+                    throw new Error(`Expected ${actual} to be falsy`);
+                  }
+                },
+                toBeNull: () => {
+                  if (actual !== null) {
+                    throw new Error(`Expected ${actual} to be null`);
+                  }
+                },
+                toContain: (expected: any) => {
+                  if (typeof actual?.includes === 'function') {
+                    if (!actual.includes(expected)) {
+                      throw new Error(`Expected ${actual} to contain ${expected}`);
+                    }
+                  } else {
+                    throw new Error(`toContain is not supported for ${typeof actual}`);
+                  }
+                },
+                not: {
+                  toBe: (expected: any) => {
+                    if (actual === expected) {
+                      throw new Error(`Expected ${actual} not to be ${expected}`);
+                    }
+                  },
+                  toContain: (expected: any) => {
+                    if (typeof actual?.includes === 'function') {
+                      if (actual.includes(expected)) {
+                        throw new Error(`Expected ${actual} not to contain ${expected}`);
+                      }
+                    } else {
+                      throw new Error(`toContain is not supported for ${typeof actual}`);
+                    }
+                  },
+                  toEqual: (expected: any) => {
+                    if (JSON.stringify(actual) === JSON.stringify(expected)) {
+                      throw new Error(`Expected ${actual} not to equal ${expected}`);
+                    }
+                  }
                 }
-              },
-              toEqual: (expected: any) => {
-                if (JSON.stringify(actual) === JSON.stringify(expected)) {
-                  throw new Error(`Expected ${actual} not to equal ${expected}`);
-                }
-              }
+              };
+              return assertions;
             }
           };
-          return assertions;
+
+          // Execute user script with context
+          let cleanScript = script.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?/g, '');
+          if (isBrowserHealthy) {
+            const pattern = /(await\s+page\.goto\([^)]+\);?\s*await\s+page\.fill\(\s*['"]#username['\"].*?await\s+page\.click\(\s*['"]#login['\"]\);?)/s;
+            if (pattern.test(cleanScript)) {
+              cleanScript = cleanScript.replace(pattern, `
+                const is_logged_in = page.url().includes('SearchHotel.aspx') || (await page.$('#username').catch(() => null)) === null;
+                if (!is_logged_in) {
+                  $1
+                } else {
+                  console.log('[Session Reuse] Already logged in. Bypassing login steps.');
+                }
+              `);
+            }
+          }
+
+          const wrappedScript = `
+            return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent, test, expect }) => {
+              ${cleanScript}
+            })
+          `;
+          const userFunction = new Function(wrappedScript);
+          const asyncFunc = userFunction();
+          await asyncFunc(executionContext);
+
+          if (testPromises.length > 0) {
+            await Promise.all(testPromises);
+          }
+          if (screenshotPromises.length > 0) {
+            await Promise.all(screenshotPromises).catch(() => {});
+          }
+
+          success = true;
+        } catch (error: any) {
+          const recoveryMgr = new RecoveryManager();
+          const { action, nextRetryCount } = recoveryMgr.getRecoveryAction(error.message, retryCount);
+          
+          if (action === 'fail' || nextRetryCount > maxRetries) {
+            throw error; // Propagate error to outer catch block
+          }
+
+          console.log(`[Recovery] Failure: "${error.message}". Recovery action: ${action}. Next retry count: ${nextRetryCount}`);
+          executionQueue.addTimelineEvent(executionId, `Failure detected: "${error.message}". Recovery action: ${action}`, 'warning');
+
+          if (this.screenshotInterval) {
+            clearInterval(this.screenshotInterval);
+          }
+
+          // Apply recovery action:
+          if (action === 'restart_browser') {
+            if (ExecutionEngine.sharedBrowser) {
+              await ExecutionEngine.sharedBrowser.close().catch(() => {});
+            }
+            ExecutionEngine.sharedBrowser = null;
+            ExecutionEngine.sharedContext = null;
+            ExecutionEngine.sharedPage = null;
+          } else {
+            // retry or re_login
+            if (action === 're_login') {
+              const storageStatePath = path.join(process.cwd(), 'public', 'artifacts', projectId || 'default', 'storage_state.json');
+              await fs.unlink(storageStatePath).catch(() => {});
+            }
+            if (ExecutionEngine.sharedPage) {
+              await ExecutionEngine.sharedPage.close().catch(() => {});
+            }
+            if (ExecutionEngine.sharedContext) {
+              await ExecutionEngine.sharedContext.close().catch(() => {});
+            }
+            ExecutionEngine.sharedPage = null;
+            ExecutionEngine.sharedContext = null;
+          }
+
+          retryCount = nextRetryCount;
+          executionQueue.addTimelineEvent(executionId, `Retrying execution (Attempt ${retryCount})...`, 'info');
         }
-      };
-
-      // Execute user script with context - wrap in async function to support top-level await
-      const cleanScript = script.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?/g, '');
-      const wrappedScript = `
-        return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent, test, expect }) => {
-          ${cleanScript}
-        })
-      `;
-      const userFunction = new Function(wrappedScript);
-      const asyncFunc = userFunction();
-      await asyncFunc(executionContext);
-
-      if (testPromises.length > 0) {
-        await Promise.all(testPromises);
       }
 
-      // Save trace
-      if (recordTrace) {
+      // Save storage state for session reuse in subsequent tests
+      if (context) {
+        await context.storageState({ path: storageStatePath }).catch((e) => {
+          console.warn('Failed to save storage state:', e);
+        });
+        executionQueue.addTimelineEvent(executionId, 'Session storage state saved', 'success');
+      }
+
+      // Stop trace for current run
+      if (recordTrace && context) {
         const tracePath = path.join(traceDir, 'trace.zip');
-        await context.tracing.stop({ path: tracePath });
+        await context.tracing.stop({ path: tracePath }).catch(() => {});
         executionQueue.setArtifact(executionId, 'trace', 'trace.zip');
+      }
+
+      // Close page and context to finalize the video
+      if (page) {
+        await page.close().catch(() => {});
+      }
+      if (context) {
+        await context.close().catch(() => {});
+      }
+
+      // Clear shared page/context references to force recreation next time
+      ExecutionEngine.sharedPage = null;
+      ExecutionEngine.sharedContext = null;
+
+      // Scan and register the WebM video artifact
+      try {
+        const files = await fs.readdir(videoDir);
+        const videoFile = files.find(f => f.endsWith('.webm'));
+        if (videoFile) {
+          executionQueue.setArtifact(executionId, 'video', videoFile);
+          executionQueue.addTimelineEvent(executionId, `Simulation video saved: ${videoFile}`, 'success');
+        }
+      } catch (e) {
+        console.warn('Failed to register video artifact:', e);
       }
 
       // Generate HTML report
       await this.generateHTMLReport(executionId, artifactDir, screenshotDir);
-
-      // Cleanup
-      await page.close();
-      await context.close();
-      await browser.close();
 
       executionQueue.completeExecution(executionId);
       
@@ -397,27 +578,57 @@ export class ExecutionEngine {
         }
       }
 
-      // 2. Stop tracing and save trace
+      // Stop trace on error
       if (this.page && this.page.context()) {
         try {
           const tracePath = path.join(traceDir, 'trace.zip');
-          await this.page.context().tracing.stop({ path: tracePath });
+          await this.page.context().tracing.stop({ path: tracePath }).catch(() => {});
           executionQueue.setArtifact(executionId, 'trace', 'trace.zip');
         } catch (traceErr) {
           console.error('[Engine] Failed to stop tracing on error:', traceErr);
         }
       }
 
-      // 3. Generate HTML report
+      // Close page and context to finalize the video
+      if (this.page) {
+        await this.page.close().catch(() => {});
+      }
+      if (this.browser && ExecutionEngine.sharedContext) {
+        await ExecutionEngine.sharedContext.close().catch(() => {});
+      }
+
+      // Clear shared page/context references to force recreation next time
+      ExecutionEngine.sharedPage = null;
+      ExecutionEngine.sharedContext = null;
+
+      // Scan and register the WebM video artifact on error
+      try {
+        const files = await fs.readdir(videoDir);
+        const videoFile = files.find(f => f.endsWith('.webm'));
+        if (videoFile) {
+          executionQueue.setArtifact(executionId, 'video', videoFile);
+        }
+      } catch (e) {
+        console.warn('Failed to register video artifact on error:', e);
+      }
+
+      // Generate HTML report
       try {
         await this.generateHTMLReport(executionId, artifactDir, screenshotDir);
       } catch (reportErr) {
         console.error('[Engine] Failed to generate HTML report on error:', reportErr);
       }
 
-      // Cleanup
-      if (this.page) await this.page.close().catch(() => {});
-      if (this.browser) await this.browser.close().catch(() => {});
+      // Cleanup browser/page only if crashed or disconnected
+      const errLower = error.message.toLowerCase();
+      const isCrash = errLower.includes('crash') || errLower.includes('closed') || errLower.includes('disconnected');
+      if (isCrash) {
+        if (this.page) await this.page.close().catch(() => {});
+        if (this.browser) await this.browser.close().catch(() => {});
+        ExecutionEngine.sharedBrowser = null;
+        ExecutionEngine.sharedPage = null;
+        ExecutionEngine.sharedContext = null;
+      }
 
       executionQueue.setError(executionId, error.message);
       
@@ -492,9 +703,9 @@ export class ExecutionEngine {
         ? `Chromium ${execution.metadata.browserVersion}`
         : "Chromium";
 
-      // Filter out events that represent visual steps or failures
+      // Include errors, successes, and any events with screenshots/details to show all key progression steps
       const stepEvents = (execution.timeline || []).filter(
-        (evt) => evt.type === 'error' || (evt.details && evt.details.endsWith('.png'))
+        (evt) => evt.event !== 'Execution Queued' && (evt.type === 'error' || evt.type === 'success' || (evt.details && evt.details.endsWith('.png')))
       );
 
       const mappedSteps = stepEvents.map((event, index) => {
@@ -626,9 +837,29 @@ export class ExecutionEngine {
         `;
       }).join('\n') || "<div class='step-card'><p>No execution timeline events recorded.</p></div>";
 
+      // Try to find booking order number in logs or timeline events
+      let orderNoFound = "N/A";
+      const allLogs = [...(execution.artifacts.logs || []), ...(execution.artifacts.console || [])];
+      for (const logLine of allLogs) {
+        const match = logLine.match(/Order Number:\s*(\w+)/i) || logLine.match(/order_no:\s*(\w+)/i) || logLine.match(/Generated Order Number:\s*(\w+)/i);
+        if (match) {
+          orderNoFound = match[1];
+          break;
+        }
+      }
+      if (orderNoFound === "N/A") {
+        for (const evt of (execution.timeline || [])) {
+          const match = evt.event.match(/Order Number:\s*(\w+)/i) || evt.event.match(/Generated Order Number:\s*(\w+)/i) || (evt.details && evt.details.match(/Order Number:\s*(\w+)/i));
+          if (match) {
+            orderNoFound = match[1];
+            break;
+          }
+        }
+      }
+
       const summaryOutcomeText = execution.metadata.status === 'completed'
-        ? "The automated testcase completed successfully on the target application. A total of " + mappedSteps.length + " steps were executed, verifying form element interactions. Visual screenshots were captured at critical checkpoints to verify correctness."
-        : "The automated test execution encountered errors or assertions failed. Verification aborted. Visual logs have been persisted for failure diagnostics.";
+        ? "The automated testcase completed successfully on the target application. A total of " + mappedSteps.length + " steps were executed sequentially, verifying form element interactions. All validation checks passed."
+        : "The automated test execution encountered errors or assertions failed. Verification aborted. Sequential logs have been persisted for failure diagnostics.";
 
       const html = `<!DOCTYPE html>
 <html>
@@ -859,7 +1090,7 @@ export class ExecutionEngine {
             <div class="header-metadata">
                 <div class="meta-row">
                     <span class="meta-label">Website Under Test</span>
-                    <span class="meta-value">https://sampleapp.tricentis.com/101/app.php</span>
+                    <span class="meta-value">https://adactinhotelapp.com/</span>
                 </div>
                 <div class="meta-grid">
                     <div class="meta-item">
@@ -877,6 +1108,10 @@ export class ExecutionEngine {
                     <div class="meta-item">
                         <span class="meta-label">Total Steps</span>
                         <span class="meta-value">${mappedSteps.length}</span>
+                    </div>
+                    <div class="meta-item" style="border-left: 2px solid #10b981; padding-left: 10px;">
+                        <span class="meta-label" style="color: #10b981;">Generated Order Number</span>
+                        <span class="meta-value" style="color: #10b981; font-weight: bold; font-family: monospace;">${orderNoFound}</span>
                     </div>
                 </div>
             </div>

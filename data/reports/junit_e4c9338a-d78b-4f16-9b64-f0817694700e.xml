@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Testcase" tests="2" failures="0" errors="1" time="0.0"><testcase name="TestCase_ab3c07cb-5fde-4627-81ac-cf94c6d4d57e" classname="PlaywrightTests" time="0.0"><error message="Execution Error">Playwright did not produce report.json. Last output: 'E:\\Agentic-AI-Automation\\backend\\playwrightt\\node_modules\\.pnpm\\playwright@1.61.1\\node_modules\\playwright\\lib\\common\\index.js',
+'E:\\Agentic-AI-Automation\\backend\\playwrightt\\node_modules\\.pnpm\\playwright@1.61.1\\node_modules\\playwright\\lib\\program.js',
+'E:\\Agentic-AI-Automation\\backend\\playwrightt\\node_modules\\.pnpm\\playwright@1.61.1\\node_modules\\playwright\\cli.js'
+]
+}</error></testcase></testsuite></testsuites>

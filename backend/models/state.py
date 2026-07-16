@@ -46,6 +46,8 @@ class WorkflowState(BaseModel):
     execution_results: list[ExecutionResult] = Field(default_factory=list)
     execution_report: ExecutionReport | None = None
     logs: list[str] = Field(default_factory=list)
+    user_stories: list[dict] = Field(default_factory=list)
+    testing_context: dict | None = None
 
     def add_log(self, message: str) -> None:
         self.logs.append(f"[{datetime.now(timezone.utc).isoformat()}] {message}")

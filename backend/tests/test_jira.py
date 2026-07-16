@@ -190,3 +190,35 @@ def test_jira_webhook_resolves_status():
     if getattr(repo, "session", None) is not None:
         updated_tc = repo.get_test_case(tc.id)
         assert updated_tc.status == TestCaseStatus.RETEST_PENDING
+
+
+def test_import_jira_story():
+    from backend.database.db_seeder import seed_database
+    from backend.database.db import SessionLocal
+    # Seed database first to make sure authorization user exists
+    db = SessionLocal()
+    seed_database(db)
+    db.close()
+
+    # Log in to get token
+    client = TestClient(app)
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "dev@platform.ai", "password": "devpassword"}
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    repo = get_project_repository()
+    project = repo.create_project("Jira Import Project", "Description", "general", "playwright")
+
+    response = client.post(
+        f"/api/v1/projects/{project.id}/requirements/import-jira?issue_key=QA-123",
+        headers=headers
+    )
+    assert response.status_code == 200
+    req_data = response.json()
+    assert req_data["requirement_id"] == "QA-123"
+    assert req_data["jira_issue_key"] == "QA-123"
+    assert req_data["jira_sync_status"] == "synced"
+

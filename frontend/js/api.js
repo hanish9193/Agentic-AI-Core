@@ -134,10 +134,19 @@ export const API = {
     });
   },
 
-  async updateProject(id, name, description, lineOfBusiness, framework = 'playwright', jiraProjectKey = null) {
+  async updateProject(id, name, description, lineOfBusiness, framework = 'playwright', jiraProjectKey = null, targetUrl = null, targetUsername = null, targetPassword = null) {
     return request(`/projects/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, description, line_of_business: lineOfBusiness, framework, jira_project_key: jiraProjectKey })
+      body: JSON.stringify({
+        name,
+        description,
+        line_of_business: lineOfBusiness,
+        framework,
+        jira_project_key: jiraProjectKey,
+        target_url: targetUrl,
+        target_username: targetUsername,
+        target_password: targetPassword
+      })
     });
   },
 
@@ -164,25 +173,35 @@ export const API = {
     return request(`/projects/${projectId}/requirements`);
   },
 
-  async createRequirement(projectId, title, description, priority, businessDomain) {
+  async createRequirement(projectId, title, description, priority, businessDomain, releaseId = null) {
     return request(`/projects/${projectId}/requirements`, {
       method: 'POST',
       body: JSON.stringify({
         title,
         description,
         priority,
-        business_domain: businessDomain
+        business_domain: businessDomain,
+        release_id: releaseId
       })
     });
   },
 
   // Import Requirements File
-  async importRequirements(projectId, fileObj) {
+  async importRequirements(projectId, fileObj, releaseId = null) {
     const formData = new FormData();
     formData.append('file', fileObj);
-    return request(`/projects/${projectId}/requirements/import`, {
+    const url = `/projects/${projectId}/requirements/import` + (releaseId ? `?release_id=${releaseId}` : '');
+    return request(url, {
       method: 'POST',
       body: formData
+    });
+  },
+
+  // Import Requirement from JIRA User Story
+  async importJiraStory(projectId, issueKey, releaseId = null) {
+    const url = `/projects/${projectId}/requirements/import-jira?issue_key=${encodeURIComponent(issueKey)}` + (releaseId ? `&release_id=${releaseId}` : '');
+    return request(url, {
+      method: 'POST'
     });
   },
 
@@ -283,6 +302,13 @@ export const API = {
   async executeTestCase(projectId, testCaseId) {
     return request(`/projects/${projectId}/testcases/${testCaseId}/execute`, {
       method: 'POST'
+    });
+  },
+
+  async executeBatch(projectId, testCaseIds) {
+    return request(`/projects/${projectId}/batches/execute`, {
+      method: 'POST',
+      body: JSON.stringify(testCaseIds)
     });
   },
 
@@ -401,6 +427,32 @@ export const API = {
 
   async getProjectUsers(projectId) {
     return request(`/projects/${projectId}/users`);
+  },
+
+  async getReleases(projectId) {
+    return request(`/projects/${projectId}/releases`);
+  },
+
+  async createRelease(projectId, name, description, status = "Active", startDate = null, endDate = null) {
+    return request(`/projects/${projectId}/releases`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description, status, start_date: startDate, end_date: endDate })
+    });
+  },
+
+  async getTestCycles(releaseId) {
+    return request(`/releases/${releaseId}/cycles`);
+  },
+
+  async createTestCycle(releaseId, name, description, status = "Active") {
+    return request(`/releases/${releaseId}/cycles`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description, status })
+    });
+  },
+
+  async getProjectCycles(projectId) {
+    return request(`/projects/${projectId}/cycles`);
   },
 
   async getAuditLogs() {

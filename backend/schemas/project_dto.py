@@ -9,6 +9,9 @@ class ProjectCreate(BaseModel):
     line_of_business: str = "general"
     framework: str = "playwright"
     jira_project_key: str | None = None
+    target_url: str | None = "https://adactinhotelapp.com/"
+    target_username: str | None = None
+    target_password: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -20,4 +23,6 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     requirements: list[UUID]
     jira_project_key: str | None = None
+    target_url: str | None = "https://adactinhotelapp.com/"
+    target_username: str | None = None
 

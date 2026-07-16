@@ -56,6 +56,14 @@ class ExecutionService:
         else:
             status = ExecutionStatus.ERROR
 
+        test_cycle_id_str = payload.get("test_cycle_id")
+        test_cycle_id = None
+        if test_cycle_id_str and test_cycle_id_str != "undefined" and test_cycle_id_str != "null":
+            try:
+                test_cycle_id = uuid.UUID(test_cycle_id_str)
+            except ValueError:
+                pass
+
         result = ExecutionResult(
             id=exec_id,
             test_case_id=test_case_id,
@@ -66,7 +74,10 @@ class ExecutionService:
             video_path=payload.get("video_path"),
             trace_path=payload.get("trace_path"),
             browser_version=payload.get("browser_version"),
-            executed_at=datetime.now(timezone.utc)
+            executed_at=datetime.now(timezone.utc),
+            test_cycle_id=test_cycle_id,
+            timeline=payload.get("timeline", []),
+            screenshots=payload.get("screenshots", [])
         )
 
         # Attach raw webhook payload so report listener can access timeline/screenshots

@@ -249,7 +249,7 @@ export const Components = {
               <!-- Description / Gherkin Steps -->
               <div>
                 <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px;">Scenario Description / Steps</h4>
-                <div class="scenario-desc-text" id="desc-txt-${sc.id}" style="font-size: 0.88rem; line-height: 1.5; color: var(--text-secondary); white-space: pre-line;">${escapeHTML(sc.description)}</div>
+                <pre class="scenario-desc-text" id="desc-txt-${sc.id}" style="font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary); background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--border-radius-sm); white-space: pre-wrap; font-family: var(--font-mono, 'Cascadia Code', Consolas, monospace); margin: 4px 0 0 0;">${escapeHTML(sc.description)}</pre>
                 <textarea class="form-control" id="desc-in-${sc.id}" style="display: none; padding: 8px; font-size: 0.85rem; width: 100%; min-height: 100px;">${escapeHTML(sc.description)}</textarea>
               </div>
 
@@ -277,7 +277,7 @@ export const Components = {
                       <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 6px;">(${escapeHTML(sc.jira_sync_status)})</span>
                     ` : (sc.approved ? `
                       <button class="btn btn-secondary" onclick="event.stopPropagation(); window._scenarioActions.onSyncJira('${sc.id}')" style="padding: 4px 8px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;">
-                        🔄 Sync to JIRA
+                        Sync to JIRA
                       </button>
                     ` : `<span style="font-size: 0.72rem; color: var(--text-muted);">Sync pending approval</span>`)}
                   </div>
@@ -460,9 +460,14 @@ export const Components = {
                       ${hasScript ? `
                         <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._testCaseActions.onViewScript('${tc.id}')">Edit Script</button>
                       ` : `
-                        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._testCaseActions.onGenerateScript('${tc.id}', this)">Generate Script</button>
+                        <select id="framework-select-${tc.id}" class="form-control" style="width: 140px; padding: 4px 8px; font-size: 0.85rem; height: 32px; display: inline-block;">
+                          <option value="playwright" selected>Playwright</option>
+                          <option value="selenium">Selenium</option>
+                          <option value="imported">Existing Framework</option>
+                        </select>
+                        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window._testCaseActions.onGenerateScript('${tc.id}', this, document.getElementById('framework-select-${tc.id}').value)">Generate Script</button>
                       `}
-                      <a href="javascript:void(0)" onclick="window._testCaseActions.onViewScript('${tc.id}')" style="font-size: 0.8rem; color: var(--accent-primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center;">Open in Playwright Workspace →</a>
+                      <a href="javascript:void(0)" onclick="window._testCaseActions.onViewScript('${tc.id}')" style="font-size: 0.8rem; color: var(--accent-primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; margin-left: 8px;">Open in Workspace →</a>
                     ` : `
                       <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" disabled>Generate Script</button>
                       <span style="font-size: 0.75rem; color: var(--text-muted);">Approve test case to enable script generation</span>

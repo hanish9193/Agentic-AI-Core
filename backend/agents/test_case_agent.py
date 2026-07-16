@@ -36,6 +36,7 @@ class TestCaseResponse(BaseModel):
     preconditions: list[str] = Field(default_factory=list)
     steps: list[str] = Field(min_length=1)
     expected_result: str = Field(min_length=1)
+    test_data: dict[str, str] = Field(default_factory=dict)
 
 
 class TestCaseListResponse(BaseModel):
@@ -94,6 +95,7 @@ class TestCaseAgent(BaseAgent):
                     steps=item.steps,
                     expected_result=item.expected_result,
                     priority=scenario.priority,
+                    test_data=item.test_data,
                 )
             )
 

@@ -20,7 +20,7 @@ llm:
 
 browser:
   type: chromium            # chromium | firefox | webkit
-  headless: true
+  headless: false
 
 rag:
   enabled: false
@@ -38,9 +38,9 @@ evaluation:
   relevance_rejection_threshold: 0.3
 
 playwright:
-  base_url: https://sampleapp.tricentis.com/101/app.php
+  base_url: https://adactinhotelapp.com/
   browser: chromium
-  headless: true
+  headless: false
   timeout: 60
   retries: 0
   workspace_url: http://localhost:3000

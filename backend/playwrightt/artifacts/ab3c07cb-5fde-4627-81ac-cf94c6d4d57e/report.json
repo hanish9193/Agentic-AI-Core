@@ -1,0 +1,135 @@
+{
+  "config": {
+    "argv": [
+      "C:\\nvm4w\\nodejs\\node.exe",
+      "E:\\Agentic-AI-Automation\\backend\\playwrightt\\node_modules\\.pnpm\\playwright@1.61.1\\node_modules\\playwright\\cli.js",
+      "test",
+      "--config",
+      "artifacts/ab3c07cb-5fde-4627-81ac-cf94c6d4d57e/playwright.config.ts"
+    ],
+    "configFile": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\artifacts\\ab3c07cb-5fde-4627-81ac-cf94c6d4d57e\\playwright.config.ts",
+    "rootDir": "E:/Agentic-AI-Automation/backend/playwrightt/artifacts/ab3c07cb-5fde-4627-81ac-cf94c6d4d57e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "E:/Agentic-AI-Automation/backend/playwrightt/artifacts/ab3c07cb-5fde-4627-81ac-cf94c6d4d57e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "E:/Agentic-AI-Automation/backend/playwrightt/artifacts/ab3c07cb-5fde-4627-81ac-cf94c6d4d57e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "report.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 10,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "test.spec.ts",
+      "file": "test.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Invalid Password with Valid Username",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 8,
+                  "error": {
+                    "message": "Error: Error reading storage state from E:/Agentic-AI-Automation/backend/playwright/artifacts/BATCH-20260715-233/storage_state.json:\nENOENT: no such file or directory, open 'E:\\Agentic-AI-Automation\\backend\\playwright\\artifacts\\BATCH-20260715-233\\storage_state.json'",
+                    "stack": "Error: Error reading storage state from E:/Agentic-AI-Automation/backend/playwright/artifacts/BATCH-20260715-233/storage_state.json:\nENOENT: no such file or directory, open 'E:\\Agentic-AI-Automation\\backend\\playwright\\artifacts\\BATCH-20260715-233\\storage_state.json'"
+                  },
+                  "errors": [
+                    {
+                      "message": "Error: Error reading storage state from E:/Agentic-AI-Automation/backend/playwright/artifacts/BATCH-20260715-233/storage_state.json:\nENOENT: no such file or directory, open 'E:\\Agentic-AI-Automation\\backend\\playwright\\artifacts\\BATCH-20260715-233\\storage_state.json'"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-07-15T17:12:55.162Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\Agentic-AI-Automation\\backend\\playwrightt\\artifacts\\ab3c07cb-5fde-4627-81ac-cf94c6d4d57e\\test-results\\test-Invalid-Password-with-Valid-Username\\error-context.md"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "b72ba50710186a3d173d-eb490af142fbd6728586",
+          "file": "test.spec.ts",
+          "line": 3,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-07-15T17:12:54.705Z",
+    "duration": 726.695,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

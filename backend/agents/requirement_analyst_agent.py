@@ -2,14 +2,21 @@ from backend.agents.base import BaseAgent
 from backend.models.state import WorkflowState
 from backend.services.llm import LLMService
 from backend.repository.project_repository import get_project_repository
+from backend.utils.prompts import load_prompt
 from pydantic import BaseModel, Field
-import re
+from backend.models.requirement import Requirement
 
 class RequirementEnrichment(BaseModel):
     title: str = Field(description="A clean, concise title for the requirement (3-8 words)")
     description: str = Field(description="Enriched, formatted description. Clean up formatting and resolve any obvious ambiguities.")
     priority: str = Field(description="Must be one of: low, medium, high")
     business_domain: str = Field(description="Must be a capitalized single word business domain (e.g. Finance, Banking, Auth, Billing, General)")
+    functional_requirements: list[str] = Field(default_factory=list, description="List of functional capabilities.")
+    non_functional_requirements: list[str] = Field(default_factory=list, description="List of non-functional checks/constraints.")
+    business_rules: list[str] = Field(default_factory=list, description="List of core business rules.")
+    acceptance_criteria: list[str] = Field(default_factory=list, description="List of acceptance criteria items.")
+    risks: list[str] = Field(default_factory=list, description="List of identified risks.")
+    assumptions: list[str] = Field(default_factory=list, description="List of standard assumptions.")
 
 class RequirementAnalystAgent(BaseAgent):
     name = "Requirement Analyst Agent"
@@ -40,8 +47,7 @@ class RequirementAnalystAgent(BaseAgent):
 
         title = req.title
 
-        # Check if LLM enrichment is requested (e.g. via configuration or config/override)
-        # Or if fields are left as default placeholder values
+        # Check if LLM enrichment is requested
         needs_llm = (
             "REQ-MANUAL" in req.title or
             req.title == "Requirement Block" or
@@ -50,21 +56,18 @@ class RequirementAnalystAgent(BaseAgent):
 
         if needs_llm:
             state.add_log(f"{self.name}: Invoking LLM for metadata enrichment and ambiguity resolution.")
-            prompt = (
-                "You are an expert Business Analyst. Enrich the following requirement by cleaning up "
-                "its formatting, generating a clean and concise title, extracting the priority, "
-                "and identifying its specific business domain.\n\n"
-                f"Raw Title: {req.title}\n"
-                f"Raw Description: {req.description}\n"
-            )
             try:
+                prompt = load_prompt(
+                    "agents/requirement_analyst/roles_and_responsibilities.md",
+                    title=req.title,
+                    description=req.description
+                )
                 enrichment = self.llm_service.structured_generate(
                     user=prompt,
                     response_model=RequirementEnrichment
                 )
                 
                 # Re-create the Requirement object with enriched values
-                from backend.models.requirement import Requirement
                 enriched_req = Requirement(
                     id=req.id,
                     title=enrichment.title,
@@ -73,7 +76,18 @@ class RequirementAnalystAgent(BaseAgent):
                     uploaded_at=req.uploaded_at,
                     original_filename=req.original_filename,
                     requirement_id=req.requirement_id,
-                    requirement_title=enrichment.title
+                    requirement_title=enrichment.title,
+                    functional_requirements=enrichment.functional_requirements,
+                    non_functional_requirements=enrichment.non_functional_requirements,
+                    business_rules=enrichment.business_rules,
+                    acceptance_criteria=enrichment.acceptance_criteria,
+                    risks=enrichment.risks,
+                    assumptions=enrichment.assumptions,
+                    jira_issue_key=req.jira_issue_key,
+                    jira_issue_url=req.jira_issue_url,
+                    jira_sync_status=req.jira_sync_status,
+                    jira_last_synced_at=req.jira_last_synced_at,
+                    release_id=req.release_id
                 )
                 state.requirement = enriched_req
                 priority = enrichment.priority

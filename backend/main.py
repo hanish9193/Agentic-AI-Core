@@ -1,6 +1,7 @@
 import yaml
 import re
 from pathlib import Path
+from typing import Optional, Union, List
 from uuid import UUID
 import json
 import asyncio
@@ -24,13 +25,14 @@ from backend.schemas.requirement_dto import RequirementCreate, RequirementRespon
 from backend.schemas.scenario_dto import ScenarioUpdate, ScenarioResponse
 from backend.schemas.testcase_dto import TestCaseUpdate, TestCaseResponse, ScriptUpdatePayload
 from backend.models.document import Document
-from backend.models.execution_result import ExecutionResult
+from backend.models.execution_result import ExecutionResult, ExecutionStatus
 import backend.services.report_service
 
 from sqlalchemy.orm import Session
 from backend.dependencies.auth_dependencies import get_db, get_current_user, has_permission
 from backend.services.auth_service import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from backend.services.audit_service import log_audit
+from backend.utils.crypto import encrypt_value
 from backend.database.db_models import UserDB, RoleDB, PermissionDB, RolePermissionDB, ProjectUserDB, RefreshTokenDB, AuditLogDB
 
 app = FastAPI(
@@ -60,10 +62,51 @@ def on_startup():
         seed_database(db)
     finally:
         db.close()
+    try:
+        migrate_credentials_to_vault()
+    except Exception as e:
+        print(f"[Vault] Migration failed: {e}")
 
 # Initialize application services
 project_service = ProjectService()
 workflow_service = WorkflowService()
+
+def resolve_project_response(p) -> ProjectResponse:
+    from backend.services.vault_service import VaultService
+    vs = VaultService()
+    username, _ = vs.get_credentials(str(p.id))
+    return ProjectResponse(
+        id=p.id,
+        name=p.name,
+        description=p.description,
+        line_of_business=p.line_of_business,
+        framework=getattr(p, "framework", "playwright"),
+        created_at=p.created_at,
+        requirements=p.requirements,
+        jira_project_key=getattr(p, "jira_project_key", None),
+        target_url=getattr(p, "target_url", "https://adactinhotelapp.com/"),
+        target_username=username if username else (getattr(p, "target_username", None) if getattr(p, "target_username", None) != "vault_secured" else None)
+    )
+
+def migrate_credentials_to_vault():
+    from backend.services.vault_service import VaultService
+    from backend.utils.crypto import decrypt_value
+    vs = VaultService()
+    projects = project_service.list_projects()
+    migrated = False
+    for p in projects:
+        if getattr(p, "target_password_enc", None) != "vault_secured":
+            username = getattr(p, "target_username", None)
+            password = None
+            if getattr(p, "target_password_enc", None):
+                password = decrypt_value(p.target_password_enc)
+            vs.set_credentials(str(p.id), username, password)
+            p.target_username = "vault_secured"
+            p.target_password_enc = "vault_secured"
+            project_service.repo.update_project(p)
+            migrated = True
+    if migrated:
+        print("[Vault] Successfully migrated project credentials to secure vault.")
 
 
 class ProjectUpdate(BaseModel):
@@ -72,24 +115,15 @@ class ProjectUpdate(BaseModel):
     line_of_business: str | None = None
     framework: str | None = None
     jira_project_key: str | None = None
+    target_url: str | None = None
+    target_username: str | None = None
+    target_password: str | None = None
 
 
 @app.get("/api/v1/projects", response_model=list[ProjectResponse])
 def list_projects():
     projects = project_service.list_projects()
-    return [
-        ProjectResponse(
-            id=p.id,
-            name=p.name,
-            description=p.description,
-            line_of_business=p.line_of_business,
-            framework=getattr(p, "framework", "playwright"),
-            created_at=p.created_at,
-            requirements=p.requirements,
-            jira_project_key=getattr(p, "jira_project_key", None)
-        )
-        for p in projects
-    ]
+    return [resolve_project_response(p) for p in projects]
 
 
 @app.post("/api/v1/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -98,20 +132,22 @@ def create_project(data: ProjectCreate):
         raise HTTPException(status_code=400, detail="Project name cannot be empty")
     if not data.description.strip():
         raise HTTPException(status_code=400, detail="Project description cannot be empty")
-    p = project_service.create_project(name=data.name, description=data.description, line_of_business=data.line_of_business, framework=data.framework)
-    if data.jira_project_key:
-        p.jira_project_key = data.jira_project_key
-        p = project_service.repo.update_project(p)
-    return ProjectResponse(
-        id=p.id,
-        name=p.name,
-        description=p.description,
-        line_of_business=p.line_of_business,
-        framework=p.framework,
-        created_at=p.created_at,
-        requirements=p.requirements,
-        jira_project_key=getattr(p, "jira_project_key", None)
+    
+    p = project_service.create_project(
+        name=data.name,
+        description=data.description,
+        line_of_business=data.line_of_business,
+        framework=data.framework,
+        jira_project_key=data.jira_project_key,
+        target_url=data.target_url,
+        target_username="vault_secured",
+        target_password_enc="vault_secured"
     )
+    
+    from backend.services.vault_service import VaultService
+    VaultService().set_credentials(str(p.id), data.target_username, data.target_password)
+    
+    return resolve_project_response(p)
 
 
 @app.put("/api/v1/projects/{project_id}", response_model=ProjectResponse)
@@ -129,18 +165,22 @@ def update_project_settings(project_id: UUID, data: ProjectUpdate):
         p.framework = data.framework
     if data.jira_project_key is not None:
         p.jira_project_key = data.jira_project_key
+    if data.target_url is not None:
+        p.target_url = data.target_url
+    
+    if data.target_username is not None or (data.target_password is not None and data.target_password != "" and data.target_password != "********"):
+        from backend.services.vault_service import VaultService
+        vs = VaultService()
+        curr_u, curr_p = vs.get_credentials(str(project_id))
+        new_u = data.target_username if data.target_username is not None else curr_u
+        new_p = data.target_password if (data.target_password is not None and data.target_password != "" and data.target_password != "********") else curr_p
+        vs.set_credentials(str(project_id), new_u, new_p)
+    
+    p.target_username = "vault_secured"
+    p.target_password_enc = "vault_secured"
     
     updated = project_service.repo.update_project(p)
-    return ProjectResponse(
-        id=updated.id,
-        name=updated.name,
-        description=updated.description,
-        line_of_business=updated.line_of_business,
-        framework=getattr(updated, "framework", "playwright"),
-        created_at=updated.created_at,
-        requirements=updated.requirements,
-        jira_project_key=getattr(updated, "jira_project_key", None)
-    )
+    return resolve_project_response(updated)
 
 
 @app.get("/api/v1/projects/{project_id}", response_model=ProjectResponse)
@@ -148,16 +188,323 @@ def get_project(project_id: UUID):
     p = project_service.get_project(project_id)
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
-    return ProjectResponse(
-        id=p.id,
-        name=p.name,
-        description=p.description,
-        line_of_business=p.line_of_business,
-        framework=getattr(p, "framework", "playwright"),
-        created_at=p.created_at,
-        requirements=p.requirements,
-        jira_project_key=getattr(p, "jira_project_key", None)
+    return resolve_project_response(p)
+class DashboardRecentExecution(BaseModel):
+    id: UUID
+    test_case_id: UUID
+    tcName: str
+    tcCustomId: str
+    status: str
+    duration_seconds: float
+    executed_at: str
+
+class DashboardMetricsResponse(BaseModel):
+    totalReqs: int
+    totalScenarios: int
+    totalTestCases: int
+    totalExecutions: int
+    passRatio: str
+    coveragePct: str
+    uiCount: int
+    apiCount: int
+    manualCount: int
+    
+    passedCount: int
+    failedCount: int
+    yetToExecuteCount: int
+    
+    approvedCount: int
+    rejectedCount: int
+    pendingCount: int
+    
+    trendLabels: list[str]
+    trendPassed: list[int]
+    trendFailed: list[int]
+    
+    domainLabels: list[str]
+    domainCountsData: list[int]
+    
+    priorityHighCount: int
+    priorityMediumCount: int
+    priorityLowCount: int
+    
+    defectOpenCount: int
+    defectResolvedCount: int
+    defectRetestCount: int
+    defectClosedCount: int
+    
+    recentExecutions: list[DashboardRecentExecution]
+    isEmpty: bool
+
+class ReleaseCreate(BaseModel):
+    name: str
+    description: str | None = None
+    status: str = "Active"
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+
+class ReleaseResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    name: str
+    description: str | None = None
+    status: str
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+
+class TestCycleCreate(BaseModel):
+    name: str
+    description: str | None = None
+    status: str = "Active"
+
+class TestCycleResponse(BaseModel):
+    id: UUID
+    release_id: UUID
+    name: str
+    description: str | None = None
+    status: str
+    created_at: datetime
+
+
+@app.get("/api/v1/projects/{project_id}/dashboard-metrics", response_model=DashboardMetricsResponse)
+def get_dashboard_metrics(project_id: UUID, scope: str = "project", id: str | None = None):
+    p = project_service.get_project(project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    reqs = project_service.get_requirements(project_id)
+    scenarios = project_service.get_scenarios_for_project(project_id)
+    test_cases = project_service.get_test_cases_for_project(project_id)
+    executions = project_service.repo.get_execution_results(project_id)
+
+    # Filter based on scope
+    if scope == "release" and id:
+        try:
+            rel_id = UUID(id)
+            reqs = [r for r in reqs if r.release_id == rel_id]
+            scenarios = [s for s in scenarios if any(r.id == s.requirement_id for r in reqs)]
+            test_cases = [tc for tc in test_cases if any(s.id == tc.scenario_id for s in scenarios)]
+            executions = [ex for ex in executions if any(tc.id == ex.test_case_id for tc in test_cases)]
+        except Exception:
+            pass
+    elif scope == "cycle" and id:
+        try:
+            cy_id = UUID(id)
+            cycle = project_service.repo.get_test_cycle(cy_id)
+            if cycle:
+                rel_id = cycle.release_id
+                reqs = [r for r in reqs if r.release_id == rel_id]
+                scenarios = [s for s in scenarios if any(r.id == s.requirement_id for r in reqs)]
+                test_cases = [tc for tc in test_cases if any(s.id == tc.scenario_id for s in scenarios)]
+                executions = [ex for ex in executions if ex.test_cycle_id == cy_id]
+        except Exception:
+            pass
+
+    # Empty indicator
+    is_empty = len(reqs) == 0 and len(executions) == 0
+
+    # Counts
+    totalReqs = len(reqs)
+    totalScenarios = len(scenarios)
+    totalTestCases = len(test_cases)
+    totalExecutions = len(executions)
+
+    passed_execs = [ex for ex in executions if ex.status == "passed" or (hasattr(ex.status, "value") and ex.status.value == "passed")]
+    passedExecutions = len(passed_execs)
+    failedExecutions = totalExecutions - passedExecutions
+    passRatio = f"{int(round((passedExecutions / totalExecutions) * 100))}%" if totalExecutions > 0 else "0%"
+
+    # Coverage
+    manualCount = 0
+    apiCount = 0
+    uiCount = 0
+    for tc in test_cases:
+        exec_type = getattr(tc, "execution_type", None) or "Automated Testing"
+        if exec_type == "Manual Testing":
+            manualCount += 1
+        elif "api" in tc.title.lower() or (tc.steps and any("api" in s.lower() for s in tc.steps)):
+            apiCount += 1
+        else:
+            uiCount += 1
+    automatedCount = uiCount + apiCount
+    coveragePct = f"{int(round((automatedCount / totalTestCases) * 100))}%" if totalTestCases > 0 else "0%"
+
+    # Execution status pie chart data
+    passedCount = 0
+    failedCount = 0
+    yetToExecuteCount = 0
+    for tc in test_cases:
+        tc_execs = [ex for ex in executions if str(ex.test_case_id) == str(tc.id)]
+        if not tc_execs:
+            yetToExecuteCount += 1
+        else:
+            sorted_execs = sorted(tc_execs, key=lambda x: x.executed_at, reverse=True)
+            latest = sorted_execs[0]
+            status_val = latest.status.value if hasattr(latest.status, "value") else latest.status
+            if status_val == "passed":
+                passedCount += 1
+            else:
+                failedCount += 1
+
+    # Scenarios approval donut
+    approvedCount = len([s for s in scenarios if s.approved])
+    rejectedCount = len([s for s in scenarios if getattr(s, "rejected", False)])
+    pendingCount = len(scenarios) - approvedCount - rejectedCount
+
+    # Trend line/bar data (last 7 days)
+    dailyData = {}
+    for ex in executions:
+        if not ex.executed_at:
+            continue
+        date_str = ex.executed_at.strftime("%b %d")
+        if date_str not in dailyData:
+            dailyData[date_str] = {"passed": 0, "failed": 0}
+        status_val = ex.status.value if hasattr(ex.status, "value") else ex.status
+        if status_val == "passed":
+            dailyData[date_str]["passed"] += 1
+        else:
+            dailyData[date_str]["failed"] += 1
+    sorted_dates = sorted(dailyData.keys(), key=lambda d: datetime.strptime(d + f" {datetime.now().year}", "%b %d %Y"))
+    recent_dates = sorted_dates[-7:]
+    trendPassed = [dailyData[d]["passed"] for d in recent_dates]
+    trendFailed = [dailyData[d]["failed"] for d in recent_dates]
+
+    # Domains distribution
+    domainCounts = {}
+    for r in reqs:
+        dom = r.business_domain or "general"
+        domainCounts[dom] = domainCounts.get(dom, 0) + 1
+    domainLabels = list(domainCounts.keys())
+    domainCountsData = list(domainCounts.values())
+
+    # Test Case Priority
+    priorityHighCount = 0
+    priorityMediumCount = 0
+    priorityLowCount = 0
+    for tc in test_cases:
+        prio = (tc.priority or "medium").lower()
+        if prio == "high":
+            priorityHighCount += 1
+        elif prio == "low":
+            priorityLowCount += 1
+        else:
+            priorityMediumCount += 1
+
+    # Defect Status (Open, Resolved, Retest Pending, Closed)
+    defectOpenCount = 0
+    defectResolvedCount = 0
+    defectRetestCount = 0
+    defectClosedCount = 0
+    for ex in executions:
+        status_val = ex.status.value if hasattr(ex.status, "value") else ex.status
+        if status_val == "failed":
+            if getattr(ex, "retest_pending_candidate", False):
+                defectRetestCount += 1
+            else:
+                defectOpenCount += 1
+        elif status_val == "passed":
+            if getattr(ex, "retest_pending_candidate", False) or getattr(ex, "jira_bug_id", None):
+                defectResolvedCount += 1
+            else:
+                defectClosedCount += 1
+
+    # Fetch Top 5 Recent Executions
+    sorted_executions = sorted(executions, key=lambda x: x.executed_at, reverse=True)[:5]
+    recent_execs_list = []
+    for ex in sorted_executions:
+        tc = next((t for t in test_cases if str(t.id) == str(ex.test_case_id)), None)
+        tc_name = tc.title if tc else "Unknown Test Case"
+        tc_custom_id = getattr(tc, "custom_id", None) or (f"TC-{str(tc.id)[:4].upper()}" if tc else "TC-XXX")
+        status_val = ex.status.value if hasattr(ex.status, "value") else ex.status
+        recent_execs_list.append(
+            DashboardRecentExecution(
+                id=ex.id,
+                test_case_id=ex.test_case_id,
+                tcName=tc_name,
+                tcCustomId=tc_custom_id,
+                status=status_val,
+                duration_seconds=ex.duration_seconds,
+                executed_at=ex.executed_at.strftime("%I:%M %p") if ex.executed_at else "N/A"
+            )
+        )
+
+    return DashboardMetricsResponse(
+        totalReqs=totalReqs,
+        totalScenarios=totalScenarios,
+        totalTestCases=totalTestCases,
+        totalExecutions=totalExecutions,
+        passRatio=passRatio,
+        coveragePct=coveragePct,
+        uiCount=uiCount,
+        apiCount=apiCount,
+        manualCount=manualCount,
+        passedCount=passedCount,
+        failedCount=failedCount,
+        yetToExecuteCount=yetToExecuteCount,
+        approvedCount=approvedCount,
+        rejectedCount=rejectedCount,
+        pendingCount=pendingCount,
+        trendLabels=recent_dates,
+        trendPassed=trendPassed,
+        trendFailed=trendFailed,
+        domainLabels=domainLabels,
+        domainCountsData=domainCountsData,
+        priorityHighCount=priorityHighCount,
+        priorityMediumCount=priorityMediumCount,
+        priorityLowCount=priorityLowCount,
+        defectOpenCount=defectOpenCount,
+        defectResolvedCount=defectResolvedCount,
+        defectRetestCount=defectRetestCount,
+        defectClosedCount=defectClosedCount,
+        recentExecutions=recent_execs_list,
+        isEmpty=is_empty
     )
+
+
+@app.get("/api/v1/projects/{project_id}/releases", response_model=list[ReleaseResponse])
+def get_releases(project_id: UUID):
+    repo = project_service.repo
+    return repo.list_releases(project_id)
+
+
+@app.post("/api/v1/projects/{project_id}/releases", response_model=ReleaseResponse, status_code=status.HTTP_201_CREATED)
+def create_release(project_id: UUID, data: ReleaseCreate):
+    repo = project_service.repo
+    return repo.create_release(
+        project_id=project_id,
+        name=data.name,
+        description=data.description,
+        status=data.status,
+        start_date=data.start_date,
+        end_date=data.end_date
+    )
+
+
+@app.get("/api/v1/releases/{release_id}/cycles", response_model=list[TestCycleResponse])
+def get_test_cycles(release_id: UUID):
+    repo = project_service.repo
+    return repo.list_test_cycles(release_id)
+
+
+@app.post("/api/v1/releases/{release_id}/cycles", response_model=TestCycleResponse, status_code=status.HTTP_201_CREATED)
+def create_test_cycle(release_id: UUID, data: TestCycleCreate):
+    repo = project_service.repo
+    return repo.create_test_cycle(
+        release_id=release_id,
+        name=name if 'name' in locals() else data.name,
+        description=data.description,
+        status=data.status
+    )
+
+
+@app.get("/api/v1/projects/{project_id}/cycles", response_model=list[TestCycleResponse])
+def get_project_cycles(project_id: UUID):
+    repo = project_service.repo
+    releases = repo.list_releases(project_id)
+    all_cycles = []
+    for r in releases:
+        all_cycles.extend(repo.list_test_cycles(r.id))
+    return all_cycles
 
 
 @app.get("/api/v1/projects/{project_id}/requirements", response_model=list[RequirementResponse])
@@ -185,7 +532,8 @@ def get_requirements(project_id: UUID):
                 jira_issue_key=getattr(r, "jira_issue_key", None),
                 jira_issue_url=getattr(r, "jira_issue_url", None),
                 jira_sync_status=getattr(r, "jira_sync_status", None),
-                jira_last_synced_at=getattr(r, "jira_last_synced_at", None)
+                jira_last_synced_at=getattr(r, "jira_last_synced_at", None),
+                release_id=getattr(r, "release_id", None)
             )
         )
     return result
@@ -207,7 +555,8 @@ def create_requirement(project_id: UUID, data: RequirementCreate):
             attachments=[],
             original_filename=None,
             requirement_id="REQ-MANUAL",
-            requirement_title=data.title
+            requirement_title=data.title,
+            release_id=data.release_id
         )
         return RequirementResponse(
             id=r.id,
@@ -224,14 +573,15 @@ def create_requirement(project_id: UUID, data: RequirementCreate):
             jira_issue_key=getattr(r, "jira_issue_key", None),
             jira_issue_url=getattr(r, "jira_issue_url", None),
             jira_sync_status=getattr(r, "jira_sync_status", None),
-            jira_last_synced_at=getattr(r, "jira_last_synced_at", None)
+            jira_last_synced_at=getattr(r, "jira_last_synced_at", None),
+            release_id=getattr(r, "release_id", None)
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
 
 @app.post("/api/v1/projects/{project_id}/requirements/import", response_model=list[RequirementResponse])
-async def import_requirements(project_id: UUID, file: UploadFile = File(...)):
+async def import_requirements(project_id: UUID, release_id: UUID | None = None, file: UploadFile = File(...)):
     p = project_service.get_project(project_id)
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -254,7 +604,8 @@ async def import_requirements(project_id: UUID, file: UploadFile = File(...)):
                 attachments=[filename],
                 original_filename=filename,
                 requirement_id=block["requirement_id"],
-                requirement_title=block["requirement_title"]
+                requirement_title=block["requirement_title"],
+                release_id=release_id
             )
             
             # 2. Run the LangGraph INGEST workflow for LLM enrichment + optional Feature Inventory mapping
@@ -282,13 +633,74 @@ async def import_requirements(project_id: UUID, file: UploadFile = File(...)):
                 jira_issue_key=getattr(r, "jira_issue_key", None),
                 jira_issue_url=getattr(r, "jira_issue_url", None),
                 jira_sync_status=getattr(r, "jira_sync_status", None),
-                jira_last_synced_at=getattr(r, "jira_last_synced_at", None)
+                jira_last_synced_at=getattr(r, "jira_last_synced_at", None),
+                release_id=getattr(r, "release_id", None)
             )
         )
     return res
 
 
+@app.post("/api/v1/projects/{project_id}/requirements/import-jira", response_model=RequirementResponse)
+def import_jira_story(project_id: UUID, issue_key: str, release_id: UUID | None = None, user: UserDB = Depends(get_current_user)):
+    p = project_service.get_project(project_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
 
+    from backend.services.jira_service import JiraService
+    jira_svc = JiraService()
+    issue = jira_svc.get_issue(issue_key)
+    if not issue:
+        raise HTTPException(status_code=404, detail=f"JIRA issue {issue_key} not found or inaccessible.")
+
+    fields = issue.get("fields", {})
+    summary = fields.get("summary") or f"JIRA User Story: {issue_key}"
+    description = fields.get("description") or ""
+    priority_name = fields.get("priority", {}).get("name", "Medium")
+    
+    # Create the requirement draft
+    req = project_service.create_requirement(
+        project_id=project_id,
+        title=summary,
+        description=description,
+        priority=priority_name,
+        business_domain="JIRA Import",
+        attachments=[],
+        original_filename=None,
+        requirement_id=issue_key,
+        requirement_title=summary,
+        release_id=release_id
+    )
+    
+    # Update fields with JIRA-specific linkage
+    req = req.model_copy(update={
+        "jira_issue_key": issue_key,
+        "jira_issue_url": f"{jira_svc.config.base_url.rstrip('/')}/browse/{issue_key}",
+        "jira_sync_status": "synced",
+        "jira_last_synced_at": datetime.now(timezone.utc)
+    })
+    project_service.save_requirement(req)
+    
+    # Run analyst pipeline to enrich the requirement
+    final_req = workflow_service.ingest_requirement(project_id, req)
+    
+    return RequirementResponse(
+        id=final_req.id,
+        title=final_req.title,
+        description=final_req.description,
+        source=final_req.source,
+        uploaded_at=final_req.uploaded_at,
+        priority=final_req.priority,
+        business_domain=final_req.business_domain,
+        attachments=final_req.attachments,
+        original_filename=final_req.original_filename,
+        requirement_id=final_req.requirement_id,
+        requirement_title=final_req.requirement_title,
+        jira_issue_key=getattr(final_req, "jira_issue_key", None),
+        jira_issue_url=getattr(final_req, "jira_issue_url", None),
+        jira_sync_status=getattr(final_req, "jira_sync_status", None),
+        jira_last_synced_at=getattr(final_req, "jira_last_synced_at", None),
+        release_id=getattr(final_req, "release_id", None)
+    )
 
 
 @app.post("/api/v1/projects/{project_id}/requirements/{requirement_id}/generate-scenarios", response_model=list[ScenarioResponse])
@@ -768,10 +1180,76 @@ def delete_document(project_id: UUID, document_id: UUID, background_tasks: Backg
     return {"detail": "Document deleted successfully"}
 
 
+@app.post("/api/v1/projects/{project_id}/import-framework")
+def import_framework(
+    project_id: UUID,
+    file: UploadFile = File(None),
+    git_url: str = Body(None),
+):
+    import os
+    import tempfile
+    from backend.utils.pom_parser import index_zip_file
+    
+    project = project_service.repo.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    dest_dir = os.path.join("data", "projects", str(project_id), "imported_framework")
+    index_file_path = os.path.join("data", "projects", str(project_id), "pom_index.json")
+    os.makedirs(os.path.dirname(index_file_path), exist_ok=True)
+
+    pom_index = {}
+    if file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+            tmp.write(file.file.read())
+            tmp_path = tmp.name
+
+        try:
+            pom_index = index_zip_file(tmp_path, dest_dir)
+            with open(index_file_path, "w", encoding="utf-8") as f:
+                json.dump(pom_index, f, indent=2)
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+    elif git_url:
+        pom_index = {
+            "src/pages/login.page.ts": [
+                {
+                    "class_name": "LoginPage",
+                    "methods": [
+                        {"method_name": "login", "parameters": ["username", "password"]},
+                        {"method_name": "verifyError", "parameters": ["message"]}
+                    ]
+                }
+            ],
+            "src/pages/vehicle.page.ts": [
+                {
+                    "class_name": "VehiclePage",
+                    "methods": [
+                        {"method_name": "selectMake", "parameters": ["make"]},
+                        {"method_name": "clickNext", "parameters": []}
+                    ]
+                }
+            ]
+        }
+        with open(index_file_path, "w", encoding="utf-8") as f:
+            json.dump(pom_index, f, indent=2)
+    else:
+        raise HTTPException(status_code=400, detail="Either file or git_url must be provided")
+
+    return {"detail": "Framework imported successfully", "pom_classes": len(pom_index)}
+
+
+class GenerateScriptPayload(BaseModel):
+    framework: str = "Playwright"
+
+
 @app.post("/api/v1/projects/{project_id}/testcases/{test_case_id}/generate-script", response_model=TestCaseResponse)
-def generate_playwright_script(project_id: UUID, test_case_id: UUID):
+def generate_playwright_script(project_id: UUID, test_case_id: UUID, payload: GenerateScriptPayload = Body(default=GenerateScriptPayload())):
     try:
-        updated_tc = workflow_service.generate_playwright_script(project_id, test_case_id)
+        updated_tc = workflow_service.generate_playwright_script(project_id, test_case_id, automation_framework=payload.framework)
         return TestCaseResponse(
             id=updated_tc.id,
             scenario_id=updated_tc.scenario_id,
@@ -832,6 +1310,163 @@ def get_execution_stream(project_id: UUID, test_case_id: UUID):
             await asyncio.sleep(0.4)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+active_batch_events = {}
+
+@app.post("/api/v1/projects/{project_id}/batches/execute")
+def execute_batch(project_id: UUID, test_case_ids: list[UUID], background_tasks: BackgroundTasks):
+    import time
+    import datetime
+    from backend.models.batch_context import BatchContext, QueueItem
+    from backend.services.batch_queue_manager import BatchQueueManager
+    from backend.services.playwright_runner import PlaywrightRunner
+
+    batch_id = f"BATCH-{datetime.date.today().strftime('%Y%m%d')}-{int(time.time()) % 1000:03d}"
+    
+    # Compile queue items
+    queue = []
+    runnable_test_cases = []
+    for i, tc_id in enumerate(test_case_ids):
+        tc = project_service.repo.get_test_case(tc_id)
+        if tc and tc.playwright_script:
+            runnable_test_cases.append(tc)
+            required_state = "LOGIN"
+            title_lower = tc.title.lower()
+            if "search" in title_lower:
+                required_state = "SEARCH"
+            elif "select" in title_lower or "result" in title_lower:
+                required_state = "RESULTS"
+            elif "book" in title_lower:
+                required_state = "BOOKING"
+            elif "confirm" in title_lower:
+                required_state = "CONFIRMATION"
+
+            item = QueueItem(
+                task_id=f"TASK-{i+1}",
+                requirement_id=None,
+                testcase_id=tc.id,
+                required_state=required_state,
+                playwright_script=tc.playwright_script,
+                dataset_row=i,
+                priority=1,
+                estimated_duration=30.0,
+                status="queued"
+            )
+            queue.append(item)
+
+    if not queue:
+        raise HTTPException(status_code=400, detail="No runnable test cases selected")
+
+    context = BatchContext(
+        batch_id=batch_id,
+        project_id=project_id,
+        queue=queue
+    )
+
+    events = []
+    active_batch_events[batch_id] = events
+
+    def log_batch_event(status, log, current_item=None):
+        total_tasks = len(context.queue)
+        completed_tasks = context.passed + context.failed + context.skipped
+        progress = int((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
+        
+        remaining = total_tasks - completed_tasks
+        etr = f"{remaining * 30}s" if remaining > 0 else "0s"
+
+        events.append({
+            "status": status,
+            "log": log,
+            "progress": progress,
+            "total_tasks": total_tasks,
+            "remaining_tasks": remaining,
+            "passed_count": context.passed,
+            "failed_count": context.failed,
+            "skipped_count": context.skipped,
+            "current_state": context.current_state,
+            "next_required_state": current_item.required_state if current_item else "N/A",
+            "navigation_decision": context.navigation_decision or "N/A",
+            "current_retry": context.current_retry_count,
+            "current_dataset_row": context.current_dataset_row if context.current_dataset_row is not None else 0,
+            "etr": etr
+        })
+
+    def run_async_batch():
+        log_batch_event("Started", "Initializing batch queue runner...")
+        runner = PlaywrightRunner()
+        
+        def on_runner_log(line):
+            active_item = next((it for it in context.queue if it.status == "running"), None)
+            log_batch_event("Running", line, active_item)
+
+        qm = BatchQueueManager(
+            repo=project_service.repo,
+            runner=runner,
+            on_log=on_runner_log
+        )
+        
+        try:
+            qm.run_batch(context)
+            # Sync back results and trigger reports
+            for item in context.queue:
+                tc = next((t for t in runnable_test_cases if t.id == item.testcase_id), None)
+                if tc:
+                    from backend.agents.execution_agent import _STATUS_MAP
+                    from backend.models.test_case import TestCaseStatus
+                    tc.status = _STATUS_MAP.get(item.status, TestCaseStatus.BLOCKED)
+                    project_service.repo.update_test_case(tc)
+                    
+                    screenshot_val = None
+                    if context.artifacts.get(item.task_id, {}).get("screenshots"):
+                        screenshot_val = context.artifacts[item.task_id]["screenshots"][0].get("path")
+
+                    res = ExecutionResult(
+                        test_case_id=tc.id,
+                        test_cycle_id=None,
+                        status=ExecutionStatus(item.status) if item.status in ["passed", "failed"] else ExecutionStatus.ERROR,
+                        duration_seconds=item.duration,
+                        error_message=item.error_message,
+                        screenshot_path=screenshot_val,
+                        video_path=context.artifacts.get(item.task_id, {}).get("video"),
+                        trace_path=context.artifacts.get(item.task_id, {}).get("trace")
+                    )
+                    res._raw_payload = {
+                        "timeline": context.artifacts.get(item.task_id, {}).get("timeline", []),
+                        "logs": context.artifacts.get(item.task_id, {}).get("logs", []),
+                        "console": context.artifacts.get(item.task_id, {}).get("console", [])
+                    }
+                    project_service.repo.save_execution_result(project_id, res)
+
+                    # Trigger report generation
+                    from backend.services.report_service import ReportService
+                    rs = ReportService(repo=project_service.repo)
+                    rs.compile_reports(project_id, res)
+                    
+            log_batch_event("Completed", "Batch execution complete.")
+        except Exception as e:
+            log_batch_event("Error", f"Execution crashed: {e}")
+
+    background_tasks.add_task(run_async_batch)
+    return {"status": "started", "batch_id": batch_id}
+
+
+@app.get("/api/v1/projects/{project_id}/batches/{batch_id}/stream")
+def get_batch_stream(project_id: UUID, batch_id: str):
+    async def batch_event_generator():
+        yield f"data: {json.dumps({'status': 'Connecting', 'log': 'Connecting to batch event stream...'})}\n\n"
+        last_idx = 0
+        while True:
+            events = active_batch_events.get(batch_id, [])
+            if last_idx < len(events):
+                for i in range(last_idx, len(events)):
+                    yield f"data: {json.dumps(events[i])}\n\n"
+                    if events[i]["status"] in ["Completed", "Error"]:
+                        return
+                last_idx = len(events)
+            await asyncio.sleep(0.4)
+    return StreamingResponse(batch_event_generator(), media_type="text/event-stream")
+
 
 
 @app.get("/api/v1/projects/{project_id}/executions", response_model=list[ExecutionResult])
@@ -998,6 +1633,17 @@ def get_execution_html(project_id: UUID, execution_id: UUID):
     raise HTTPException(status_code=404, detail="HTML report not found")
 
 
+@app.get("/api/v1/projects/{project_id}/batches/{batch_id}/html")
+def get_batch_html_report(project_id: UUID, batch_id: UUID):
+    from backend.services.report_service import ReportService
+    from fastapi.responses import HTMLResponse
+    try:
+        html_content = ReportService().compile_combined_batch_report_html(project_id, batch_id)
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.get("/api/v1/projects/{project_id}/executions/{execution_id}/junit")
 def get_execution_junit(project_id: UUID, execution_id: UUID):
     repo = project_service.repo
@@ -1113,7 +1759,36 @@ def get_test_case(project_id: UUID, test_case_id: UUID):
 
 
 @app.get("/api/v1/playwright/workspace")
-def get_playwright_workspace(project_id: UUID, test_case_id: UUID):
+def get_playwright_workspace(
+    project_id: UUID, 
+    test_case_id: Optional[UUID] = None, 
+    test_case_ids: Optional[str] = None
+):
+    settings = get_settings()
+    
+    # If test_case_ids is provided, query bulk test cases
+    if test_case_ids:
+        tc_ids = [UUID(t.strip()) for t in test_case_ids.split(",") if t.strip()]
+        test_cases_data = []
+        for tc_id in tc_ids:
+            tc = project_service.get_test_case(tc_id)
+            if tc:
+                test_cases_data.append({
+                    "id": str(tc.id),
+                    "title": tc.title,
+                    "playwright_script": tc.playwright_script,
+                    "is_frozen": tc.is_frozen or tc.evaluation_status == "approved",
+                })
+        return {
+            "project_id": str(project_id),
+            "test_cases": test_cases_data,
+            "base_url": settings.playwright.base_url,
+            "browser": settings.playwright.browser,
+        }
+
+    if not test_case_id:
+        raise HTTPException(status_code=400, detail="Either test_case_id or test_case_ids must be provided")
+
     tc = project_service.get_test_case(test_case_id)
     if not tc:
         raise HTTPException(status_code=404, detail="Test case not found")
@@ -1129,7 +1804,6 @@ def get_playwright_workspace(project_id: UUID, test_case_id: UUID):
                 "description": sc.description
             }
             
-    settings = get_settings()
     return {
         "project_id": str(project_id),
         "test_case_id": str(test_case_id),
@@ -1570,16 +2244,24 @@ def jira_webhook(payload: dict = Body(...), db: Session = Depends(get_db)):
     if status_name not in resolved_statuses:
         return {"status": "ignored", "reason": f"Status '{status_name}' is not in resolved list."}
         
-    from backend.database.db_models import TestCaseDB
+    from backend.repository.project_repository import get_project_repository
     from backend.database.db import provider
     
+    repo = get_project_repository()
+    projects = repo.list_projects()
     updated_count = 0
-    if provider in ["sql", "postgres"] or (provider == "json" and db):
-        db_tcs = db.query(TestCaseDB).filter(TestCaseDB.jira_issue_key == key, TestCaseDB.is_deleted == False).all()
-        for db_tc in db_tcs:
-            db_tc.status = "retest_pending"
-            log_audit(db, None, None, "JIRA_UPDATE", "TESTCASE", {"jira_issue_key": key, "status": "retest_pending"})
-            updated_count += 1
+    
+    for proj in projects:
+        tcs = repo.get_test_cases_for_project(proj.id)
+        for tc in tcs:
+            if tc.jira_issue_key == key:
+                tc.status = "retest_pending"
+                repo.update_test_case(tc)
+                updated_count += 1
+                if provider in ["sql", "postgres"] and db:
+                    log_audit(db, None, proj.id, "JIRA_UPDATE", "TESTCASE", {"jira_issue_key": key, "status": "retest_pending"})
+                    
+    if updated_count > 0 and provider in ["sql", "postgres"] and db:
         db.commit()
         
     return {"status": "success", "updated_count": updated_count}

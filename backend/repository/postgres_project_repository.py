@@ -10,11 +10,14 @@ from backend.models.scenario import Scenario
 from backend.models.test_case import TestCase
 from backend.models.document import Document
 from backend.models.execution_result import ExecutionResult
+from backend.models.release import Release
+from backend.models.test_cycle import TestCycle
 from backend.repository.project_repository import ProjectRepository
 from backend.database.db import SessionLocal
 from backend.database.db_models import (
     ProjectDB, RequirementDB, ScenarioDB, TestCaseDB, 
-    ExecutionDB, ReportDB, DocumentDB, ScenarioNoteDB, TestCaseNoteDB
+    ExecutionDB, ReportDB, DocumentDB, ScenarioNoteDB, TestCaseNoteDB,
+    ReleaseDB, TestCycleDB
 )
 
 logger = logging.getLogger("backend.repository.postgres_project_repository")
@@ -72,6 +75,9 @@ class PostgresProjectRepository(ProjectRepository):
                 line_of_business=p.line_of_business,
                 framework=p.framework,
                 jira_project_key=p.jira_project_key,
+                target_url=getattr(p, "target_url", None),
+                target_username=getattr(p, "target_username", None),
+                target_password_enc=getattr(p, "target_password_enc", None),
                 created_at=p.created_at,
                 requirements=[r.id for r in p.requirements if include_deleted or not r.is_deleted]
             )
@@ -93,18 +99,24 @@ class PostgresProjectRepository(ProjectRepository):
             line_of_business=p.line_of_business,
             framework=p.framework,
             jira_project_key=p.jira_project_key,
+            target_url=getattr(p, "target_url", None),
+            target_username=getattr(p, "target_username", None),
+            target_password_enc=getattr(p, "target_password_enc", None),
             created_at=p.created_at,
             requirements=[r.id for r in p.requirements if include_deleted or not r.is_deleted]
         )
 
-    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None) -> Project:
+    def create_project(self, name: str, description: str, line_of_business: str = "general", framework: str = "playwright", jira_project_key: str | None = None, target_url: str | None = "https://adactinhotelapp.com/", target_username: str | None = None, target_password_enc: str | None = None) -> Project:
         session = self.session
         db_proj = ProjectDB(
             name=name,
             description=description,
             line_of_business=line_of_business,
             framework=framework,
-            jira_project_key=jira_project_key
+            jira_project_key=jira_project_key,
+            target_url=target_url,
+            target_username=target_username,
+            target_password_enc=target_password_enc
         )
         session.add(db_proj)
         self._flush_or_commit()
@@ -115,6 +127,9 @@ class PostgresProjectRepository(ProjectRepository):
             line_of_business=db_proj.line_of_business,
             framework=db_proj.framework,
             jira_project_key=db_proj.jira_project_key,
+            target_url=db_proj.target_url,
+            target_username=db_proj.target_username,
+            target_password_enc=db_proj.target_password_enc,
             created_at=db_proj.created_at,
             requirements=[]
         )
@@ -130,6 +145,9 @@ class PostgresProjectRepository(ProjectRepository):
         db_proj.line_of_business = project.line_of_business
         db_proj.framework = project.framework
         db_proj.jira_project_key = project.jira_project_key
+        db_proj.target_url = project.target_url
+        db_proj.target_username = project.target_username
+        db_proj.target_password_enc = project.target_password_enc
         self._flush_or_commit()
         return project
 
@@ -184,7 +202,8 @@ class PostgresProjectRepository(ProjectRepository):
                 jira_issue_key=r.jira_issue_key,
                 jira_issue_url=r.jira_issue_url,
                 jira_sync_status=r.jira_sync_status,
-                jira_last_synced_at=r.jira_last_synced_at
+                jira_last_synced_at=r.jira_last_synced_at,
+                release_id=r.release_id
             )
             for r in db_reqs
         ]
@@ -199,11 +218,13 @@ class PostgresProjectRepository(ProjectRepository):
         attachments: list[str] | None = None,
         original_filename: str | None = None,
         requirement_id: str | None = None,
-        requirement_title: str | None = None
+        requirement_title: str | None = None,
+        release_id: UUID | None = None
     ) -> Requirement:
         session = self.session
         db_req = RequirementDB(
             project_id=project_id,
+            release_id=release_id,
             title=title,
             description=description,
             source="manual",
@@ -233,7 +254,8 @@ class PostgresProjectRepository(ProjectRepository):
             jira_issue_key=db_req.jira_issue_key,
             jira_issue_url=db_req.jira_issue_url,
             jira_sync_status=db_req.jira_sync_status,
-            jira_last_synced_at=db_req.jira_last_synced_at
+            jira_last_synced_at=db_req.jira_last_synced_at,
+            release_id=db_req.release_id
         )
 
     def save_requirement(
@@ -263,7 +285,8 @@ class PostgresProjectRepository(ProjectRepository):
                 jira_issue_key=requirement.jira_issue_key,
                 jira_issue_url=requirement.jira_issue_url,
                 jira_sync_status=requirement.jira_sync_status,
-                jira_last_synced_at=requirement.jira_last_synced_at
+                jira_last_synced_at=requirement.jira_last_synced_at,
+                release_id=requirement.release_id
             )
             session.add(db_req)
         else:
@@ -279,6 +302,7 @@ class PostgresProjectRepository(ProjectRepository):
             db_req.jira_issue_url = requirement.jira_issue_url
             db_req.jira_sync_status = requirement.jira_sync_status
             db_req.jira_last_synced_at = requirement.jira_last_synced_at
+            db_req.release_id = requirement.release_id
             if priority is not None:
                 db_req.priority = priority
             if business_domain is not None:
@@ -286,7 +310,26 @@ class PostgresProjectRepository(ProjectRepository):
             if attachments is not None:
                 db_req.attachments = attachments
 
-        self._flush_or_commit()
+    def get_scenarios_for_project(self, project_id: UUID) -> list[Scenario]:
+        session = self.session
+        stmt = (
+            select(ScenarioDB)
+            .join(RequirementDB, ScenarioDB.requirement_id == RequirementDB.id)
+            .where(RequirementDB.project_id == project_id, ScenarioDB.is_deleted.is_(False), RequirementDB.is_deleted.is_(False))
+        )
+        db_scs = session.scalars(stmt).all()
+        return [Scenario.model_validate(s, from_attributes=True) for s in db_scs]
+
+    def get_test_cases_for_project(self, project_id: UUID) -> list[TestCase]:
+        session = self.session
+        stmt = (
+            select(TestCaseDB)
+            .join(ScenarioDB, TestCaseDB.scenario_id == ScenarioDB.id)
+            .join(RequirementDB, ScenarioDB.requirement_id == RequirementDB.id)
+            .where(RequirementDB.project_id == project_id, TestCaseDB.is_deleted.is_(False), ScenarioDB.is_deleted.is_(False), RequirementDB.is_deleted.is_(False))
+        )
+        db_tcs = session.scalars(stmt).all()
+        return [TestCase.model_validate(tc, from_attributes=True) for tc in db_tcs]
 
     def get_scenarios(self, requirement_id: UUID, include_deleted: bool = False) -> list[Scenario]:
         session = self.session
@@ -602,7 +645,14 @@ class PostgresProjectRepository(ProjectRepository):
                 video_path=ex.video_path,
                 trace_path=ex.trace_path,
                 browser_version=ex.browser_version,
-                executed_at=ex.executed_at
+                executed_at=ex.executed_at,
+                test_cycle_id=ex.test_cycle_id,
+                failure_category=ex.failure_category,
+                root_cause_summary=ex.root_cause_summary,
+                suggest_retry=ex.suggest_retry,
+                retest_pending_candidate=ex.retest_pending_candidate,
+                jira_bug_id=ex.jira_bug_id,
+                jira_bug_url=ex.jira_bug_url
             )
             for ex in db_execs
         ]
@@ -623,7 +673,14 @@ class PostgresProjectRepository(ProjectRepository):
             video_path=ex.video_path,
             trace_path=ex.trace_path,
             browser_version=ex.browser_version,
-            executed_at=ex.executed_at
+            executed_at=ex.executed_at,
+            test_cycle_id=ex.test_cycle_id,
+            failure_category=ex.failure_category,
+            root_cause_summary=ex.root_cause_summary,
+            suggest_retry=ex.suggest_retry,
+            retest_pending_candidate=ex.retest_pending_candidate,
+            jira_bug_id=ex.jira_bug_id,
+            jira_bug_url=ex.jira_bug_url
         )
 
     def save_execution_result(self, project_id: UUID, result: ExecutionResult) -> None:
@@ -635,6 +692,7 @@ class PostgresProjectRepository(ProjectRepository):
                 id=result.id,
                 test_case_id=result.test_case_id,
                 project_id=project_id,
+                test_cycle_id=result.test_cycle_id,
                 status=result.status.value,
                 duration_seconds=result.duration_seconds,
                 error_message=result.error_message,
@@ -642,7 +700,13 @@ class PostgresProjectRepository(ProjectRepository):
                 video_path=result.video_path,
                 trace_path=result.trace_path,
                 browser_version=result.browser_version,
-                executed_at=result.executed_at
+                executed_at=result.executed_at,
+                failure_category=result.failure_category,
+                root_cause_summary=result.root_cause_summary,
+                suggest_retry=result.suggest_retry,
+                retest_pending_candidate=result.retest_pending_candidate,
+                jira_bug_id=result.jira_bug_id,
+                jira_bug_url=result.jira_bug_url
             )
             session.add(db_ex)
         else:
@@ -654,6 +718,13 @@ class PostgresProjectRepository(ProjectRepository):
             db_ex.trace_path = result.trace_path
             db_ex.browser_version = result.browser_version
             db_ex.executed_at = result.executed_at
+            db_ex.test_cycle_id = result.test_cycle_id
+            db_ex.failure_category = result.failure_category
+            db_ex.root_cause_summary = result.root_cause_summary
+            db_ex.suggest_retry = result.suggest_retry
+            db_ex.retest_pending_candidate = result.retest_pending_candidate
+            db_ex.jira_bug_id = result.jira_bug_id
+            db_ex.jira_bug_url = result.jira_bug_url
         self._flush_or_commit()
 
     def get_scenario_notes(self, scenario_id: UUID) -> list[str]:
@@ -701,7 +772,8 @@ class PostgresProjectRepository(ProjectRepository):
             requirement_title=r.requirement_title,
             priority=r.priority,
             business_domain=r.business_domain,
-            attachments=r.attachments
+            attachments=r.attachments,
+            release_id=r.release_id
         )
 
     def get_scenario(self, scenario_id: UUID) -> Scenario | None:
@@ -756,3 +828,112 @@ class PostgresProjectRepository(ProjectRepository):
             "pdf_path": db_rep.pdf_path,
             "created_at": db_rep.created_at.isoformat()
         }
+
+    def list_releases(self, project_id: UUID) -> list[Release]:
+        session = self.session
+        stmt = select(ReleaseDB).where(ReleaseDB.project_id == project_id)
+        db_releases = session.scalars(stmt).all()
+        return [
+            Release(
+                id=r.id,
+                project_id=r.project_id,
+                name=r.name,
+                description=r.description,
+                status=r.status,
+                start_date=r.start_date,
+                end_date=r.end_date
+            )
+            for r in db_releases
+        ]
+
+    def create_release(self, project_id: UUID, name: str, description: str | None = None, status: str = "Active", start_date: datetime | None = None, end_date: datetime | None = None) -> Release:
+        from uuid import uuid4
+        session = self.session
+        db_release = ReleaseDB(
+            id=uuid4(),
+            project_id=project_id,
+            name=name,
+            description=description,
+            status=status,
+            start_date=start_date,
+            end_date=end_date
+        )
+        session.add(db_release)
+        self._flush_or_commit()
+        return Release(
+            id=db_release.id,
+            project_id=db_release.project_id,
+            name=db_release.name,
+            description=db_release.description,
+            status=db_release.status,
+            start_date=db_release.start_date,
+            end_date=db_release.end_date
+        )
+
+    def get_release(self, release_id: UUID) -> Release | None:
+        session = self.session
+        stmt = select(ReleaseDB).where(ReleaseDB.id == release_id)
+        r = session.scalar(stmt)
+        if not r:
+            return None
+        return Release(
+            id=r.id,
+            project_id=r.project_id,
+            name=r.name,
+            description=r.description,
+            status=r.status,
+            start_date=r.start_date,
+            end_date=r.end_date
+        )
+
+    def list_test_cycles(self, release_id: UUID) -> list[TestCycle]:
+        session = self.session
+        stmt = select(TestCycleDB).where(TestCycleDB.release_id == release_id)
+        db_cycles = session.scalars(stmt).all()
+        return [
+            TestCycle(
+                id=c.id,
+                release_id=c.release_id,
+                name=c.name,
+                description=c.description,
+                status=c.status,
+                created_at=c.created_at
+            )
+            for c in db_cycles
+        ]
+
+    def create_test_cycle(self, release_id: UUID, name: str, description: str | None = None, status: str = "Active") -> TestCycle:
+        from uuid import uuid4
+        session = self.session
+        db_cycle = TestCycleDB(
+            id=uuid4(),
+            release_id=release_id,
+            name=name,
+            description=description,
+            status=status
+        )
+        session.add(db_cycle)
+        self._flush_or_commit()
+        return TestCycle(
+            id=db_cycle.id,
+            release_id=db_cycle.release_id,
+            name=db_cycle.name,
+            description=db_cycle.description,
+            status=db_cycle.status,
+            created_at=db_cycle.created_at
+        )
+
+    def get_test_cycle(self, cycle_id: UUID) -> TestCycle | None:
+        session = self.session
+        stmt = select(TestCycleDB).where(TestCycleDB.id == cycle_id)
+        c = session.scalar(stmt)
+        if not c:
+            return None
+        return TestCycle(
+            id=c.id,
+            release_id=c.release_id,
+            name=c.name,
+            description=c.description,
+            status=c.status,
+            created_at=c.created_at
+        )

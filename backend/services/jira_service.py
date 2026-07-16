@@ -80,6 +80,36 @@ class JiraService:
             logger.error(f"Jira search error: {e}")
         return []
 
+    def get_issue(self, issue_key: str) -> dict | None:
+        """Fetch details of a single Jira issue by key."""
+        if self.mock_mode:
+            logger.info(f"[Mock JIRA] Fetching issue: '{issue_key}'")
+            return {
+                "key": issue_key,
+                "fields": {
+                    "summary": f"Mock Story for {issue_key}: Book a Hotel room in Adactin",
+                    "description": "As a registered user, I want to book a hotel room using Adactin Hotel App so that I can secure accommodation.",
+                    "priority": {"name": "High"},
+                    "issuetype": {"name": "Story"}
+                }
+            }
+
+        url = f"{self.config.base_url.rstrip('/')}/rest/api/2/issue/{issue_key}"
+        try:
+            response = self.session.get(
+                url,
+                headers=self._get_headers(),
+                verify=self.config.verify_ssl,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return response.json()
+            logger.error(f"Jira get issue failed ({response.status_code}): {response.text}")
+        except Exception as e:
+            logger.error(f"Jira get issue error: {e}")
+        return None
+
+
     def create_issue(self, summary: str, description: str, issue_type: str, project_key: str | None = None, labels: list[str] | None = None, assignee_email: str | None = None) -> dict | None:
         """Create a new issue (e.g. Story or Bug) in Jira."""
         proj_key = project_key or self.config.project_key or "QA"

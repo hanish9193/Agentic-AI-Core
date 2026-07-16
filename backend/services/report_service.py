@@ -112,22 +112,22 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
                 result = f"Step {step_num} verification passed."
         else:
             # Fallback mapping
-            is_tricentis = not test_case or any("tricentis" in str(getattr(test_case, k, "")).lower() for k in ["title", "expected_result"])
-            if is_tricentis and ("initial" in fn_lower or fn_lower.startswith("01-")):
-                title = "Initial Portal Loading"
-                action = "Navigate to the Tricentis Vehicle Insurance portal and initialize the test session."
-                observation = "The application landing page loaded successfully. The vehicle data input form is displayed and interactive."
-                result = "Portal loaded and ready for automation."
-            elif is_tricentis and ("form-filled" in fn_lower or fn_lower.startswith("02-")):
-                title = "Vehicle Form Input Completion"
-                action = "Fill out all vehicle specifications: Make (BMW), Model (Scooter), Cylinder Capacity (150), Engine Performance (90), Date of Manufacture, Seats (2), Fuel (Petrol), List Price (25000), License Plate, and Annual Mileage."
-                observation = "All input fields and selection dropdowns populated with correct test data parameters. No form validation errors."
-                result = "Vehicle data form validation passed."
-            elif is_tricentis and ("insurant-data" in fn_lower or fn_lower.startswith("03-")):
-                title = "Transition to Enter Insurant Data"
-                action = "Click the 'Next' action button to submit the vehicle form data and navigate to the Insurant details form."
-                observation = "Form submitted successfully. Browser page navigated to the Enter Insurant Data portal page view."
-                result = "Navigation to insurant form successful."
+            is_demo = not test_case or any(k in str(getattr(test_case, attr, "")).lower() for attr in ["title", "expected_result"] for k in ["tricentis", "adactin", "hotel", "vehicle"])
+            if is_demo and ("initial" in fn_lower or fn_lower.startswith("01-") or "login" in fn_lower):
+                title = "Portal Session Initialization"
+                action = "Navigate to the target application URL and initialize the test session."
+                observation = "The application landing page loaded successfully. Login form fields filled and submitted."
+                result = "Session initialized and authenticated successfully."
+            elif is_demo and ("form-filled" in fn_lower or fn_lower.startswith("02-") or "search" in fn_lower):
+                title = "Workflow Data Input completion"
+                action = "Fill out form input specifications and search filters on the target page."
+                observation = "All input fields and selection dropdowns populated with correct test data parameters."
+                result = "Input parameters validated."
+            elif is_demo and ("insurant-data" in fn_lower or fn_lower.startswith("03-") or "select" in fn_lower or "next" in fn_lower):
+                title = "Transition to Next Page"
+                action = "Click the next action button to submit form data and navigate to the next page."
+                observation = "Form submitted successfully. Browser page navigated to the next step."
+                result = "Navigation to the next page successful."
             else:
                 title = "Visual State Capture"
                 action = "Capture screenshot to record browser visual state."
@@ -152,6 +152,77 @@ class ReportService:
         else:
             self.repo = repo
 
+    def enrich_steps_with_llm(self, mapped_steps: list[dict], test_case) -> list[dict]:
+        """
+        Enriches the mapped steps with realistic, context-specific Action, Observation,
+        and Result descriptions using the Ollama-backed LLMService.
+        """
+        if not mapped_steps:
+            return mapped_steps
+
+        try:
+            import json
+            from backend.services.llm import LLMService
+            from pydantic import BaseModel, Field
+
+            class EnrichedStep(BaseModel):
+                step_index: int = Field(description="The index of the step in the list (0-based)")
+                action: str = Field(description="The interaction action description, active voice, specific to elements.")
+                observation: str = Field(description="Visual observation of the page (e.g. 'the user is on the ... page, all required fields seem to be filled based on previous actions and current visibility')")
+                result: str = Field(description="Detailed verification outcome (e.g. 'Success - the page was scrolled and the next button is not visible')")
+
+            class EnrichedStepsList(BaseModel):
+                steps: list[EnrichedStep]
+
+            llm = LLMService()
+
+            tc_title = test_case.title if test_case else "Playwright Automation Check"
+            tc_expected = getattr(test_case, "expected_result", "") if test_case else ""
+            tc_steps = getattr(test_case, "steps", []) if test_case else []
+
+            steps_input = []
+            for i, step in enumerate(mapped_steps):
+                steps_input.append({
+                    "index": i,
+                    "title": step.get("title", ""),
+                    "action": step.get("action", ""),
+                    "observation": step.get("observation", ""),
+                    "result": step.get("result", "")
+                })
+
+            user_prompt = f"""
+Test Case Title: {tc_title}
+Expected Result: {tc_expected}
+Test Case Steps: {chr(10).join(tc_steps)}
+
+Current execution steps:
+{json.dumps(steps_input, indent=2)}
+
+Please enrich the 'action', 'observation', and 'result' fields for each step to make them highly detailed, realistic, and specific to the website elements and flow.
+- The 'observation' field MUST describe what the user sees on the screen at this point (e.g. "the user is on the 'Enter Insurance Data' tab of the website, all required fields seem to be filled based on previous actions and current visibility").
+- The 'result' field MUST describe the verification result/status (e.g. "Success - the page was scrolled and the next button is not visible").
+
+Return the list of enriched steps matching the EnrichedStepsList schema.
+"""
+
+            res = llm.structured_generate(
+                user=user_prompt,
+                response_model=EnrichedStepsList,
+                system="You are an expert QA automation reporting agent. You enrich step execution logs with professional, context-specific Action, Observation, and Result fields based on the test case design."
+            )
+
+            for enriched in res.steps:
+                idx = enriched.step_index
+                if 0 <= idx < len(mapped_steps):
+                    mapped_steps[idx]["action"] = enriched.action
+                    mapped_steps[idx]["observation"] = enriched.observation
+                    mapped_steps[idx]["result"] = enriched.result
+
+        except Exception as e:
+            print(f"[LLM Report Enrichment Error]: {e}")
+            
+        return mapped_steps
+
     def compile_reports(self, project_id: UUID, execution_result: ExecutionResult) -> dict:
         """
         Compiles HTML, PDF, and JUnit reports based on the Playwright execution results
@@ -163,8 +234,8 @@ class ReportService:
         execution_id_str = str(execution_result.id)
         
         # Extract rich payload timeline and screenshots
-        payload = getattr(execution_result, "_raw_payload", {})
-        raw_timeline = payload.get("timeline", [])
+        payload = getattr(execution_result, "_raw_payload", {}) or {}
+        raw_timeline = payload.get("timeline", []) or getattr(execution_result, "timeline", []) or []
         
         # Self-healing: if raw_timeline is empty, try to retrieve it dynamically
         if not raw_timeline:
@@ -235,10 +306,12 @@ class ReportService:
                 step_mapped["screenshot_url"] = str((next_screenshots_dir / failure_screenshot_name).absolute())
             mapped_steps.append(step_mapped)
 
+        mapped_steps = self.enrich_steps_with_llm(mapped_steps, test_case)
+
         # Determine target web URL
         from backend.config.settings import get_settings
         settings = get_settings()
-        web_url = payload.get("base_url") or settings.playwright.base_url or "https://sampleapp.tricentis.com/101/app.php"
+        web_url = payload.get("base_url") or settings.playwright.base_url or "https://adactinhotelapp.com/"
 
         # 1. Compile JUnit XML
         junit_path = reports_dir / f"junit_{execution_id_str}.xml"
@@ -338,21 +411,21 @@ class ReportService:
         if is_error:
             banner_html = f"""
         <div class="error-banner">
-            <div class="error-title">❌ Test Execution Failed</div>
+            <div class="error-title">Test Execution Failed</div>
             <div class="error-msg">{escaped_error_msg}</div>
             <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
-                <button class="btn-rerun" onclick="rerunTestCase('{execution_result.test_case_id}')">🔄 Rerun Execution</button>
-                <a href="http://localhost:3000/execution/{execution_id_str}" target="_blank" class="btn-workspace">🖥 Open in Playwright Workspace</a>
+                <button class="btn-rerun" onclick="rerunTestCase('{execution_result.test_case_id}')">Rerun Execution</button>
+                <a href="http://localhost:3000/execution/{execution_id_str}" target="_blank" class="btn-workspace">Open in Playwright Workspace</a>
             </div>
         </div>
         """
         else:
             banner_html = f"""
         <div class="success-banner">
-            <div class="success-title">✓ Test Execution Passed</div>
+            <div class="success-title">Test Execution Passed</div>
             <div style="margin-top: 16px; display: flex; gap: 12px; align-items: center;">
-                <button class="btn-rerun" onclick="rerunTestCase('{execution_result.test_case_id}')">🔄 Rerun Execution</button>
-                <a href="http://localhost:3000/execution/{execution_id_str}" target="_blank" class="btn-workspace">🖥 Open in Playwright Workspace</a>
+                <button class="btn-rerun" onclick="rerunTestCase('{execution_result.test_case_id}')">Rerun Execution</button>
+                <a href="http://localhost:3000/execution/{execution_id_str}" target="_blank" class="btn-workspace">Open in Playwright Workspace</a>
             </div>
         </div>
         """
@@ -882,6 +955,421 @@ class ReportService:
         report_payload = self.repo.save_report(project_id, UUID(execution_id_str), report_payload)
 
         return report_payload
+
+    def compile_batch_report(self, project_id: UUID, context) -> dict:
+        reports_dir = Path("data/reports")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        
+        batch_id_str = context.batch_id
+        
+        total_tasks = len(context.queue)
+        passed = context.passed
+        failed = context.failed
+        skipped = context.skipped
+        
+        task_rows = []
+        for item in context.queue:
+            status_class = "badge-passed" if item.status == "passed" else "badge-failed" if item.status in ["failed", "error"] else "badge-error"
+            tc_title = "N/A"
+            try:
+                tc = self.repo.get_test_case(item.testcase_id)
+                if tc:
+                    tc_title = tc.title
+            except Exception:
+                pass
+            
+            task_rows.append(f"""
+            <tr>
+                <td><strong>{item.task_id}</strong></td>
+                <td>{tc_title}</td>
+                <td><code style="background: #0f172a; padding: 2px 6px; border-radius: 4px; border: 1px solid #334155;">{item.required_state}</code></td>
+                <td>{item.duration:.2f}s</td>
+                <td><span class="badge {status_class}">{item.status.upper()}</span></td>
+                <td style="font-size: 12px; font-family: monospace; color: #fca5a5;">{item.error_message or ""}</td>
+            </tr>
+            """)
+        
+        task_rows_html = "\n".join(task_rows)
+        
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Batch Execution Summary - {batch_id_str}</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 40px 20px;
+            margin: 0;
+        }}
+        .container {{
+            max-width: 1000px;
+            margin: 0 auto;
+        }}
+        .header {{
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 32px;
+        }}
+        .header-title h1 {{
+            margin: 0 0 6px 0;
+            font-size: 26px;
+            color: #3b82f6;
+        }}
+        .header-title p {{
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+            font-family: monospace;
+        }}
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 32px;
+        }}
+        .metric-card {{
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }}
+        .metric-val {{
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }}
+        .metric-label {{
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }}
+        .custom-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 24px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        .custom-table th, .custom-table td {{
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }}
+        .custom-table th {{
+            background-color: #0f172a;
+            color: #64748b;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }}
+        .badge {{
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+        }}
+        .badge-passed {{ background-color: #10b981; color: #ffffff; }}
+        .badge-failed {{ background-color: #ef4444; color: #ffffff; }}
+        .badge-error {{ background-color: #f59e0b; color: #ffffff; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h1>Batch Execution Summary Dashboard</h1>
+                <p>Batch ID: {batch_id_str} | Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</p>
+            </div>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-val" style="color: #3b82f6;">{total_tasks}</div>
+                <div class="metric-label">Total Tasks</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val" style="color: #10b981;">{passed}</div>
+                <div class="metric-label">Passed</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val" style="color: #ef4444;">{failed}</div>
+                <div class="metric-label">Failed</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val" style="color: #f59e0b;">{skipped}</div>
+                <div class="metric-label">Skipped</div>
+            </div>
+        </div>
+
+        <h2>Detailed Task Execution Logs</h2>
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Task ID</th>
+                    <th>Test Case Title</th>
+                    <th>Required State</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                    <th>Error Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {task_rows_html}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+"""
+        batch_html_path = reports_dir / f"batch_report_{batch_id_str}.html"
+        batch_html_path.write_text(html_content, encoding="utf-8")
+        
+        return {"batch_report_path": str(batch_html_path)}
+
+    def compile_combined_batch_report_html(self, project_id: UUID, batch_id: UUID) -> str:
+        # 1. Fetch all executions for the project
+        all_execs = self.repo.list_execution_results(project_id)
+        
+        # 2. Filter for executions belonging to this batch_id (test_cycle_id)
+        batch_execs = [ex for ex in all_execs if ex.test_cycle_id == batch_id]
+        
+        if not batch_execs:
+            # Try string comparison as fallback
+            batch_execs = [ex for ex in all_execs if str(ex.test_cycle_id) == str(batch_id)]
+            
+        if not batch_execs:
+            raise ValueError(f"No executions found for Batch ID: {batch_id}")
+            
+        # Sort chronologically
+        batch_execs.sort(key=lambda x: x.executed_at)
+        
+        # Count statistics
+        passed = sum(1 for ex in batch_execs if ex.status.value == "passed")
+        failed = sum(1 for ex in batch_execs if ex.status.value in ("failed", "error"))
+        skipped = sum(1 for ex in batch_execs if ex.status.value == "skipped")
+        total_runs = len(batch_execs)
+        
+        # Build sections for each test case
+        sections_html = []
+        for tc_idx, ex in enumerate(batch_execs):
+            tc = self.repo.get_test_case(ex.test_case_id)
+            tc_title = tc.title if tc else f"Test Case {ex.test_case_id}"
+            
+            payload = getattr(ex, "_raw_payload", {}) or {}
+            raw_timeline = payload.get("timeline", []) or getattr(ex, "timeline", []) or []
+            
+            # If empty, try to parse from Next.js report on disk
+            if not raw_timeline:
+                next_report_path = Path("backend/playwrightt/public/artifacts") / str(ex.id) / "report.html"
+                if next_report_path.exists():
+                    try:
+                        import re
+                        content = next_report_path.read_text(encoding="utf-8")
+                        matches = re.findall(r'<li class="([^"]+)">\s*<span[^>]*>([^<]+)</span>\s*<strong>([^<]+)</strong>', content)
+                        for m in matches:
+                            evt_type, time_str, event_name = m
+                            t_val = 0.0
+                            if "(" in time_str:
+                                t_val_str = time_str.split("(")[1].split("s")[0]
+                                try:
+                                    t_val = float(t_val_str)
+                                except ValueError:
+                                    pass
+                            raw_timeline.append({
+                                "event": event_name,
+                                "time": t_val,
+                                "type": evt_type
+                            })
+                    except Exception:
+                        pass
+            
+            # Map timeline to steps
+            mapped_steps = []
+            for step_idx, evt in enumerate(raw_timeline):
+                step_mapped = map_timeline_event_to_step(evt, step_idx, project_id, ex.id, test_case=tc)
+                mapped_steps.append(step_mapped)
+                
+            mapped_steps = self.enrich_steps_with_llm(mapped_steps, tc)
+
+            import urllib.parse
+            video_tag = ""
+            if ex.video_path:
+                video_url = f"/api/v1/projects/{project_id}/executions/{ex.id}/video?path={urllib.parse.quote(ex.video_path)}"
+                video_tag = f"""
+                <div style="margin-top: 16px; margin-bottom: 24px; max-width: 480px;">
+                    <div style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Simulation Video</div>
+                    <video src="{video_url}" controls style="width: 100%; border-radius: 8px; border: 1px solid #334155; background: #000;"></video>
+                </div>
+                """
+
+            steps_cards = []
+            for idx, step in enumerate(mapped_steps):
+                screenshot_tag = ""
+                if step["screenshot_url"]:
+                    # Serve screenshot relative to the execution
+                    img_src = f"/api/v1/projects/{project_id}/executions/{ex.id}/screenshots/{step['screenshot_name']}"
+                    screenshot_tag = f"""
+                    <div class="step-image">
+                        <img src="{img_src}" alt="Screenshot {idx + 1}" style="max-width: 100%; border-radius: 8px; border: 1px solid #334155;" />
+                    </div>
+                    """
+                steps_cards.append(f"""
+                <div class="step-card" style="background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; display: flex; justify-content: space-between; gap: 24px;">
+                    <div class="step-left" style="flex: 1.5;">
+                        <div class="step-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                            <span class="step-num" style="background-color: #3b82f6; color: #ffffff; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">Step {idx + 1}</span>
+                            <span class="step-title" style="font-weight: 600; color: #f8fafc; font-size: 14px;">{step['title']}</span>
+                        </div>
+                        <div class="step-details" style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #94a3b8;">
+                            <div><strong>Action:</strong> {step['action']}</div>
+                            <div><strong>Observation:</strong> {step['observation']}</div>
+                            <div><strong>Result:</strong> {step['result']}</div>
+                        </div>
+                    </div>
+                    <div class="step-right" style="flex: 1; text-align: right; min-width: 200px;">
+                        {screenshot_tag}
+                    </div>
+                </div>
+                """)
+            
+            steps_html = "\n".join(steps_cards) if steps_cards else "<div style='color: #64748b; font-size: 13px; padding: 12px;'>No step timeline events recorded for this test case.</div>"
+            
+            status_color = "#10b981" if ex.status.value == "passed" else "#ef4444"
+            error_banner = ""
+            if ex.status.value in ("failed", "error") and ex.error_message:
+                escaped_err = ex.error_message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+                error_banner = f"""
+                <div style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px; color: #fca5a5; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
+                    {escaped_err}
+                </div>
+                """
+                
+            sections_html.append(f"""
+            <div class="testcase-section" style="margin-bottom: 48px; border-top: 1px solid #334155; padding-top: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 style="margin: 0; font-size: 18px; color: #f8fafc;">Case {tc_idx + 1}: {tc_title}</h2>
+                    <span style="background-color: {status_color}; color: #ffffff; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: bold; text-transform: uppercase;">{ex.status.value}</span>
+                </div>
+                <div style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
+                    Duration: {ex.duration_seconds:.2f}s | Executed At: {ex.executed_at.strftime('%Y-%m-%d %H:%M:%S UTC')}
+                </div>
+                {error_banner}
+                {video_tag}
+                {steps_html}
+            </div>
+            """)
+            
+        sections_str = "\n".join(sections_html)
+        
+        # Combined HTML layout
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Batch Execution Report - {batch_id}</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 40px 20px;
+            margin: 0;
+        }}
+        .container {{
+            max-width: 1000px;
+            margin: 0 auto;
+        }}
+        .header {{
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 32px;
+        }}
+        .header-title h1 {{
+            margin: 0 0 6px 0;
+            font-size: 26px;
+            color: #3b82f6;
+        }}
+        .header-title p {{
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+            font-family: monospace;
+        }}
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 32px;
+        }}
+        .metric-card {{
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }}
+        .metric-val {{
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }}
+        .metric-label {{
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-title">
+                <h1>Batch Execution Report</h1>
+                <p>Batch Context ID: {batch_id} | Compiled At: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</p>
+            </div>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-val" style="color: #3b82f6;">{total_runs}</div>
+                <div class="metric-label">Total Cases</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val" style="color: #10b981;">{passed}</div>
+                <div class="metric-label">Passed</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val" style="color: #ef4444;">{failed}</div>
+                <div class="metric-label">Failed</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val" style="color: #f59e0b;">{skipped}</div>
+                <div class="metric-label">Skipped</div>
+            </div>
+        </div>
+
+        <h2 style="font-size: 20px; color: #f8fafc; margin-bottom: 24px;">Sequential Execution Details</h2>
+        {sections_str}
+    </div>
+</body>
+</html>
+"""
+        return html_content
 
 # Register execution completed listener to handle report compilation automatically
 from backend.services.execution_service import register_execution_completed_listener

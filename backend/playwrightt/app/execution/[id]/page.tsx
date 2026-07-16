@@ -194,7 +194,7 @@ export default function ExecutionDetailPage() {
               disabled={isRerunning || !execution?.script}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-2"
             >
-              🔄 {isRerunning ? 'Rerunning...' : 'Rerun'}
+              {isRerunning ? 'Rerunning...' : 'Rerun'}
             </Button>
             <a
               href={`/api/artifacts/${executionId}/report`}

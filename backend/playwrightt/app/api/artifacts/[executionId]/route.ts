@@ -21,7 +21,7 @@ export async function GET(
       );
       // Retrieve filenames from the timeline events when available
       const timelineScreenshots = (execution.timeline || [])
-        .filter(e => e.event === 'Screenshot Captured' && e.details)
+        .filter(e => e.details && e.details.endsWith('.png'))
         .map(e => `/api/artifacts/${executionId}/screenshot/${e.details}`);
 
       const allScreenshotUrls = timelineScreenshots.length > 0 
@@ -32,7 +32,7 @@ export async function GET(
         executionId,
         artifacts: execution.artifacts,
         metadata: execution.metadata,
-        screenshots: namedScreenshots,
+        screenshots: allScreenshotUrls,
         allScreenshots: allScreenshotUrls,
       });
     }
@@ -63,7 +63,7 @@ export async function GET(
 
       return NextResponse.json({
         executionId,
-        screenshots: screenshotUrls,
+        screenshots: screenshotUrls.length > 0 ? screenshotUrls : allScreenshotUrls,
         allScreenshots: allScreenshotUrls,
       });
     } catch (err) {

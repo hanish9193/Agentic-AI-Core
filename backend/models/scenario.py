@@ -38,3 +38,5 @@ class Scenario(BaseModel):
     jira_issue_url: str | None = None
     jira_sync_status: str | None = None
     jira_last_synced_at: datetime | None = None
+    path_type: str = "happy_path"
+    tags: list[str] = Field(default_factory=list)

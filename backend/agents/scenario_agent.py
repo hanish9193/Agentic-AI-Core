@@ -26,6 +26,8 @@ class _GeneratedScenario(BaseModel):
     description: str = Field(min_length=1)
     priority: Priority = Priority.MEDIUM
     confidence: float = Field(ge=0.0, le=1.0, default=0.95)
+    path_type: str = "happy_path"
+    tags: list[str] = Field(default_factory=list)
 
     @field_validator("priority", mode="before")
     @classmethod
@@ -73,6 +75,8 @@ class ScenarioAgent(BaseAgent):
                     description=item.description,
                     priority=item.priority,
                     confidence=item.confidence,
+                    path_type=item.path_type,
+                    tags=item.tags,
                 )
             )
 

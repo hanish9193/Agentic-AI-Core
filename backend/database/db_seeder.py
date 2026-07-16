@@ -88,8 +88,8 @@ def seed_database(db: Session) -> None:
     db.commit()
 
     # 4. Seed Development Users
-    # Seed ONLY if app environment is development
-    if settings.app_env == "development":
+    # Seed if app environment is development or testing
+    if settings.app_env in ["development", "testing"]:
         dev_users = [
             {"email": "dev@platform.ai", "name": "Super Admin User", "pass": "devpassword", "role": "Super Admin"},
             {"email": "admin@platform.ai", "name": "Admin User", "pass": "adminpassword", "role": "Admin"},

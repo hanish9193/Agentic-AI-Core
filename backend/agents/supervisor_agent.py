@@ -160,3 +160,11 @@ class SupervisorAgent(BaseAgent):
         if op == WorkflowOperation.GENERATE_PLAYWRIGHT:
             return "end"
         return "execution_agent"
+
+    def route_after_backlog_creation(self, state: WorkflowState, config: RunnableConfig | None = None) -> str:
+        """Routes after backlog creation based on operational mode."""
+        configurable = config.get("configurable", {}) if config else {}
+        op = configurable.get("operation")
+        if op == WorkflowOperation.BACKLOG:
+            return "human_approval_agent_1"
+        return "qa_story_analyzer_agent"

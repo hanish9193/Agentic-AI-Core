@@ -11,8 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from backend.config.settings import get_settings
 from backend.database.db import Base
 from backend.database.db_models import (
-    ProjectDB, RequirementDB, ScenarioDB, TestCaseDB,
-    ExecutionDB, ReportDB, DocumentDB, ScenarioNoteDB, TestCaseNoteDB
+    UserDB, RoleDB, PermissionDB, RolePermissionDB, ProjectUserDB, AuditLogDB,
+    ProjectDB, RequirementDB, ScenarioDB, TestCaseDB, ExecutionDB, ReportDB,
+    DocumentDB, ScenarioNoteDB, TestCaseNoteDB, ReleaseDB, TestCycleDB
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -28,10 +29,18 @@ def normalize_dict(d: dict) -> dict:
 
 def run_migration() -> int:
     settings = get_settings()
+    provider_name = settings.repository.provider
     db_url = settings.repository.database_url
+    if provider_name == "json":
+        db_url = "sqlite:///./backend/database/local_fallback.db"
     logger.info(f"Connecting to database: {db_url}")
     
-    engine = create_engine(db_url)
+    # SQLite does not support pool_size or max_overflow
+    engine_kwargs = {}
+    if "sqlite" in db_url:
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+        
+    engine = create_engine(db_url, **engine_kwargs)
     Base.metadata.create_all(engine)
     
     Session = sessionmaker(bind=engine)
@@ -303,8 +312,8 @@ def run_migration() -> int:
                     junit_path=rep.get("junit_path"),
                     html_path=rep.get("html_path"),
                     pdf_path=rep.get("pdf_path"),
-                    created_at=datetime.fromisoformat(rep["created_at"].replace("Z", "+00:00")),
-                    updated_at=datetime.fromisoformat(rep["created_at"].replace("Z", "+00:00"))
+                    created_at=datetime.fromisoformat(rep.get("created_at", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00")),
+                    updated_at=datetime.fromisoformat(rep.get("created_at", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
                 )
                 session.add(db_rep)
 

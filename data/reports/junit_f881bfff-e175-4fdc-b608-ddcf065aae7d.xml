@@ -1,0 +1,3 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="Playwright Testcase" tests="2" failures="1" errors="0" time="0.008"><testcase name="TestCase_ab3c07cb-5fde-4627-81ac-cf94c6d4d57e" classname="PlaywrightTests" time="0.008"><failure message="Assertion Failed">Error: Error reading storage state from E:/Agentic-AI-Automation/backend/playwright/artifacts/BATCH-20260715-826/storage_state.json:
+ENOENT: no such file or directory, open 'E:\Agentic-AI-Automation\backend\playwright\artifacts\BATCH-20260715-826\storage_state.json'</failure></testcase></testsuite></testsuites>

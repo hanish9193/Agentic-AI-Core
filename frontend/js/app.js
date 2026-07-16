@@ -5,6 +5,10 @@ class App {
   constructor() {
     this.projects = [];
     this.currentProject = null;
+    this.releases = [];
+    this.testCycles = [];
+    this.currentRelease = null;
+    this.currentTestCycle = null;
     this.requirements = [];
     this.scenarios = [];
     this.testCases = [];
@@ -18,6 +22,7 @@ class App {
     this.selectedRequirementId = null;
     this.activePlaywrightTestCaseId = null;
     this.activeExecutionStream = null;
+    this.dashboardScope = 'project';
   }
 
   async init() {
@@ -115,6 +120,81 @@ class App {
       }
     });
 
+    // Release Dropdown
+    const releaseSelect = document.getElementById('release-select');
+    if (releaseSelect) {
+      releaseSelect.addEventListener('change', async (e) => {
+        const val = e.target.value;
+        if (val === '__create_new__') {
+          this.openModal('create-release-modal');
+          releaseSelect.value = this.currentRelease ? this.currentRelease.id : '';
+        } else if (val) {
+          await this.selectRelease(val);
+        }
+      });
+    }
+
+    // Cycle Dropdown
+    const cycleSelect = document.getElementById('cycle-select');
+    if (cycleSelect) {
+      cycleSelect.addEventListener('change', async (e) => {
+        const val = e.target.value;
+        if (val === '__create_new__') {
+          this.openModal('create-cycle-modal');
+          cycleSelect.value = this.currentTestCycle ? this.currentTestCycle.id : '';
+        } else if (val) {
+          await this.selectTestCycle(val);
+        }
+      });
+    }
+
+    // Create Release Form Submit
+    const createReleaseForm = document.getElementById('create-release-form');
+    if (createReleaseForm) {
+      createReleaseForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!this.currentProject) return;
+        const name = document.getElementById('new-release-name').value.trim();
+        const desc = document.getElementById('new-release-desc').value.trim();
+        const status = document.getElementById('new-release-status').value;
+        if (!name) return;
+        try {
+          const rel = await API.createRelease(this.currentProject.id, name, desc, status);
+          this.addLog(`Release '${name}' created`);
+          this.closeModal('create-release-modal');
+          await this.loadReleasesForProject();
+          await this.selectRelease(rel.id);
+        } catch (err) {
+          alert(`Failed to create release: ${err.message}`);
+        }
+      });
+    }
+
+    // Create Cycle Form Submit
+    const createCycleForm = document.getElementById('create-cycle-form');
+    if (createCycleForm) {
+      createCycleForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!this.currentRelease) {
+          alert('Please select a Release before creating a Test Cycle.');
+          return;
+        }
+        const name = document.getElementById('new-cycle-name').value.trim();
+        const desc = document.getElementById('new-cycle-desc').value.trim();
+        const status = document.getElementById('new-cycle-status').value;
+        if (!name) return;
+        try {
+          const cyc = await API.createTestCycle(this.currentRelease.id, name, desc, status);
+          this.addLog(`Test Cycle '${name}' created`);
+          this.closeModal('create-cycle-modal');
+          await this.loadCyclesForRelease();
+          await this.selectTestCycle(cyc.id);
+        } catch (err) {
+          alert(`Failed to create test cycle: ${err.message}`);
+        }
+      });
+    }
+
     // Project Framework Dropdown
     document.getElementById('project-framework-select').addEventListener('change', async (e) => {
       const newFramework = e.target.value;
@@ -188,7 +268,8 @@ class App {
       if (!title || !desc) return;
 
       try {
-        await API.createRequirement(this.currentProject.id, title, desc, priority, domain);
+        const releaseId = this.currentRelease ? this.currentRelease.id : null;
+        await API.createRequirement(this.currentProject.id, title, desc, priority, domain, releaseId);
         this.addLog(`Requirement '${title}' added`);
         this.closeModal('create-requirement-modal');
         await this.refreshProjectData();
@@ -206,6 +287,15 @@ class App {
         if (files.length === 0) return;
         await this.uploadRequirementFile(files[0]);
         fileInput.value = '';
+      });
+    }
+
+    // JIRA Story Import trigger
+    const btnImportJira = document.getElementById('btn-import-jira-story');
+    if (btnImportJira) {
+      btnImportJira.addEventListener('click', async () => {
+        const inputVal = document.getElementById('jira-story-key-input').value;
+        await this.importJiraStory(inputVal);
       });
     }
 
@@ -341,8 +431,28 @@ class App {
     const container = document.getElementById('requirements-list-container');
     container.innerHTML = Components.Spinner(`Importing and parsing '${file.name}' requirements...`);
     try {
-      const imported = await API.importRequirements(this.currentProject.id, file);
+      const releaseId = this.currentRelease ? this.currentRelease.id : null;
+      const imported = await API.importRequirements(this.currentProject.id, file, releaseId);
       this.addLog(`Imported ${imported.length} requirement(s) from '${file.name}'`);
+      await this.refreshProjectData();
+    } catch (err) {
+      alert(`Import failed: ${err.message}`);
+      await this.refreshProjectData();
+    }
+  }
+
+  async importJiraStory(issueKey) {
+    if (!issueKey || !issueKey.trim()) {
+      alert("Please enter a valid JIRA Story Key.");
+      return;
+    }
+    const container = document.getElementById('requirements-list-container');
+    container.innerHTML = Components.Spinner(`Fetching JIRA Story '${issueKey}' and running Analyst pipeline...`);
+    try {
+      const releaseId = this.currentRelease ? this.currentRelease.id : null;
+      await API.importJiraStory(this.currentProject.id, issueKey.trim(), releaseId);
+      this.addLog(`Imported user story from JIRA key: '${issueKey}'`);
+      document.getElementById('jira-story-key-input').value = '';
       await this.refreshProjectData();
     } catch (err) {
       alert(`Import failed: ${err.message}`);
@@ -358,11 +468,17 @@ class App {
 
   showProjectStartScreen() {
     this.currentProject = null;
+    this.currentRelease = null;
+    this.currentTestCycle = null;
     localStorage.removeItem('active_project_id');
     document.getElementById('sidebar-container').style.display = 'none';
     document.getElementById('project-select-wrapper').style.display = 'none';
+    const relSelect = document.getElementById('release-select');
+    if (relSelect) relSelect.style.display = 'none';
+    const cySelect = document.getElementById('cycle-select');
+    if (cySelect) cySelect.style.display = 'none';
     
-    const container = document.getElementById('workspace-container');
+    const container = document.getElementById('project-start-view');
     const options = this.projects.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('');
 
     container.innerHTML = `
@@ -408,6 +524,8 @@ class App {
         return p ? [p.name, p.description, p.line_of_business] : [];
       });
     }
+
+    this.navigateTo('project-start');
   }
 
   async loadSettings() {
@@ -482,8 +600,91 @@ class App {
     });
   }
 
+  async loadReleasesForProject() {
+    if (!this.currentProject) return;
+    try {
+      this.releases = await API.getReleases(this.currentProject.id);
+      const relSelect = document.getElementById('release-select');
+      if (relSelect) {
+        relSelect.style.display = 'inline-block';
+        relSelect.innerHTML = `
+          <option value="" disabled selected>▼ Select Release</option>
+          ${this.releases.map(r => `<option value="${r.id}">${escapeHTML(r.name)}</option>`).join('')}
+          <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create Release</option>
+        `;
+        if (this.currentRelease) {
+          relSelect.value = this.currentRelease.id;
+        } else {
+          relSelect.value = "";
+        }
+      }
+    } catch (err) {
+      console.error('Error loading releases:', err);
+    }
+  }
+
+  async selectRelease(releaseId) {
+    this.currentRelease = this.releases.find(r => r.id === releaseId) || null;
+    const relSelect = document.getElementById('release-select');
+    if (relSelect && this.currentRelease) {
+      relSelect.value = this.currentRelease.id;
+    }
+    const cySelect = document.getElementById('cycle-select');
+    if (this.currentRelease) {
+      if (cySelect) cySelect.style.display = 'inline-block';
+      await this.loadCyclesForRelease();
+      // Select first cycle by default if available
+      if (this.testCycles.length > 0) {
+        await this.selectTestCycle(this.testCycles[0].id);
+      } else {
+        this.currentTestCycle = null;
+        if (cySelect) cySelect.value = '';
+        await this.refreshProjectData();
+      }
+    } else {
+      if (cySelect) {
+        cySelect.style.display = 'none';
+        cySelect.innerHTML = '<option value="" disabled selected>▼ Select Cycle</option>';
+      }
+      this.currentTestCycle = null;
+      await this.refreshProjectData();
+    }
+  }
+
+  async loadCyclesForRelease() {
+    if (!this.currentRelease) return;
+    try {
+      this.testCycles = await API.getTestCycles(this.currentRelease.id);
+      const cySelect = document.getElementById('cycle-select');
+      if (cySelect) {
+        cySelect.innerHTML = `
+          <option value="" disabled selected>▼ Select Cycle</option>
+          ${this.testCycles.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('')}
+          <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create Cycle</option>
+        `;
+        if (this.currentTestCycle) {
+          cySelect.value = this.currentTestCycle.id;
+        } else {
+          cySelect.value = "";
+        }
+      }
+    } catch (err) {
+      console.error('Error loading cycles:', err);
+    }
+  }
+
+  async selectTestCycle(cycleId) {
+    this.currentTestCycle = this.testCycles.find(c => c.id === cycleId) || null;
+    const cySelect = document.getElementById('cycle-select');
+    if (cySelect && this.currentTestCycle) {
+      cySelect.value = this.currentTestCycle.id;
+    }
+    await this.refreshProjectData();
+  }
+
   async selectProject(projectId) {
     try {
+      this.currentProjectId = projectId;
       this.currentProject = await API.getProject(projectId);
       localStorage.setItem('active_project_id', projectId);
       
@@ -497,7 +698,16 @@ class App {
       }
 
       this.addLog(`Project '${this.currentProject.name}' selected`);
-      await this.refreshProjectData();
+      
+      await this.loadReleasesForProject();
+      // Select first release if available
+      if (this.releases.length > 0) {
+        await this.selectRelease(this.releases[0].id);
+      } else {
+        this.currentRelease = null;
+        this.currentTestCycle = null;
+        await this.refreshProjectData();
+      }
       this.navigateTo('dashboard');
     } catch (err) {
       alert(`Error loading project details: ${err.message}`);
@@ -505,18 +715,43 @@ class App {
     }
   }
 
+  get filteredRequirements() {
+    if (this.currentRelease) {
+      return this.requirements.filter(r => r.release_id === this.currentRelease.id);
+    }
+    return this.requirements;
+  }
+
+  get filteredScenarios() {
+    const reqs = this.filteredRequirements;
+    return this.scenarios.filter(s => reqs.some(r => r.id === s.requirement_id));
+  }
+
+  get filteredTestCases() {
+    const scs = this.filteredScenarios;
+    return this.testCases.filter(tc => scs.some(s => s.id === tc.scenario_id));
+  }
+
+  get filteredExecutions() {
+    if (this.currentTestCycle) {
+      return this.executions.filter(e => e.test_cycle_id === this.currentTestCycle.id);
+    }
+    return this.executions;
+  }
+
   async refreshProjectData() {
     if (!this.currentProject) return;
     try {
       this.requirements = await API.getRequirements(this.currentProject.id);
       
+      const freq = this.filteredRequirements;
       // Ensure selectedRequirementId is valid for the current project, otherwise reset it
-      if (this.selectedRequirementId && !this.requirements.some(r => r.id === this.selectedRequirementId)) {
+      if (this.selectedRequirementId && !freq.some(r => r.id === this.selectedRequirementId)) {
         this.selectedRequirementId = null;
       }
       // Default to the first requirement if none is selected
-      if (this.requirements.length > 0 && !this.selectedRequirementId) {
-        this.selectedRequirementId = this.requirements[0].id;
+      if (freq.length > 0 && !this.selectedRequirementId) {
+        this.selectedRequirementId = freq[0].id;
       }
 
       this.scenarios = await API.getScenarios(this.currentProject.id);
@@ -568,12 +803,19 @@ class App {
   }
 
   navigateTo(viewName) {
-    if (!this.currentProject && viewName !== 'settings') {
+    if (!this.currentProject && viewName !== 'settings' && viewName !== 'project-start') {
       this.showProjectStartScreen();
       return;
     }
 
-    if (window.location.hash !== `#/${viewName}`) {
+    let isMatch = false;
+    if (viewName === 'execution-workspace') {
+      isMatch = window.location.hash === '#/execution-workspace' || window.location.hash.startsWith('#/execution/');
+    } else {
+      isMatch = window.location.hash === `#/${viewName}`;
+    }
+
+    if (!isMatch) {
       window.location.hash = `#/${viewName}`;
       return;
     }
@@ -595,24 +837,47 @@ class App {
       }
     });
 
-    if (document.getElementById('workspace-container').children.length === 1 && document.getElementById('workspace-container').firstElementChild.classList.contains('project-start-container')) {
-      location.reload();
-    }
-
     if (viewName === 'playwright') this.renderPlaywrightWorkspace();
   }
 
-  // Dashboard Metrics
-  renderDashboardMetrics() {
-    const totalReqs = this.requirements.length;
-    const totalScenarios = this.scenarios.length;
-    const totalTestCases = this.testCases.length;
-    const totalExecutions = this.executions.length;
+  switchDashboardScope(scope) {
+    this.dashboardScope = scope;
+    const btnProject = document.getElementById('btn-db-scope-project');
+    const btnRelease = document.getElementById('btn-db-scope-release');
+    const btnCycle = document.getElementById('btn-db-scope-cycle');
+    
+    if (btnProject) btnProject.classList.remove('active');
+    if (btnRelease) btnRelease.classList.remove('active');
+    if (btnCycle) btnCycle.classList.remove('active');
+    
+    if (btnProject) btnProject.style.borderBottom = 'none';
+    if (btnRelease) btnRelease.style.borderBottom = 'none';
+    if (btnCycle) btnCycle.style.borderBottom = 'none';
+    
+    const activeBtn = document.getElementById(`btn-db-scope-${scope}`);
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+      activeBtn.style.borderBottom = '2px solid var(--accent-primary)';
+    }
+    
+    this.renderDashboardMetrics();
+  }
+
+  async renderDashboardMetrics() {
+    if (!this.currentProject) return;
 
     // Set the Project Name subtitle
     const projectSub = document.getElementById('dashboard-project-subtitle');
     if (projectSub) {
-      projectSub.textContent = `Project: ${this.currentProject ? this.currentProject.name : 'Unknown'}`;
+      const scopeLabel = this.dashboardScope ? this.dashboardScope.charAt(0).toUpperCase() + this.dashboardScope.slice(1) : 'Project';
+      const name = this.currentProject ? this.currentProject.name : 'Unknown';
+      let detail = `Scope: ${scopeLabel}`;
+      if (this.dashboardScope === 'release' && this.currentRelease) {
+        detail += ` (${this.currentRelease.name})`;
+      } else if (this.dashboardScope === 'cycle' && this.currentTestCycle) {
+        detail += ` (${this.currentTestCycle.name})`;
+      }
+      projectSub.textContent = `Project: ${name} | ${detail}`;
     }
 
     // Set Framework Label
@@ -622,40 +887,39 @@ class App {
       fwLbl.textContent = fw.charAt(0).toUpperCase() + fw.slice(1);
     }
 
+    let idQuery = '';
+    if (this.dashboardScope === 'release' && this.currentRelease) {
+      idQuery = `&id=${this.currentRelease.id}`;
+    } else if (this.dashboardScope === 'cycle' && this.currentTestCycle) {
+      idQuery = `&id=${this.currentTestCycle.id}`;
+    }
+
+    let data = null;
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/v1/projects/${this.currentProject.id}/dashboard-metrics?scope=${this.dashboardScope}${idQuery}`, {
+        headers: headers
+      });
+      if (!res.ok) throw new Error("Failed to fetch dashboard metrics");
+      data = await res.json();
+    } catch (e) {
+      console.error("Dashboard metrics fetch error:", e);
+      return;
+    }
+
     // Set Last Execution Timestamp
     const lastExecLbl = document.getElementById('dashboard-last-exec-lbl');
     if (lastExecLbl) {
-      if (this.executions.length > 0) {
-        const sorted = [...this.executions].sort((a, b) => new Date(b.executed_at) - new Date(a.executed_at));
-        const latest = sorted[0];
-        const dateObj = new Date(latest.executed_at);
-        const dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const timeStr = dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-        lastExecLbl.textContent = `${dateStr} ${timeStr}`;
+      if (data.recentExecutions && data.recentExecutions.length > 0) {
+        lastExecLbl.textContent = data.recentExecutions[0].executed_at;
       } else {
         lastExecLbl.textContent = 'No executions';
       }
     }
-
-    // Compute automation rates and average confidence
-    const passedExecutions = this.executions.filter(ex => ex.status === 'passed').length;
-    const passRatio = totalExecutions > 0 ? `${Math.round((passedExecutions / totalExecutions) * 100)}%` : '0%';
-
-    let totalConfidence = 0;
-    let counts = 0;
-    this.scenarios.forEach(s => {
-      if (typeof s.confidence === 'number') {
-        totalConfidence += s.confidence;
-        counts++;
-      }
-    });
-    this.testCases.forEach(tc => {
-      if (typeof tc.confidence === 'number') {
-        totalConfidence += tc.confidence;
-        counts++;
-      }
-    });
-    const avgConfidence = counts > 0 ? `${Math.round((totalConfidence / counts) * 100)}%` : '0%';
 
     // Render KPI Cards (Row 1)
     const renderKpiCard = (label, value, subtitle, trend, trendClass = "badge-approved") => {
@@ -673,277 +937,100 @@ class App {
       `;
     };
 
-    const reqTrend = totalReqs > 0 ? `+${Math.max(1, Math.floor(totalReqs / 5))} this week` : 'Stable';
-    const scTrend = totalScenarios > 0 ? '100% drafted' : '0% drafted';
-    const tcTrend = totalTestCases > 0 ? `+${Math.max(1, Math.floor(totalTestCases / 4))} this week` : '0% automated';
-    const execTrend = totalExecutions > 0 ? `+${Math.max(1, Math.floor(totalExecutions / 3))} runs` : 'No runs yet';
-    const passTrend = totalExecutions > 0 ? '+2% change' : 'N/A';
-    const confTrend = counts > 0 ? 'High precision' : 'N/A';
+    const reqTrend = data.totalReqs > 0 ? `+${Math.max(1, Math.floor(data.totalReqs / 5))} this week` : 'Stable';
+    const scTrend = data.totalScenarios > 0 ? '100% drafted' : '0% drafted';
+    const tcTrend = data.totalTestCases > 0 ? `+${Math.max(1, Math.floor(data.totalTestCases / 4))} this week` : '0% automated';
+    const execTrend = data.totalExecutions > 0 ? `+${Math.max(1, Math.floor(data.totalExecutions / 3))} runs` : 'No runs yet';
+    const passTrend = data.totalExecutions > 0 ? '+2% change' : 'N/A';
 
     const grid = document.getElementById('dashboard-metrics-grid');
     if (grid) {
       grid.innerHTML = `
-        ${renderKpiCard("Requirements", totalReqs, "Total Requirements", reqTrend, totalReqs > 0 ? "badge-approved" : "badge-pending")}
-        ${renderKpiCard("Generated Scenarios", totalScenarios, "Drafted Scenarios", scTrend, totalScenarios > 0 ? "badge-approved" : "badge-pending")}
-        ${renderKpiCard("Generated Test Cases", totalTestCases, "Total Test Cases", tcTrend, totalTestCases > 0 ? "badge-approved" : "badge-pending")}
-        ${renderKpiCard("Total Executions", totalExecutions, "Execution Runs", execTrend, totalExecutions > 0 ? "badge-approved" : "badge-pending")}
-        ${renderKpiCard("Automation Pass %", passRatio, "Overall Pass Rate", passTrend, totalExecutions > 0 ? "badge-approved" : "badge-pending")}
-        ${renderKpiCard("Avg Confidence", avgConfidence, "Model Scoring Avg", confTrend, counts > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("Requirements", data.totalReqs, "Total Requirements", reqTrend, data.totalReqs > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("Generated Scenarios", data.totalScenarios, "Drafted Scenarios", scTrend, data.totalScenarios > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("Generated Test Cases", data.totalTestCases, "Total Test Cases", tcTrend, data.totalTestCases > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("Total Executions", data.totalExecutions, "Execution Runs", execTrend, data.totalExecutions > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("Automation Pass %", data.passRatio, "Overall Pass Rate", passTrend, data.totalExecutions > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("Automation Coverage", data.coveragePct, `UI: ${data.uiCount} | API: ${data.apiCount} | Manual: ${data.manualCount}`, "Interactive", "badge-approved")}
       `;
     }
 
-    // Compute Execution Status Pie Chart data per Test Case (latest run)
-    let passedCount = 0;
-    let failedCount = 0;
-    let yetToExecuteCount = 0;
-
-    this.testCases.forEach(tc => {
-      const tcExecs = this.executions.filter(ex => String(ex.test_case_id) === String(tc.id));
-      if (tcExecs.length === 0) {
-        yetToExecuteCount++;
-      } else {
-        const sorted = [...tcExecs].sort((a, b) => new Date(b.executed_at) - new Date(a.executed_at));
-        const latest = sorted[0];
-        if (latest.status === 'passed') {
-          passedCount++;
-        } else {
-          failedCount++;
-        }
-      }
-    });
-
-    // Compute Scenario Approval Donut Chart data
-    const approvedCount = this.scenarios.filter(s => s.approved === true).length;
-    const rejectedCount = this.scenarios.filter(s => s.rejected === true).length;
-    const pendingCount = this.scenarios.filter(s => !s.approved && !s.rejected).length;
-
-    // Compute Trend data by execution date
-    const dailyData = {};
-    this.executions.forEach(ex => {
-      if (!ex.executed_at) return;
-      const dateStr = new Date(ex.executed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      if (!dailyData[dateStr]) {
-        dailyData[dateStr] = { passed: 0, failed: 0 };
-      }
-      if (ex.status === 'passed') {
-        dailyData[dateStr].passed++;
-      } else {
-        dailyData[dateStr].failed++;
-      }
-    });
-    const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a) - new Date(b));
-    const recentDates = sortedDates.slice(-7);
-    const trendPassed = recentDates.map(d => dailyData[d].passed);
-    const trendFailed = recentDates.map(d => dailyData[d].failed);
-
-    // Compute Requirement distribution by business domains
-    const domainCounts = {};
-    this.requirements.forEach(r => {
-      const dom = r.business_domain || 'General';
-      domainCounts[dom] = (domainCounts[dom] || 0) + 1;
-    });
-
-    // Compute Test Case Priority counts
-    const priorityCounts = { high: 0, medium: 0, low: 0 };
-    this.testCases.forEach(tc => {
-      const prio = (tc.priority || 'medium').toLowerCase();
-      if (priorityCounts[prio] !== undefined) {
-        priorityCounts[prio]++;
-      } else {
-        priorityCounts.medium++;
-      }
-    });
-
-    // Render/Placeholder mappings for data-dense dashboards
-    let pieData, pieLabels, pieColors;
-    const totalPie = passedCount + failedCount + yetToExecuteCount;
     const legendDiv = document.getElementById('execution-pie-chart-legend');
-    if (totalPie === 0) {
-      pieData = [120, 18, 42];
-      pieLabels = ['Passed', 'Failed', 'Yet to Execute'];
-      pieColors = ['#10b981', '#ef4444', '#64748b'];
+    if (data.isEmpty || data.totalTestCases === 0) {
       if (legendDiv) {
         legendDiv.innerHTML = `
-          <div class="legend-item"><span class="legend-color" style="background-color: #10b981;"></span>Passed (120)</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #ef4444;"></span>Failed (18)</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #64748b;"></span>Yet to Execute (42)</div>
+          <div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; padding: 20px 0;">
+            No executions yet.<br>Create a Release and Test Cycle to begin.
+          </div>
         `;
       }
     } else {
-      pieData = [passedCount, failedCount, yetToExecuteCount];
-      pieLabels = ['Passed', 'Failed', 'Yet to Execute'];
-      pieColors = ['#10b981', '#ef4444', '#64748b'];
       if (legendDiv) {
         legendDiv.innerHTML = `
-          <div class="legend-item"><span class="legend-color" style="background-color: #10b981;"></span>Passed (${passedCount})</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #ef4444;"></span>Failed (${failedCount})</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #64748b;"></span>Yet to Execute (${yetToExecuteCount})</div>
+          <div class="legend-item"><span class="legend-color" style="background-color: #10b981;"></span>Passed (${data.passedCount})</div>
+          <div class="legend-item"><span class="legend-color" style="background-color: #ef4444;"></span>Failed (${data.failedCount})</div>
+          <div class="legend-item"><span class="legend-color" style="background-color: #64748b;"></span>Yet to Execute (${data.yetToExecuteCount})</div>
         `;
       }
     }
 
-    let donutData, donutLabels, donutColors;
-    const totalDonut = approvedCount + rejectedCount + pendingCount;
     const donutLegendDiv = document.getElementById('approval-donut-chart-legend');
-    if (totalDonut === 0) {
-      donutData = [45, 5, 12];
-      donutLabels = ['Approved', 'Rejected', 'Pending'];
-      donutColors = ['#10b981', '#ef4444', '#f59e0b'];
+    if (data.totalScenarios === 0) {
       if (donutLegendDiv) {
         donutLegendDiv.innerHTML = `
-          <div class="legend-item"><span class="legend-color" style="background-color: #10b981;"></span>Approved (45)</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #ef4444;"></span>Rejected (5)</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #f59e0b;"></span>Pending (12)</div>
+          <div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; padding: 20px 0;">
+            No scenarios generated yet.
+          </div>
         `;
       }
     } else {
-      donutData = [approvedCount, rejectedCount, pendingCount];
-      donutLabels = ['Approved', 'Rejected', 'Pending'];
-      donutColors = ['#10b981', '#ef4444', '#f59e0b'];
       if (donutLegendDiv) {
         donutLegendDiv.innerHTML = `
-          <div class="legend-item"><span class="legend-color" style="background-color: #10b981;"></span>Approved (${approvedCount})</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #ef4444;"></span>Rejected (${rejectedCount})</div>
-          <div class="legend-item"><span class="legend-color" style="background-color: #f59e0b;"></span>Pending (${pendingCount})</div>
+          <div class="legend-item"><span class="legend-color" style="background-color: #10b981;"></span>Approved (${data.approvedCount})</div>
+          <div class="legend-item"><span class="legend-color" style="background-color: #ef4444;"></span>Rejected (${data.rejectedCount})</div>
+          <div class="legend-item"><span class="legend-color" style="background-color: #f59e0b;"></span>Pending (${data.pendingCount})</div>
         `;
       }
-    }
-
-    let trendLabels, trendPassedData, trendFailedData;
-    if (recentDates.length === 0) {
-      trendLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      trendPassedData = [12, 15, 18, 20, 25, 22, 28];
-      trendFailedData = [2, 1, 3, 2, 4, 1, 2];
-    } else {
-      trendLabels = recentDates;
-      trendPassedData = trendPassed;
-      trendFailedData = trendFailed;
-    }
-
-    let domainLabels, domainCountsData;
-    const domains = Object.keys(domainCounts);
-    if (domains.length === 0) {
-      domainLabels = ['Finance', 'Insurance', 'Healthcare', 'General'];
-      domainCountsData = [8, 12, 6, 4];
-    } else {
-      domainLabels = domains;
-      domainCountsData = domains.map(d => domainCounts[d]);
-    }
-
-    let priorityData, priorityLabels, priorityColors;
-    const totalPrio = priorityCounts.high + priorityCounts.medium + priorityCounts.low;
-    if (totalPrio === 0) {
-      priorityData = [80, 100, 30];
-      priorityLabels = ['High', 'Medium', 'Low'];
-      priorityColors = ['#ef4444', '#f59e0b', '#3b82f6'];
-    } else {
-      priorityData = [priorityCounts.high, priorityCounts.medium, priorityCounts.low];
-      priorityLabels = ['High', 'Medium', 'Low'];
-      priorityColors = ['#ef4444', '#f59e0b', '#3b82f6'];
-    }
-
-    let defectData, defectLabels, defectColors;
-    if (failedCount === 0) {
-      defectData = [10, 35, 5, 120];
-      defectLabels = ['Open', 'Resolved', 'Retest Pending', 'Closed'];
-      defectColors = ['#ef4444', '#10b981', '#f59e0b', '#64748b'];
-    } else {
-      const openDef = Math.ceil(failedCount * 0.3);
-      const resDef = Math.ceil(failedCount * 0.5);
-      const retestDef = failedCount - openDef - resDef;
-      defectData = [openDef, resDef, retestDef, Math.ceil(failedCount * 1.5)];
-      defectLabels = ['Open', 'Resolved', 'Retest Pending', 'Closed'];
-      defectColors = ['#ef4444', '#10b981', '#f59e0b', '#64748b'];
     }
 
     // Populate Recent Executions Table (Row 4 Left)
     const recentExecsTbody = document.getElementById('recent-executions-tbody');
     if (recentExecsTbody) {
-      if (this.executions.length === 0) {
+      if (data.recentExecutions.length === 0) {
         recentExecsTbody.innerHTML = `
-          <tr style="border-bottom: 1px solid var(--border-color);">
-            <td style="padding: 10px 12px;">TC-001: Login Flow Authentication</td>
-            <td style="text-align: center; padding: 10px 12px;"><span class="badge badge-approved">Passed</span></td>
-            <td style="text-align: right; padding: 10px 12px;">4.1 sec</td>
-            <td style="text-align: right; padding: 10px 12px;">09:30</td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border-color);">
-            <td style="padding: 10px 12px;">TC-014: Payment Processing Gateway</td>
-            <td style="text-align: center; padding: 10px 12px;"><span class="badge badge-rejected">Failed</span></td>
-            <td style="text-align: right; padding: 10px 12px;">8.2 sec</td>
-            <td style="text-align: right; padding: 10px 12px;">09:33</td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border-color);">
-            <td style="padding: 10px 12px;">TC-022: Vehicle Registration Form</td>
-            <td style="text-align: center; padding: 10px 12px;"><span class="badge badge-approved">Passed</span></td>
-            <td style="text-align: right; padding: 10px 12px;">5.5 sec</td>
-            <td style="text-align: right; padding: 10px 12px;">09:35</td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border-color);">
-            <td style="padding: 10px 12px;">TC-045: Premium Quote Calculation</td>
-            <td style="text-align: center; padding: 10px 12px;"><span class="badge badge-approved">Passed</span></td>
-            <td style="text-align: right; padding: 10px 12px;">3.9 sec</td>
-            <td style="text-align: right; padding: 10px 12px;">09:38</td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border-color);">
-            <td style="padding: 10px 12px;">TC-088: User Profile Preferences</td>
-            <td style="text-align: center; padding: 10px 12px;"><span class="badge badge-approved">Passed</span></td>
-            <td style="text-align: right; padding: 10px 12px;">2.8 sec</td>
-            <td style="text-align: right; padding: 10px 12px;">09:40</td>
+          <tr>
+            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 30px 10px; font-size: 0.75rem;">
+              No executions logged. Select a Release and Test Cycle to trigger runner scripts.
+            </td>
           </tr>
         `;
       } else {
-        const sorted = [...this.executions].sort((a, b) => new Date(b.executed_at) - new Date(a.executed_at)).slice(0, 5);
-        recentExecsTbody.innerHTML = sorted.map(ex => {
-          const tc = this.testCases.find(t => String(t.id) === String(ex.test_case_id));
-          const tcName = tc ? tc.title : 'Unknown Test Case';
-          const tcCustomId = tc ? (tc.custom_id || `TC-${tc.id.substring(0, 4).toUpperCase()}`) : 'TC-XXX';
+        recentExecsTbody.innerHTML = data.recentExecutions.map(ex => {
           const isPassed = ex.status === 'passed';
-          const timeStr = new Date(ex.executed_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-          const durationStr = ex.duration_seconds ? `${ex.duration_seconds.toFixed(1)} sec` : 'N/A';
           return `
             <tr style="border-bottom: 1px solid var(--border-color);">
-              <td style="padding: 10px 12px;">${escapeHTML(tcCustomId)}: ${escapeHTML(tcName)}</td>
+              <td style="padding: 10px 12px;">${escapeHTML(ex.tcCustomId)}: ${escapeHTML(ex.tcName)}</td>
               <td style="text-align: center; padding: 10px 12px;"><span class="badge ${isPassed ? 'badge-approved' : 'badge-rejected'}">${escapeHTML(ex.status)}</span></td>
-              <td style="text-align: right; padding: 10px 12px;">${escapeHTML(durationStr)}</td>
-              <td style="text-align: right; padding: 10px 12px;">${escapeHTML(timeStr)}</td>
+              <td style="text-align: right; padding: 10px 12px;">${escapeHTML(ex.duration_seconds.toFixed(1))} sec</td>
+              <td style="text-align: right; padding: 10px 12px;">${escapeHTML(ex.executed_at)}</td>
             </tr>
           `;
         }).join('');
       }
     }
 
-    // Populate Recent Activity Feed fallback
-    const activityContainer = document.getElementById('recent-activity-list');
-    if (activityContainer) {
-      if (this.logs.length === 0) {
-        const defaultLogs = [
-          { time: '09:12 AM', message: 'Jira Story requirements synced successfully' },
-          { time: '09:15 AM', message: 'ScenarioDraftingAgent initiated for project' },
-          { time: '09:20 AM', message: 'Test Scenario approved by QA Lead' },
-          { time: '09:25 AM', message: 'TestCaseAgent created Playwright automation script' },
-          { time: '09:35 AM', message: 'Execution run completed for TestSuite_Alpha' },
-          { time: '09:40 AM', message: 'LangSmith tracer logs recorded' }
-        ];
-        activityContainer.innerHTML = defaultLogs.map(log => Components.RecentActivityItem(log)).join('');
-      } else {
-        activityContainer.innerHTML = this.logs.slice(0, 10).map(log => Components.RecentActivityItem(log)).join('');
-      }
-    }
-
     // Populate Execution Summary Table
     const summaryTbody = document.getElementById('dashboard-summary-tbody');
     if (summaryTbody) {
-      const realExecCount = passedCount + failedCount;
-      const displayProj = this.currentProject ? this.currentProject.name : 'Vehicle Insurance (Demo)';
-      const displayReqs = totalReqs === 0 ? 18 : totalReqs;
-      const displayScenarios = totalScenarios === 0 ? 62 : totalScenarios;
-      const displayTestCases = totalTestCases === 0 ? 210 : totalTestCases;
-      const displayExecuted = totalExecutions === 0 ? 178 : totalExecutions;
-      const displayPassed = totalExecutions === 0 ? 160 : passedExecutions;
-      const displayFailed = totalExecutions === 0 ? 18 : (totalExecutions - passedExecutions);
-      const displayYet = totalTestCases === 0 ? 32 : yetToExecuteCount;
-      const displayRate = totalExecutions === 0 ? '89.9%' : `${Math.round((passedExecutions / totalExecutions) * 100)}%`;
+      const displayProj = this.currentProject ? this.currentProject.name : 'Unknown';
+      const displayReqs = data.totalReqs;
+      const displayScenarios = data.totalScenarios;
+      const displayTestCases = data.totalTestCases;
+      const displayExecuted = data.totalExecutions;
+      const displayPassed = data.passedCount + data.failedCount > 0 ? data.passedCount : 0;
+      const displayFailed = data.passedCount + data.failedCount > 0 ? data.failedCount : 0;
+      const displayYet = data.yetToExecuteCount;
+      const displayRate = data.passRatio;
 
       summaryTbody.innerHTML = `
         <tr>
@@ -1043,7 +1130,6 @@ class App {
     // Render charts defensively
     if (typeof Chart !== 'undefined') {
       try {
-        // Destroy existing chart instances to avoid hover redraw bugs
         if (this.executionPieChartInstance) this.executionPieChartInstance.destroy();
         if (this.approvalDonutChartInstance) this.approvalDonutChartInstance.destroy();
         if (this.trendBarChartInstance) this.trendBarChartInstance.destroy();
@@ -1054,10 +1140,12 @@ class App {
         // Render Execution Status Pie Chart
         const pieCtx = document.getElementById('execution-pie-chart');
         if (pieCtx) {
+          const pieData = data.isEmpty || data.totalTestCases === 0 ? [0, 0, 0] : [data.passedCount, data.failedCount, data.yetToExecuteCount];
+          const pieColors = ['#10b981', '#ef4444', '#64748b'];
           this.executionPieChartInstance = new Chart(pieCtx, {
             type: 'pie',
             data: {
-              labels: pieLabels,
+              labels: ['Passed', 'Failed', 'Yet to Execute'],
               datasets: [{
                 data: pieData,
                 backgroundColor: pieColors,
@@ -1068,9 +1156,7 @@ class App {
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false }
-              }
+              plugins: { legend: { display: false } }
             }
           });
         }
@@ -1078,10 +1164,12 @@ class App {
         // Render Scenario Approval Donut Chart
         const donutCtx = document.getElementById('approval-donut-chart');
         if (donutCtx) {
+          const donutData = data.totalScenarios === 0 ? [0, 0, 0] : [data.approvedCount, data.rejectedCount, data.pendingCount];
+          const donutColors = ['#10b981', '#ef4444', '#f59e0b'];
           this.approvalDonutChartInstance = new Chart(donutCtx, {
             type: 'doughnut',
             data: {
-              labels: donutLabels,
+              labels: ['Approved', 'Rejected', 'Pending'],
               datasets: [{
                 data: donutData,
                 backgroundColor: donutColors,
@@ -1093,9 +1181,7 @@ class App {
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false }
-              }
+              plugins: { legend: { display: false } }
             }
           });
         }
@@ -1103,118 +1189,99 @@ class App {
         // Render Pass/Fail Trend Bar Chart
         const trendCtx = document.getElementById('trend-bar-chart');
         if (trendCtx) {
+          const trendLabels = data.trendLabels.length === 0 ? ['No Data'] : data.trendLabels;
+          const trendPassedData = data.trendLabels.length === 0 ? [0] : data.trendPassed;
+          const trendFailedData = data.trendLabels.length === 0 ? [0] : data.trendFailed;
           this.trendBarChartInstance = new Chart(trendCtx, {
             type: 'bar',
             data: {
               labels: trendLabels,
               datasets: [
-                {
-                  label: 'Passed',
-                  data: trendPassedData,
-                  backgroundColor: '#10b981',
-                  borderRadius: 4
-                },
-                {
-                  label: 'Failed',
-                  data: trendFailedData,
-                  backgroundColor: '#ef4444',
-                  borderRadius: 4
-                }
+                { label: 'Passed', data: trendPassedData, backgroundColor: '#10b981', borderRadius: 4 },
+                { label: 'Failed', data: trendFailedData, backgroundColor: '#ef4444', borderRadius: 4 }
               ]
             },
             options: {
               responsive: true,
               maintainAspectRatio: false,
               scales: {
-                x: {
-                  grid: { display: false },
-                  ticks: { color: '#94a3b8', font: { size: 10 } }
-                },
-                y: {
-                  grid: { color: '#1f2937' },
-                  ticks: { color: '#94a3b8', font: { size: 10 }, stepSize: 5 }
-                }
+                x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                y: { grid: { color: '#1f2937' }, ticks: { color: '#94a3b8', font: { size: 10 }, stepSize: 5 } }
               },
               plugins: {
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    color: '#94a3b8',
-                    font: { size: 10 },
-                    boxWidth: 10
-                  }
-                }
+                legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 10 } }
               }
             }
           });
         }
 
         // Render Requirement Distribution Bar Chart (Row 5 Left)
-        const domCtx = document.getElementById('domain-bar-chart');
-        if (domCtx) {
-          this.domainBarChartInstance = new Chart(domCtx, {
+        const domainCtx = document.getElementById('domain-bar-chart');
+        if (domainCtx) {
+          const domainLabels = data.domainLabels.length === 0 ? ['No Domains'] : data.domainLabels;
+          const domainCountsData = data.domainLabels.length === 0 ? [0] : data.domainCountsData;
+          this.domainBarChartInstance = new Chart(domainCtx, {
             type: 'bar',
             data: {
               labels: domainLabels,
               datasets: [{
                 label: 'Requirements',
                 data: domainCountsData,
-                backgroundColor: '#0d9488',
+                backgroundColor: 'rgba(20, 184, 166, 0.4)',
+                borderColor: 'var(--accent-teal)',
+                borderWidth: 1,
                 borderRadius: 4
               }]
             },
             options: {
+              indexAxis: 'y',
               responsive: true,
               maintainAspectRatio: false,
               scales: {
-                x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
-                y: { ticks: { color: '#94a3b8', font: { size: 9 }, stepSize: 2 }, grid: { color: '#1f2937' } }
+                x: { grid: { color: '#1f2937' }, ticks: { color: '#94a3b8', font: { size: 10 }, stepSize: 1 } },
+                y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
               },
               plugins: { legend: { display: false } }
             }
           });
         }
 
-        // Render Test Case Priority Donut Chart (Row 5 Middle)
-        const priCtx = document.getElementById('priority-donut-chart');
-        if (priCtx) {
-          this.priorityDonutChartInstance = new Chart(priCtx, {
+        // Render Test Case Priority Donut Chart (Row 5 Center)
+        const prioCtx = document.getElementById('priority-donut-chart');
+        if (prioCtx) {
+          const priorityData = data.totalTestCases === 0 ? [0, 0, 0] : [data.priorityHighCount, data.priorityMediumCount, data.priorityLowCount];
+          this.priorityDonutChartInstance = new Chart(prioCtx, {
             type: 'doughnut',
             data: {
-              labels: priorityLabels,
+              labels: ['High', 'Medium', 'Low'],
               datasets: [{
                 data: priorityData,
-                backgroundColor: priorityColors,
+                backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6'],
                 borderColor: '#111827',
                 borderWidth: 2,
-                cutout: '60%'
+                cutout: '65%'
               }]
             },
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: true,
-                  position: 'right',
-                  labels: { color: '#94a3b8', font: { size: 9 }, boxWidth: 8 }
-                }
-              }
+              plugins: { legend: { display: false } }
             }
           });
         }
 
         // Render Defect Status Pie Chart (Row 5 Right)
-        const defCtx = document.getElementById('defect-pie-chart');
-        if (defCtx) {
-          this.defectPieChartInstance = new Chart(defCtx, {
+        const defectCtx = document.getElementById('defect-pie-chart');
+        if (defectCtx) {
+          const totalDefects = data.defectOpenCount + data.defectResolvedCount + data.defectRetestCount + data.defectClosedCount;
+          const defectData = totalDefects === 0 ? [0, 0, 0, 0] : [data.defectOpenCount, data.defectResolvedCount, data.defectRetestCount, data.defectClosedCount];
+          this.defectPieChartInstance = new Chart(defectCtx, {
             type: 'pie',
             data: {
-              labels: defectLabels,
+              labels: ['Open', 'Resolved', 'Retest Pending', 'Closed'],
               datasets: [{
                 data: defectData,
-                backgroundColor: defectColors,
+                backgroundColor: ['#ef4444', '#10b981', '#f59e0b', '#6b7280'],
                 borderColor: '#111827',
                 borderWidth: 2
               }]
@@ -1222,13 +1289,7 @@ class App {
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  display: true,
-                  position: 'right',
-                  labels: { color: '#94a3b8', font: { size: 9 }, boxWidth: 8 }
-                }
-              }
+              plugins: { legend: { display: false } }
             }
           });
         }
@@ -1317,7 +1378,7 @@ class App {
   renderRequirements() {
     const container = document.getElementById('requirements-list-container');
     
-    const tableHtml = Components.RequirementsTable(this.requirements, {
+    const tableHtml = Components.RequirementsTable(this.filteredRequirements, {
       onSelect: (reqId) => {
         this.selectedRequirementId = reqId;
         this.renderScenariosRequirementDropdown();
@@ -1354,7 +1415,7 @@ class App {
 
     select.innerHTML = `
       <option value="" disabled ${!this.selectedRequirementId ? 'selected' : ''}>▼ Choose Requirement</option>
-      ${this.requirements.map(r => `<option value="${r.id}" ${r.id === this.selectedRequirementId ? 'selected' : ''}>${escapeHTML(this.formatRequirementLabel(r))}</option>`).join('')}
+      ${this.filteredRequirements.map(r => `<option value="${r.id}" ${r.id === this.selectedRequirementId ? 'selected' : ''}>${escapeHTML(this.formatRequirementLabel(r))}</option>`).join('')}
     `;
 
     select.onchange = (e) => {
@@ -1364,7 +1425,7 @@ class App {
     };
 
     this.setupSearchInput('scenario-req-search', 'scenario-req-select', (id) => {
-      const r = this.requirements.find(x => x.id === id);
+      const r = this.filteredRequirements.find(x => x.id === id);
       return r ? [r.title, r.requirement_id, r.description] : [];
     });
   }
@@ -1543,7 +1604,7 @@ class App {
 
     select.innerHTML = `
       <option value="" disabled ${!this.selectedRequirementId ? 'selected' : ''}>▼ Choose Requirement</option>
-      ${this.requirements.map(r => `<option value="${r.id}" ${r.id === this.selectedRequirementId ? 'selected' : ''}>${escapeHTML(this.formatRequirementLabel(r))}</option>`).join('')}
+      ${this.filteredRequirements.map(r => `<option value="${r.id}" ${r.id === this.selectedRequirementId ? 'selected' : ''}>${escapeHTML(this.formatRequirementLabel(r))}</option>`).join('')}
     `;
 
     select.onchange = (e) => {
@@ -1553,7 +1614,7 @@ class App {
     };
 
     this.setupSearchInput('tc-req-search', 'tc-req-select', (id) => {
-      const r = this.requirements.find(x => x.id === id);
+      const r = this.filteredRequirements.find(x => x.id === id);
       return r ? [r.title, r.requirement_id, r.description] : [];
     });
   }
@@ -1645,15 +1706,15 @@ class App {
       onViewScript: (id) => {
         this.openPlaywrightScriptWorkspace(id);
       },
-      onGenerateScript: async (id, btn) => {
+      onGenerateScript: async (id, btn, framework) => {
         btn.disabled = true;
         btn.innerText = "Generating...";
         const newWindow = window.open('', '_blank');
         if (newWindow) {
-          newWindow.document.write('<html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;"><div>Generating Playwright Script... Please wait...</div></body></html>');
+          newWindow.document.write('<html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;"><div>Generating Script... Please wait...</div></body></html>');
         }
         try {
-          await API.generatePlaywrightScript(this.currentProject.id, id);
+          await API.generatePlaywrightScript(this.currentProject.id, id, framework);
           this.addLog("Playwright script generated for test case");
           await this.refreshProjectData();
           this.renderTestCases();
@@ -1716,7 +1777,7 @@ class App {
         const btn = document.getElementById('btn-generate-all-scripts');
         btn.onclick = async () => {
           btn.disabled = true;
-          btn.innerText = "⚡ Generating Scripts in Background...";
+          btn.innerText = "Generating Scripts in Background...";
           try {
             for (const tc of approvedTCs) {
               await API.generatePlaywrightScript(this.currentProject.id, tc.id);
@@ -1728,9 +1789,55 @@ class App {
             alert(`Script generation failed: ${err.message}`);
           } finally {
             btn.disabled = false;
-            btn.innerText = "⚡ Generate Playwright Scripts for All Approved Test Cases";
+            btn.innerText = "Generate Playwright Scripts for All Approved Test Cases";
           }
         };
+
+        const runBatchBtn = document.getElementById('btn-run-selected-batch');
+        if (runBatchBtn) {
+          runBatchBtn.onclick = async () => {
+            const ids = this.getSelectedTestCases();
+            if (ids.length === 0) return alert("Please select at least one test case to execute.");
+            
+            runBatchBtn.disabled = true;
+            
+            const scriptless = ids.filter(id => {
+              const tc = this.testCases.find(t => t.id === id);
+              return tc && !tc.playwright_script;
+            });
+            
+            if (scriptless.length > 0) {
+              runBatchBtn.innerText = `Auto-generating ${scriptless.length} script(s)...`;
+              try {
+                for (const tcId of scriptless) {
+                  await API.generatePlaywrightScript(this.currentProject.id, tcId);
+                }
+                this.addLog(`Auto-generated scripts for ${scriptless.length} selected test cases.`);
+                await this.refreshProjectData();
+                this.renderTestCases();
+              } catch (err) {
+                alert(`Failed to auto-generate scripts: ${err.message}`);
+                runBatchBtn.disabled = false;
+                runBatchBtn.innerText = "Run Selected Batch";
+                return;
+              }
+            }
+
+            runBatchBtn.innerText = "Redirecting to Playwright Workspace...";
+            try {
+              const wsUrl = this.settings?.playwright?.workspace_url || 'http://localhost:3000';
+              const testCycleId = this.currentTestCycle ? this.currentTestCycle.id : '';
+              const url = `${wsUrl}/?project_id=${this.currentProject.id}&test_case_ids=${ids.join(',')}&test_cycle_id=${testCycleId}`;
+              window.open(url, '_blank');
+              this.addLog(`Opened batch workspace for ${ids.length} selected test cases.`);
+            } catch (err) {
+              alert(`Failed to redirect to Playwright Workspace: ${err.message}`);
+            } finally {
+              runBatchBtn.disabled = false;
+              runBatchBtn.innerText = "Run Selected Batch";
+            }
+          };
+        }
       } else {
         bulkScriptContainer.style.display = 'none';
       }
@@ -2019,7 +2126,7 @@ class App {
 
     select.innerHTML = `
       <option value="" disabled ${!this.selectedRequirementId ? 'selected' : ''}>▼ Choose Requirement</option>
-      ${this.requirements.map(r => `<option value="${r.id}" ${r.id === this.selectedRequirementId ? 'selected' : ''}>${escapeHTML(this.formatRequirementLabel(r))}</option>`).join('')}
+      ${this.filteredRequirements.map(r => `<option value="${r.id}" ${r.id === this.selectedRequirementId ? 'selected' : ''}>${escapeHTML(this.formatRequirementLabel(r))}</option>`).join('')}
     `;
 
     select.onchange = (e) => {
@@ -2051,8 +2158,19 @@ class App {
 
   async handleRouting() {
     const hash = window.location.hash;
-    const view = hash.replace('#/', '') || 'dashboard';
-    if (['dashboard', 'requirements', 'scenarios', 'testcases', 'playwright', 'executions', 'reports', 'langsmith', 'settings'].includes(view)) {
+    let view = hash.replace('#/', '') || 'dashboard';
+    
+    if (view.startsWith('execution/')) {
+      const parts = view.split('/');
+      const execId = parts[1];
+      if (this.currentProject) {
+        await this.renderExecutionWorkspaceObserver(execId);
+      }
+      this.navigateTo('execution-workspace');
+      return;
+    }
+
+    if (['dashboard', 'requirements', 'scenarios', 'testcases', 'playwright', 'executions', 'reports', 'langsmith', 'settings', 'execution-workspace', 'project-start'].includes(view)) {
       if (this.currentProject) {
         await this.refreshProjectData().catch(e => console.error("Router refresh error:", e));
       }
@@ -2147,7 +2265,360 @@ class App {
   // Executions History Renderer
   renderExecutions() {
     const container = document.getElementById('executions-list-container');
-    container.innerHTML = Components.ExecutionsTable(this.executions);
+    container.innerHTML = Components.ExecutionsTable(this.filteredExecutions);
+  }
+
+  async renderExecutionWorkspaceObserver(execId) {
+    const container = document.getElementById('execution-observer-body');
+    if (!container) return;
+
+    if (this.activeExecutionStream) {
+      this.activeExecutionStream.close();
+      this.activeExecutionStream = null;
+    }
+
+    const isBatch = execId.startsWith('BATCH-');
+
+    if (!isBatch) {
+      container.innerHTML = Components.Spinner("Loading execution details...");
+      try {
+        const data = await API.getExecutionDetail(this.currentProject.id, execId);
+        const ex = data.execution;
+        
+        if (!ex.status) {
+          this.renderRealTimeObserver(execId, false);
+          return;
+        }
+
+        this.renderHistoricalExecution(data);
+        return;
+      } catch (err) {
+        this.renderRealTimeObserver(execId, false);
+        return;
+      }
+    } else {
+      this.renderRealTimeObserver(execId, true);
+    }
+  }
+
+  renderRealTimeObserver(batchOrExecId, isBatch) {
+    const container = document.getElementById('execution-observer-body');
+    const descEl = document.getElementById('obs-title-desc');
+    if (descEl) {
+      descEl.textContent = `Monitoring ${isBatch ? 'batch execution' : 'test case'} stream in real-time. Survives page refreshes.`;
+    }
+
+    container.innerHTML = `
+      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; min-height: 480px;">
+        <!-- LEFT PANEL: Terminal Log Stream -->
+        <div class="section-card" style="display: flex; flex-direction: column; height: 100%;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="margin: 0;">Execution Stream Terminal</h2>
+            <span class="badge badge-review" id="obs-connection-status">Connecting...</span>
+          </div>
+          <div id="obs-terminal" style="flex-grow: 1; min-height: 380px; background: #000; border-radius: var(--border-radius-md); padding: 16px; font-family: monospace; font-size: 0.85rem; color: #10b981; overflow-y: auto; line-height: 1.6; border: 1px solid var(--border-color);">
+            <div style="color: var(--text-muted);">Waiting for logs...</div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANEL: Structured Status Dashboard -->
+        <div style="display: flex; flex-direction: column; gap: 20px; height: 100%;">
+          <!-- Progress Bar Card -->
+          <div class="section-card">
+            <h2>Batch Execution Progress</h2>
+            <div style="margin-top: 16px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px;">
+                <span id="obs-progress-text">Progress: 0%</span>
+                <span id="obs-etr-text">ETR: --</span>
+              </div>
+              <div style="background-color: var(--bg-primary); height: 12px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color);">
+                <div id="obs-progress-bar" style="background-color: var(--color-success); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Counts Card -->
+          <div class="section-card" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; text-align: center;">
+            <div style="background: var(--bg-secondary); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color);">
+              <div style="font-size: 1.5rem; font-weight: 700; color: var(--color-success);" id="obs-count-passed">0</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px;">Passed</div>
+            </div>
+            <div style="background: var(--bg-secondary); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color);">
+              <div style="font-size: 1.5rem; font-weight: 700; color: var(--color-danger);" id="obs-count-failed">0</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px;">Failed</div>
+            </div>
+            <div style="background: var(--bg-secondary); padding: 12px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color);">
+              <div style="font-size: 1.5rem; font-weight: 700; color: var(--color-warning);" id="obs-count-skipped">0</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px;">Skipped</div>
+            </div>
+          </div>
+
+          <!-- Active Metrics Card -->
+          <div class="section-card" style="display: flex; flex-direction: column; gap: 12px;">
+            <h2>Logical Application State</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.85rem; margin-top: 8px;">
+              <div>
+                <span style="color: var(--text-muted); display: block; font-size: 0.75rem; text-transform: uppercase;">Current State</span>
+                <strong id="obs-current-state" style="color: var(--text-primary);">LOGIN</strong>
+              </div>
+              <div>
+                <span style="color: var(--text-muted); display: block; font-size: 0.75rem; text-transform: uppercase;">Next Required State</span>
+                <strong id="obs-next-state" style="color: var(--text-primary);">--</strong>
+              </div>
+            </div>
+            <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+              <span style="color: var(--text-muted); display: block; font-size: 0.75rem; text-transform: uppercase;">Navigation Decision</span>
+              <strong id="obs-nav-decision" style="color: var(--accent-primary);">--</strong>
+            </div>
+            <div style="border-top: 1px solid var(--border-color); padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.85rem;">
+              <div>
+                <span style="color: var(--text-muted); display: block; font-size: 0.75rem; text-transform: uppercase;">Current Retry</span>
+                <strong id="obs-current-retry">0</strong>
+              </div>
+              <div>
+                <span style="color: var(--text-muted); display: block; font-size: 0.75rem; text-transform: uppercase;">Current Dataset Row</span>
+                <strong id="obs-dataset-row">--</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const terminal = document.getElementById('obs-terminal');
+    const connBadge = document.getElementById('obs-connection-status');
+    const progressBar = document.getElementById('obs-progress-bar');
+    const progressText = document.getElementById('obs-progress-text');
+    const etrText = document.getElementById('obs-etr-text');
+    const countPassed = document.getElementById('obs-count-passed');
+    const countFailed = document.getElementById('obs-count-failed');
+    const countSkipped = document.getElementById('obs-count-skipped');
+    const currentState = document.getElementById('obs-current-state');
+    const nextState = document.getElementById('obs-next-state');
+    const navDecision = document.getElementById('obs-nav-decision');
+    const currentRetry = document.getElementById('obs-current-retry');
+    const datasetRow = document.getElementById('obs-dataset-row');
+
+    const streamUrl = isBatch
+      ? `/api/v1/projects/${this.currentProject.id}/batches/${batchOrExecId}/stream`
+      : `/api/v1/projects/${this.currentProject.id}/testcases/${batchOrExecId}/execution-stream`;
+
+    const source = new EventSource(streamUrl);
+    this.activeExecutionStream = source;
+
+    terminal.innerHTML = '';
+
+    source.onopen = () => {
+      connBadge.className = "badge badge-approved";
+      connBadge.textContent = "Live Stream";
+    };
+
+    source.onerror = () => {
+      connBadge.className = "badge badge-rejected";
+      connBadge.textContent = "Disconnected";
+      source.close();
+    };
+
+    source.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.log) {
+        const logLine = document.createElement('div');
+        logLine.style.marginBottom = '4px';
+        logLine.innerHTML = escapeHTML(data.log);
+        terminal.appendChild(logLine);
+        terminal.scrollTop = terminal.scrollHeight;
+      }
+
+      if (data.progress !== undefined) {
+        progressBar.style.width = `${data.progress}%`;
+        progressText.textContent = `Progress: ${data.progress}% (${data.total_tasks - data.remaining_tasks}/${data.total_tasks} Tasks)`;
+      }
+      if (data.etr !== undefined) {
+        etrText.textContent = `ETR: ${data.etr}`;
+      }
+      if (data.passed_count !== undefined) {
+        countPassed.textContent = data.passed_count;
+      }
+      if (data.failed_count !== undefined) {
+        countFailed.textContent = data.failed_count;
+      }
+      if (data.skipped_count !== undefined) {
+        countSkipped.textContent = data.skipped_count;
+      }
+      if (data.current_state !== undefined) {
+        currentState.textContent = data.current_state;
+      }
+      if (data.next_required_state !== undefined) {
+        nextState.textContent = data.next_required_state;
+      }
+      if (data.navigation_decision !== undefined) {
+        navDecision.textContent = data.navigation_decision;
+      }
+      if (data.current_retry !== undefined) {
+        currentRetry.textContent = data.current_retry;
+      }
+      if (data.current_dataset_row !== undefined) {
+        datasetRow.textContent = data.current_dataset_row;
+      }
+
+      if (data.status === 'Completed' || data.status === 'Error') {
+        connBadge.className = "badge badge-approved";
+        connBadge.textContent = "Finished";
+        source.close();
+        this.refreshProjectData();
+      }
+    };
+  }
+
+  renderHistoricalExecution(data) {
+    const container = document.getElementById('execution-observer-body');
+    const ex = data.execution;
+    
+    try {
+      const stages = [
+        { key: "Queued", label: "Queued", status: "completed" },
+        { key: "Preparing Environment", label: "Preparing Env", status: "completed" },
+        { key: "Running", label: "Running", status: ex.status === 'passed' || ex.status === 'failed' || ex.status === 'error' ? "completed" : "active" }
+      ];
+
+      let analysisStatus = "pending";
+    if (ex.failure_category) {
+      analysisStatus = "completed";
+    } else if (ex.status === 'failed' || ex.status === 'error') {
+      analysisStatus = "active";
+    }
+    stages.push({ key: "Execution Analysis", label: "Analysis", status: analysisStatus });
+
+    let jiraStatus = "pending";
+    if (ex.jira_bug_id) {
+      jiraStatus = "completed";
+    } else if (ex.status === 'failed' && ex.failure_category === 'Product Bug') {
+      jiraStatus = "active";
+    }
+    stages.push({ key: "Jira Sync", label: "Jira Sync", status: jiraStatus });
+
+    let reportingStatus = "pending";
+    if (data.report && Object.keys(data.report).length > 0) {
+      reportingStatus = "completed";
+    } else if (ex.status) {
+      reportingStatus = "completed";
+    }
+    stages.push({ key: "Reporting", label: "Reporting", status: reportingStatus });
+    stages.push({ key: "Completed", label: "Completed", status: ex.status ? "completed" : "pending" });
+
+    const stagesHtml = stages.map(s => {
+      let color = "var(--text-muted)";
+      let icon = "○";
+      if (s.status === 'completed') {
+        color = "var(--color-success)";
+        icon = "✓";
+      } else if (s.status === 'active') {
+        color = "var(--accent-primary)";
+        icon = "●";
+      }
+      return `
+        <div style="display: flex; flex-direction: column; align-items: center; flex: 1; text-align: center;">
+          <div style="width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; background: var(--bg-tertiary); border: 2px solid ${color}; color: ${color}; margin-bottom: 6px; font-size: 0.8rem;">
+            ${icon}
+          </div>
+          <div style="font-size: 0.72rem; font-weight: 600; color: ${color}; text-transform: uppercase;">${escapeHTML(s.label)}</div>
+        </div>
+      `;
+    }).join('<div style="flex-grow: 1; height: 2px; background: var(--border-color); margin-top: 12px; max-width: 40px;"></div>');
+
+    let triageHtml = `<div style="color: var(--text-muted); font-size: 0.85rem;">No triage findings for successful run.</div>`;
+    if (ex.failure_category && ex.failure_category !== 'None') {
+      triageHtml = `
+        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px;">
+          <div>
+            <div style="margin-bottom: 12px;">
+              <span class="badge ${ex.failure_category === 'Product Bug' ? 'badge-rejected' : 'badge-review'}" style="font-size: 0.85rem; padding: 4px 10px;">
+                ${escapeHTML(ex.failure_category)}
+              </span>
+            </div>
+            <div style="font-size: 0.85rem; margin-bottom: 8px;"><strong>Suggest Retry:</strong> ${ex.suggest_retry ? 'Yes' : 'No'}</div>
+            <div style="font-size: 0.85rem;"><strong>Retest Candidate:</strong> ${ex.retest_pending_candidate ? 'Yes' : 'No'}</div>
+          </div>
+          <div>
+            <h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;">Root Cause Summary</h4>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; margin: 0; background: var(--bg-tertiary); padding: 8px; border-radius: var(--border-radius-md); border: 1px solid var(--border-color);">${escapeHTML(ex.root_cause_summary || 'N/A')}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    let defectHtml = `<div style="color: var(--text-muted); font-size: 0.85rem;">No JIRA issues mapped.</div>`;
+    if (ex.jira_bug_id) {
+      defectHtml = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="font-size: 1.5rem;">🐞</div>
+          <div>
+            <div style="font-weight: 700; font-size: 1rem;">
+              <a href="${escapeHTML(ex.jira_bug_url)}" target="_blank" style="color: var(--color-danger); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                ${escapeHTML(ex.jira_bug_id)}
+              </a>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Created/Synced by DefectManagementAgent</div>
+          </div>
+        </div>
+      `;
+    }
+
+    const logsHtml = data.logs && data.logs.length > 0
+      ? data.logs.map(log => `<div style="margin-bottom: 4px;">${escapeHTML(log)}</div>`).join('')
+      : `<div style="color: var(--text-muted);">No execution logs streamed.</div>`;
+
+    container.innerHTML = `
+      <div class="section-card" style="display: flex; align-items: center; justify-content: space-between; padding: 20px 32px; margin-bottom: 24px; border: 1px solid var(--border-color);">
+        ${stagesHtml}
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+        <div class="section-card">
+          <h2>AI Execution Triaging Findings</h2>
+          <div style="margin-top: 16px;">
+            ${triageHtml}
+          </div>
+        </div>
+        <div class="section-card">
+          <h2>Defect Lifecycle Link</h2>
+          <div style="margin-top: 16px;">
+            ${defectHtml}
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="section-card" style="display: flex; flex-direction: column; height: 360px;">
+          <h2>Execution Stream Terminal</h2>
+          <div style="flex-grow: 1; background: #000; border-radius: var(--border-radius-md); padding: 16px; font-family: monospace; font-size: 0.82rem; color: #10b981; overflow-y: auto; line-height: 1.5; margin-top: 12px; border: 1px solid var(--border-color);">
+            ${logsHtml}
+          </div>
+        </div>
+        <div class="section-card" style="display: flex; flex-direction: column; height: 360px;">
+          <h2>Execution Run Artifacts</h2>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; flex-grow: 1;">
+            <div style="background: var(--bg-secondary); border-radius: var(--border-radius-md); border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; gap: 10px;">
+              <div style="font-size: 1.5rem;">📸</div>
+              <div style="font-weight: 600; font-size: 0.85rem;">Last Screenshot</div>
+              ${ex.screenshot_path ? `
+                <a href="/api/v1/projects/${this.currentProject.id}/executions/${ex.id}/screenshot?path=${encodeURIComponent(ex.screenshot_path)}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">View Screenshot</a>
+              ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">No screenshot captured</span>`}
+            </div>
+            <div style="background: var(--bg-secondary); border-radius: var(--border-radius-md); border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; gap: 10px;">
+              <div style="font-size: 1.5rem;">🎬</div>
+              <div style="font-weight: 600; font-size: 0.85rem;">Video Recording</div>
+              ${ex.video_path ? `
+                <a href="/api/v1/projects/${this.currentProject.id}/executions/${ex.id}/video?path=${encodeURIComponent(ex.video_path)}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">Replay Video</a>
+              ` : `<span style="font-size: 0.75rem; color: var(--text-muted);">No video recorded</span>`}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    } catch (err) {
+      container.innerHTML = `<div style="color: var(--color-danger); font-size: 0.88rem; padding: 24px;">Failed to render workspace details: ${escapeHTML(err.message)}</div>`;
+    }
   }
 
   // LangSmith Trace Logs
@@ -2185,10 +2656,46 @@ class App {
 
     const passPct = Math.round((passed / runTotal) * 100);
 
-    const optionsHtml = this.executions.map(ex => {
+    // Group executions by test_cycle_id for batch runs
+    const batchesMap = new Map();
+    const individualExecs = [];
+
+    this.executions.forEach(ex => {
+      if (ex.test_cycle_id) {
+        if (!batchesMap.has(ex.test_cycle_id)) {
+          batchesMap.set(ex.test_cycle_id, []);
+        }
+        batchesMap.get(ex.test_cycle_id).push(ex);
+      } else {
+        individualExecs.push(ex);
+      }
+    });
+
+    const optionsList = [];
+    
+    // Add batch runs
+    batchesMap.forEach((execs, batchId) => {
+      const latestDate = new Date(Math.max(...execs.map(e => new Date(e.executed_at).getTime())));
+      const statusList = execs.map(e => e.status);
+      const passedCount = statusList.filter(s => s === 'passed').length;
+      const statusText = passedCount === execs.length ? 'passed' : 'failed';
+      optionsList.push({
+        value: `batch:${batchId}`,
+        label: `📦 Batch Run: ${latestDate.toLocaleString()} (${execs.length} Cases - ${passedCount} Passed) - Status: ${statusText}`
+      });
+    });
+
+    // Add individual runs
+    individualExecs.forEach(ex => {
       const date = new Date(ex.executed_at).toLocaleString();
-      return `<option value="${ex.id}">${escapeHTML(date)} - Status: ${escapeHTML(ex.status)}</option>`;
-    }).join('');
+      const tcTitle = this.testCases?.find(t => t.id === ex.test_case_id)?.title || 'Test Case';
+      optionsList.push({
+        value: ex.id,
+        label: `${date} - Case: ${tcTitle} - Status: ${ex.status}`
+      });
+    });
+
+    const optionsHtml = optionsList.map(opt => `<option value="${opt.value}">${escapeHTML(opt.label)}</option>`).join('');
 
     container.innerHTML = `
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 32px;">
@@ -2232,19 +2739,32 @@ class App {
     document.getElementById('btn-dl-report-pdf').onclick = () => {
       const id = getSelectedExecId();
       if (!id) return alert("Select an execution");
-      window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/pdf`, '_blank');
+      if (id.startsWith('batch:')) {
+        alert("PDF export is only supported for individual execution runs. Please use 'View HTML Report' to view the full batch details.");
+      } else {
+        window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/pdf`, '_blank');
+      }
     };
 
     document.getElementById('btn-dl-report-html').onclick = () => {
       const id = getSelectedExecId();
       if (!id) return alert("Select an execution");
-      window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/html`, '_blank');
+      if (id.startsWith('batch:')) {
+        const batchId = id.split(':')[1];
+        window.open(`/api/v1/projects/${this.currentProject.id}/batches/${batchId}/html`, '_blank');
+      } else {
+        window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/html`, '_blank');
+      }
     };
 
     document.getElementById('btn-dl-report-junit').onclick = () => {
       const id = getSelectedExecId();
       if (!id) return alert("Select an execution");
-      window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/junit`, '_blank');
+      if (id.startsWith('batch:')) {
+        alert("JUnit export is only supported for individual execution runs. Please use 'View HTML Report' to view the full batch details.");
+      } else {
+        window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/junit`, '_blank');
+      }
     };
   }
 
@@ -2369,6 +2889,8 @@ class App {
     
     // Bind global helpers
     window.switchSettingsTab = this.switchSettingsTab.bind(this);
+    window.saveProjectSettings = this.saveProjectSettings.bind(this);
+    window.switchDashboardScope = this.switchDashboardScope.bind(this);
     window.handleLogout = this.handleLogout.bind(this);
     window.handleLoginSubmit = this.handleLoginSubmit.bind(this);
     window.handleCreateUserSubmit = this.handleCreateUserSubmit.bind(this);
@@ -2541,6 +3063,57 @@ class App {
       this.loadUsersTab();
     } else if (tabName === 'audit') {
       this.loadAuditLogsTab();
+    } else if (tabName === 'project') {
+      this.populateProjectSettingsForm();
+    }
+  }
+
+  populateProjectSettingsForm() {
+    if (!this.currentProjectId) {
+      alert("Please select a project first.");
+      return;
+    }
+    const proj = this.projects.find(x => x.id === this.currentProjectId);
+    if (!proj) return;
+    document.getElementById('project-settings-url').value = proj.target_url || 'https://adactinhotelapp.com/';
+    document.getElementById('project-settings-username').value = proj.target_username || '';
+    document.getElementById('project-settings-password').value = proj.target_username ? '********' : '';
+  }
+
+  async saveProjectSettings(e) {
+    if (e) e.preventDefault();
+    if (!this.currentProjectId) {
+      alert("No active project selected");
+      return;
+    }
+    const proj = this.projects.find(x => x.id === this.currentProjectId);
+    if (!proj) return;
+
+    const targetUrl = document.getElementById('project-settings-url').value;
+    const targetUsername = document.getElementById('project-settings-username').value;
+    const targetPassword = document.getElementById('project-settings-password').value;
+
+    try {
+      const updated = await API.updateProject(
+        this.currentProjectId,
+        proj.name,
+        proj.description,
+        proj.line_of_business,
+        proj.framework,
+        proj.jira_project_key,
+        targetUrl,
+        targetUsername,
+        targetPassword
+      );
+      
+      // Update local project object
+      proj.target_url = updated.target_url;
+      proj.target_username = updated.target_username;
+      
+      this.addLog(`Project settings updated for: ${proj.name}`);
+      alert("Project settings updated successfully");
+    } catch (err) {
+      alert(`Failed to save project settings: ${err.message}`);
     }
   }
 

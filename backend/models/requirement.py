@@ -41,3 +41,11 @@ class Requirement(BaseModel):
     jira_issue_url: str | None = None
     jira_sync_status: str | None = None
     jira_last_synced_at: datetime | None = None
+    functional_requirements: list[str] = Field(default_factory=list)
+    non_functional_requirements: list[str] = Field(default_factory=list)
+    business_rules: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    backlog: dict | None = None
+    release_id: UUID | None = None

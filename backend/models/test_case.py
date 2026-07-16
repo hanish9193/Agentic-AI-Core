@@ -65,4 +65,7 @@ class TestCase(BaseModel):
     jira_issue_key: str | None = None
     jira_issue_url: str | None = None
     jira_sync_status: str | None = None
-    jira_last_synced_at: datetime | None = None
+    jira_last_synced_at: datetime | None = None
+    test_data: dict[str, str] = Field(default_factory=dict)
+    execution_type: str = "UI Automation"
+    automation_framework: str = "playwright"

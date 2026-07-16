@@ -133,7 +133,9 @@ def stub_llm_service(
     canned_evaluation_batch: _EvaluationBatch,
 ) -> StubLLMService:
     from backend.agents.requirement_analyst_agent import RequirementEnrichment
-    from backend.agents.backlog_creation_agent import UserStoryResponse
+    from backend.agents.backlog_creation_agent import UserStoryResponse, EpicResponse, FeatureBlock, StoryBlock
+    from backend.agents.qa_story_analyzer_agent import TestingContextResponse, TestStrategyDetails, TestScopeDetails, RiskItem
+    from backend.agents.automation_orchestrator_agent import OrchestrationResponse
 
     return StubLLMService(
         responses={
@@ -149,6 +151,36 @@ def stub_llm_service(
             UserStoryResponse: UserStoryResponse(
                 user_story="As a financial user, I want to perform a login so that I can access my accounts.",
                 acceptance_criteria=["Verify successful login redirects to dashboard.", "Verify error message on incorrect password."]
+            ),
+            EpicResponse: EpicResponse(
+                title="Canned Epic Title",
+                description="Canned Epic Description",
+                features=[
+                    FeatureBlock(
+                        title="Canned Feature Title",
+                        description="Canned Feature Description",
+                        user_stories=[
+                            StoryBlock(
+                                title="Canned User Story Title",
+                                description="As a user, I want to authenticate, so that I can see the dashboard.",
+                                acceptance_criteria=["AC 1", "AC 2"]
+                            )
+                        ]
+                    )
+                ]
+            ),
+            TestingContextResponse: TestingContextResponse(
+                risk_analysis=[
+                    RiskItem(area="canned risk", risk_level="low", mitigation="canned mitigation")
+                ],
+                test_strategy=TestStrategyDetails(approach="standard automation", environment="QA"),
+                test_scope=TestScopeDetails(in_scope=["auth"], out_scope=[]),
+                coverage_suggestions=["verify correct logins"]
+            ),
+            OrchestrationResponse: OrchestrationResponse(
+                test_case_title="Verify: Valid Login",
+                execution_type="UI Automation",
+                reason="Canned orchestration routing"
             )
         },
         generate_response=_CANNED_PLAYWRIGHT_CODE,

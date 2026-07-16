@@ -32,6 +32,9 @@ class ProjectDB(Base):
     line_of_business = Column(String(100), nullable=False, default="general")
     framework = Column(String(100), nullable=False, default="playwright")
     jira_project_key = Column(String(100), nullable=True)
+    target_url = Column(String(500), nullable=True, default="https://adactinhotelapp.com/")
+    target_username = Column(String(255), nullable=True)
+    target_password_enc = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     
@@ -51,11 +54,40 @@ class ProjectDB(Base):
     user_associations = relationship("ProjectUserDB", back_populates="project", cascade="all, delete-orphan")
 
 
+class ReleaseDB(Base):
+    __tablename__ = "releases"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, default="Active")
+    start_date = Column(DateTime(timezone=True), nullable=True)
+    end_date = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    project = relationship("ProjectDB")
+
+
+class TestCycleDB(Base):
+    __tablename__ = "test_cycles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    release_id = Column(UUID(as_uuid=True), ForeignKey("releases.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, default="Active")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    release = relationship("ReleaseDB")
+
+
 class RequirementDB(Base):
     __tablename__ = "requirements"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    release_id = Column(UUID(as_uuid=True), ForeignKey("releases.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     source = Column(String(50), nullable=False, default="manual")
@@ -160,6 +192,7 @@ class ExecutionDB(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     test_case_id = Column(UUID(as_uuid=True), ForeignKey("test_cases.id", ondelete="CASCADE"), nullable=False, index=True)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    test_cycle_id = Column(UUID(as_uuid=True), ForeignKey("test_cycles.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(50), nullable=False)
     duration_seconds = Column(Float, nullable=False, default=0.0)
     error_message = Column(Text, nullable=True)
@@ -168,6 +201,13 @@ class ExecutionDB(Base):
     trace_path = Column(String(500), nullable=True)
     browser_version = Column(String(100), nullable=True)
     executed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+    failure_category = Column(String(100), nullable=True)
+    root_cause_summary = Column(Text, nullable=True)
+    suggest_retry = Column(Boolean, default=False, nullable=True)
+    retest_pending_candidate = Column(Boolean, default=False, nullable=True)
+    jira_bug_id = Column(String(100), nullable=True)
+    jira_bug_url = Column(String(500), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)

@@ -26,6 +26,9 @@ from backend.agents.requirement_analyst_agent import RequirementAnalystAgent
 from backend.agents.feature_inventory_agent import FeatureInventoryAgent
 from backend.agents.backlog_creation_agent import BacklogCreationAgent
 from backend.agents.jira_sync_agent import JiraSyncAgent
+from backend.agents.qa_story_analyzer_agent import QAStoryAnalyzerAgent
+from backend.agents.execution_analysis_agent import ExecutionAnalysisAgent
+from backend.agents.defect_management_agent import DefectManagementAgent
 from backend.models.requirement import Requirement
 from backend.models.state import WorkflowState
 
@@ -50,6 +53,9 @@ def build_graph(
     feature_inventory_agent: BaseAgent | None = None,
     backlog_creation_agent: BaseAgent | None = None,
     jira_sync_agent: BaseAgent | None = None,
+    qa_story_analyzer_agent: BaseAgent | None = None,
+    execution_analysis_agent: BaseAgent | None = None,
+    defect_management_agent: BaseAgent | None = None,
 ):
     supervisor_agent = SupervisorAgent()
     scenario_agent = scenario_agent or ScenarioAgent()
@@ -63,6 +69,9 @@ def build_graph(
     feature_inventory_agent = feature_inventory_agent or FeatureInventoryAgent()
     backlog_creation_agent = backlog_creation_agent or BacklogCreationAgent()
     jira_sync_agent = jira_sync_agent or JiraSyncAgent()
+    qa_story_analyzer_agent = qa_story_analyzer_agent or QAStoryAnalyzerAgent()
+    execution_analysis_agent = execution_analysis_agent or ExecutionAnalysisAgent()
+    defect_management_agent = defect_management_agent or DefectManagementAgent()
 
     @traceable(name="SupervisorAgent")
     def _supervisor_node(state: WorkflowState) -> WorkflowState:
@@ -112,9 +121,21 @@ def build_graph(
     def _backlog_creation_node(state: WorkflowState) -> WorkflowState:
         return backlog_creation_agent.run(state)
 
+    @traceable(name="QAStoryAnalyzerAgent")
+    def _qa_story_analyzer_node(state: WorkflowState) -> WorkflowState:
+        return qa_story_analyzer_agent.run(state)
+
     @traceable(name="JiraSyncAgent")
     def _jira_sync_node(state: WorkflowState, config: dict | None = None) -> WorkflowState:
         return jira_sync_agent.run(state, config=config)
+
+    @traceable(name="ExecutionAnalysisAgent")
+    def _execution_analysis_node(state: WorkflowState) -> WorkflowState:
+        return execution_analysis_agent.run(state)
+
+    @traceable(name="DefectManagementAgent")
+    def _defect_management_node(state: WorkflowState) -> WorkflowState:
+        return defect_management_agent.run(state)
 
     builder = StateGraph(WorkflowState)
     
@@ -131,7 +152,10 @@ def build_graph(
     builder.add_node("requirement_analyst_agent", _requirement_analyst_node)
     builder.add_node("feature_inventory_agent", _feature_inventory_node)
     builder.add_node("backlog_creation_agent", _backlog_creation_node)
+    builder.add_node("qa_story_analyzer_agent", _qa_story_analyzer_node)
     builder.add_node("jira_sync_agent", _jira_sync_node)
+    builder.add_node("execution_analysis_agent", _execution_analysis_node)
+    builder.add_node("defect_management_agent", _defect_management_node)
 
     # Routing Map
     routing_map = {
@@ -146,7 +170,10 @@ def build_graph(
         "requirement_analyst_agent": "requirement_analyst_agent",
         "feature_inventory_agent": "feature_inventory_agent",
         "backlog_creation_agent": "backlog_creation_agent",
+        "qa_story_analyzer_agent": "qa_story_analyzer_agent",
         "jira_sync_agent": "jira_sync_agent",
+        "execution_analysis_agent": "execution_analysis_agent",
+        "defect_management_agent": "defect_management_agent",
         "end": END,
     }
 
@@ -167,8 +194,13 @@ def build_graph(
     
     builder.add_edge("feature_inventory_agent", END)
     
-    builder.add_edge("scenario_agent", "backlog_creation_agent")
-    builder.add_edge("backlog_creation_agent", "human_approval_agent_1")
+    builder.add_conditional_edges(
+        "backlog_creation_agent",
+        supervisor_agent.route_after_backlog_creation,
+        routing_map
+    )
+    builder.add_edge("qa_story_analyzer_agent", "scenario_agent")
+    builder.add_edge("scenario_agent", "human_approval_agent_1")
     
     builder.add_conditional_edges(
         "human_approval_agent_1",
@@ -191,7 +223,9 @@ def build_graph(
         routing_map
     )
     
-    builder.add_edge("execution_agent", "report_agent")
+    builder.add_edge("execution_agent", "execution_analysis_agent")
+    builder.add_edge("execution_analysis_agent", "defect_management_agent")
+    builder.add_edge("defect_management_agent", "report_agent")
     builder.add_edge("report_agent", END)
     builder.add_edge("jira_sync_agent", END)
 

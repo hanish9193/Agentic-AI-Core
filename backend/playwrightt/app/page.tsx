@@ -4,85 +4,76 @@ import { useState, useCallback, useEffect, Suspense } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import { ExecutionList } from '@/components/execution-list';
-import { LiveBrowserPreview } from '@/components/live-browser-preview';
-import { Play, Code2, Globe, Save, Sun, Moon } from 'lucide-react';
+import { Play, Code2, Save, Sun, Moon } from 'lucide-react';
 import { Execution } from '@/lib/execution-queue';
 
-const SAMPLE_SCRIPT = `// Tricentis Vehicle Insurance Application Test
-// This test navigates to the Tricentis app, fills out the Enter Vehicle Data form completely and moves to the next page.
+const SAMPLE_SCRIPT = `// Adactin Hotel Application Test
+// This test navigates to the Adactin Hotel app, logs in, searches for a hotel, selects and books the hotel.
 
-// Navigate to the Tricentis application
-await page.goto('https://sampleapp.tricentis.com/101/app.php', { waitUntil: 'networkidle' });
-addLog('Navigated to Tricentis Vehicle Insurance Application');
+// Define configuration constants
+const BASE_URL = 'https://adactinhotelapp.com/';
+const USERNAME = 'adactin_demo_user';
+const PASSWORD = 'demo_password';
+
+// Navigate to the Adactin Hotel Application
+await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+addLog('Navigated to Adactin Hotel Portal');
 addTimelineEvent('Website loaded', 'success');
 
 // Take a screenshot of the initial state
 await screenshot('01-initial-state');
 
-// Select Make
-await page.selectOption('#make', 'BMW');
-addLog('Selected BMW as vehicle make');
-addTimelineEvent('Vehicle make selected', 'success');
+// Perform Login
+await page.fill('#username', USERNAME);
+await page.fill('#password', PASSWORD);
+await page.click('#login');
+addLog('Filled credentials and clicked Login');
+addTimelineEvent('Login submitted', 'success');
 
-// Wait for Model dropdown to populate and select Model
-await page.waitForSelector('#model option:nth-child(2)', { state: 'attached', timeout: 3000 });
-await page.selectOption('#model', 'Scooter');
-addLog('Selected Scooter as vehicle model');
-addTimelineEvent('Vehicle model selected', 'success');
+// Wait for search form
+await page.waitForSelector('#location', { state: 'attached', timeout: 5000 });
+await screenshot('02-login-success');
 
-// Fill Cylinder Capacity
-await page.fill('#cylindercapacity', '150');
-addLog('Entered Cylinder Capacity: 150');
+// Search Hotel: Select Sydney location
+await page.selectOption('#location', 'Sydney');
+addLog('Selected Sydney as Location');
+addTimelineEvent('Location selected', 'success');
 
-// Fill Engine Performance
-await page.fill('#engineperformance', '90');
-addLog('Entered Engine Performance: 90');
+// Select Hotel Creek
+await page.selectOption('#hotels', 'Hotel Creek');
+addLog('Selected Hotel Creek');
 
-// Fill Date of Manufacture
-await page.fill('#dateofmanufacture', '06/01/2024');
-addLog('Entered Date of Manufacture: 06/01/2024');
+// Select Standard Room type
+await page.selectOption('#room_type', 'Standard');
+addLog('Selected Standard Room Type');
 
-// Select Number of Seats
-if (await page.isVisible('#numberofseatsmotorcycle')) {
-  await page.selectOption('#numberofseatsmotorcycle', '2');
-} else {
-  await page.selectOption('#numberofseats', '2');
-}
-addLog('Selected 2 seats');
+// Select 1 Room
+await page.selectOption('#room_nos', '1');
+addLog('Selected 1 Room');
 
-// Select Fuel Type
-await page.selectOption('#fuel', 'Petrol');
-addLog('Selected Petrol as fuel type');
+// Click Search
+await page.click('#Submit');
+addLog('Submitted Hotel Search');
+addTimelineEvent('Search form submitted', 'success');
 
-// Fill List Price
-await page.fill('#listprice', '25000');
-addLog('Entered List Price: 25000');
+// Wait for Select Hotel page
+await page.waitForSelector('#radiobutton_0', { state: 'attached', timeout: 5000 });
+await screenshot('03-search-results');
 
-// Fill License Plate Number
-await page.fill('#licenseplatenumber', 'BMW-101');
-addLog('Entered License Plate Number: BMW-101');
+// Select first hotel and continue
+await page.click('#radiobutton_0');
+await page.click('#continue');
+addLog('Selected hotel and clicked Continue');
+addTimelineEvent('Hotel selected', 'success');
 
-// Fill Annual Mileage
-await page.fill('#annualmileage', '12000');
-addLog('Entered Annual Mileage: 12000');
-addTimelineEvent('Form fields filled', 'success');
+// Wait for Book Hotel page
+await page.waitForSelector('#first_name', { state: 'attached', timeout: 5000 });
+await screenshot('04-book-hotel-page');
 
-// Take screenshot before proceeding
-await screenshot('02-form-filled');
-
-// Click Next
-const nextBtn = await page.$('#nextenterinsurantdata');
-if (nextBtn) {
-  await nextBtn.click();
-  addLog('Clicked Next (Enter Insurant Data)');
-  addTimelineEvent('Clicked Next', 'success');
-  await page.waitForTimeout(1000);
-}
-
-// Take final screenshot of insurant data page
-await screenshot('03-insurant-data-page');
+// Logout to clean up session
+await page.goto('https://adactinhotelapp.com/Logout.php');
+addLog('Session cleaned up via logout');
 addTimelineEvent('Test completed successfully', 'success');
-addLog('All test steps completed');
 `;
 
 function PlaywrightWorkspaceContent() {
@@ -110,6 +101,10 @@ function PlaywrightWorkspaceContent() {
   const [scenario, setScenario] = useState<{ id: string; scenario_name: string; description: string } | null>(null);
   const [uploadTestData, setUploadTestData] = useState(false);
   const [testDataText, setTestDataText] = useState("");
+  const [batchTestCases, setBatchTestCases] = useState<{ id: string; title: string; playwright_script: string; is_frozen: boolean }[]>([]);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState<number | null>(null);
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [testCycleId, setTestCycleId] = useState<string | null>(null);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
@@ -197,6 +192,8 @@ function PlaywrightWorkspaceContent() {
       const params = new URLSearchParams(window.location.search);
       let pId = params.get('project_id');
       let tcId = params.get('test_case_id');
+      let tcIdsParam = params.get('test_case_ids');
+      let cycleId = params.get('test_cycle_id');
       
       // Fallback to localStorage if parameters are not present in URL
       if (!pId) {
@@ -205,10 +202,20 @@ function PlaywrightWorkspaceContent() {
         localStorage.setItem('project_id', pId);
       }
       
-      if (!tcId) {
+      if (!tcId && !tcIdsParam) {
         tcId = localStorage.getItem('test_case_id');
-      } else {
+      } else if (tcId) {
         localStorage.setItem('test_case_id', tcId);
+      }
+
+      if (cycleId) {
+        localStorage.setItem('test_cycle_id', cycleId);
+        setTestCycleId(cycleId);
+      } else {
+        const storedCycle = localStorage.getItem('test_cycle_id');
+        if (storedCycle) {
+          setTestCycleId(storedCycle);
+        }
       }
 
       const initializeWorkspace = async () => {
@@ -229,6 +236,28 @@ function PlaywrightWorkspaceContent() {
           }
         } else {
           setProjectId(pId);
+        }
+
+        // If batch test case IDs are provided
+        if (pId && tcIdsParam) {
+          try {
+            const res = await fetch(`${getBackendUrl()}/api/v1/playwright/workspace?project_id=${pId}&test_case_ids=${tcIdsParam}`);
+            if (!res.ok) throw new Error("Batch workspace details not found");
+            const data = await res.json();
+            
+            if (data.test_cases && data.test_cases.length > 0) {
+              setBatchTestCases(data.test_cases);
+              const firstCase = data.test_cases[0];
+              setScript(firstCase.playwright_script || SAMPLE_SCRIPT);
+              setTestCaseId(firstCase.id);
+              setTestCaseTitle(`Batch Case: ${firstCase.title}`);
+              setIsFrozen(firstCase.is_frozen);
+            }
+          } catch (err) {
+            console.error("Error loading batch workspace data:", err);
+            setError("Failed to load batch context from the Enterprise Platform.");
+          }
+          return;
         }
 
         // Step 2: If we have a project ID but test case ID is still missing, fetch test cases for the project
@@ -334,8 +363,97 @@ function PlaywrightWorkspaceContent() {
     }
   };
 
+  const runBatchSequentially = async () => {
+    if (batchTestCases.length === 0) return;
+    setIsBatchRunning(true);
+    setCurrentBatchIndex(0);
+    setError(null);
+
+    const activeTestCycleId = testCycleId || 'batch-' + Date.now();
+
+    for (let i = 0; i < batchTestCases.length; i++) {
+      setCurrentBatchIndex(i);
+      
+      const activeTc = batchTestCases[i];
+      setScript(activeTc.playwright_script || SAMPLE_SCRIPT);
+      setTestCaseId(activeTc.id);
+      setTestCaseTitle(`Batch Case [${i + 1}/${batchTestCases.length}]: ${activeTc.title}`);
+      setIsFrozen(activeTc.is_frozen);
+
+      // Execute this test case using our existing /api/execute flow
+      await new Promise<void>(async (resolve) => {
+        try {
+          const response = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              script: activeTc.playwright_script || SAMPLE_SCRIPT,
+              projectId: projectId || 'demo-project',
+              testCaseIds: [activeTc.id],
+              browser: 'chromium',
+              testData: uploadTestData ? testDataText : null,
+              testCycleId: activeTestCycleId
+            }),
+          });
+
+          if (!response.ok) {
+            const data = await response.json();
+            console.error('Execution failed start:', data.error);
+            resolve();
+            return;
+          }
+
+          const data = await response.json();
+          const execId = data.executionId;
+
+          // Poll status of this specific run until completed/failed/stopped
+          let notFoundCount = 0;
+          const interval = setInterval(async () => {
+            try {
+              const statusRes = await fetch(`/api/status?id=${execId}`);
+              if (statusRes.ok) {
+                notFoundCount = 0; // reset
+                const statusData = await statusRes.json();
+                const status = statusData.metadata?.status;
+                if (status === 'completed' || status === 'failed' || status === 'stopped' || status === 'passed') {
+                  clearInterval(interval);
+                  resolve();
+                }
+              } else {
+                notFoundCount++;
+                if (notFoundCount > 45) { // 45 seconds of consecutive errors/404s
+                  console.error(`[Batch Poller] Timeout waiting for execution ${execId}. Resolving.`);
+                  clearInterval(interval);
+                  resolve();
+                }
+              }
+            } catch (err) {
+              notFoundCount++;
+              if (notFoundCount > 45) {
+                clearInterval(interval);
+                resolve();
+              }
+            }
+          }, 1000);
+        } catch (err) {
+          console.error('Batch run step failed:', err);
+          resolve();
+        }
+      });
+    }
+
+    setIsBatchRunning(false);
+    setCurrentBatchIndex(null);
+    setTestCaseTitle(`Batch Execution Completed (${batchTestCases.length} runs)`);
+    await fetchExecutions();
+  };
+
   // Handle script execution
   const handleExecute = async (overrideScript?: any) => {
+    if (batchTestCases.length > 0) {
+      await runBatchSequentially();
+      return;
+    }
     const isOverride = typeof overrideScript === 'string';
     const scriptToRun = isOverride ? overrideScript : script;
     setIsLoading(true);
@@ -355,7 +473,8 @@ function PlaywrightWorkspaceContent() {
           projectId: projectId || 'demo-project',
           testCaseIds: testCaseId ? [testCaseId] : [],
           browser: 'chromium',
-          testData: uploadTestData ? testDataText : null
+          testData: uploadTestData ? testDataText : null,
+          testCycleId: testCycleId
         }),
       });
 
@@ -442,16 +561,69 @@ function PlaywrightWorkspaceContent() {
           </div>
         </div>
 
-        {/* Live Browser Preview - Full Width Top Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <Globe className="w-6 h-6 text-green-600" />
-            <h2 className="text-2xl font-bold text-foreground">Live Browser Preview</h2>
+
+
+        {/* Batch Queue View */}
+        {batchTestCases.length > 0 && (
+          <div className="mb-6 bg-card border border-border rounded-lg p-5 shadow-lg">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 className="font-semibold text-xl text-foreground flex items-center gap-2">
+                  📦 Batch Queue ({batchTestCases.length} Test Cases)
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  Executing test cases sequentially within the Playwright Workspace using a shared browser session.
+                </p>
+              </div>
+              <Button
+                onClick={runBatchSequentially}
+                disabled={isBatchRunning}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold cursor-pointer px-6 py-2 rounded-lg"
+              >
+                {isBatchRunning ? 'Running Batch Sequential Queue...' : 'Run Selected Batch'}
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {batchTestCases.map((tc, idx) => {
+                const isActive = currentBatchIndex === idx;
+                const isCompleted = currentBatchIndex !== null && idx < currentBatchIndex;
+                const isPending = currentBatchIndex === null || idx > currentBatchIndex;
+                
+                return (
+                  <div
+                    key={tc.id}
+                    className={`p-4 rounded-xl border text-sm flex items-center justify-between cursor-pointer transition-all duration-200 ${
+                      isActive
+                        ? 'border-blue-500 bg-blue-500/10 shadow-md ring-1 ring-blue-500/30'
+                        : isCompleted
+                        ? 'border-green-500/30 bg-green-500/5 hover:bg-green-500/10'
+                        : 'border-border bg-muted/20 hover:bg-muted/40 hover:border-muted-foreground/30'
+                    }`}
+                    onClick={() => {
+                      if (!isBatchRunning) {
+                        setScript(tc.playwright_script || SAMPLE_SCRIPT);
+                        setTestCaseId(tc.id);
+                        setTestCaseTitle(`Batch Case [${idx+1}/${batchTestCases.length}]: ${tc.title}`);
+                        setIsFrozen(tc.is_frozen);
+                      }
+                    }}
+                  >
+                    <div className="truncate pr-2">
+                      <p className="font-semibold truncate text-foreground">{tc.title}</p>
+                      <p className="text-xs text-muted-foreground truncate font-mono mt-0.5">{tc.id.substring(0, 8)}</p>
+                    </div>
+                    <div>
+                      {isActive && <span className="text-xs bg-blue-500/20 text-blue-400 font-semibold px-2.5 py-0.5 rounded-full animate-pulse border border-blue-500/30">Running</span>}
+                      {isCompleted && <span className="text-xs bg-green-500/20 text-green-400 font-semibold px-2.5 py-0.5 rounded-full border border-green-500/30">Passed</span>}
+                      {isPending && <span className="text-xs bg-muted text-muted-foreground font-semibold px-2.5 py-0.5 rounded-full border border-border">Pending</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="h-96 bg-card rounded-lg border border-border overflow-hidden shadow-sm">
-            <LiveBrowserPreview />
-          </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Panel - Script Editor */}
@@ -545,11 +717,11 @@ function PlaywrightWorkspaceContent() {
               <div className="flex gap-2 mt-4">
                 <Button
                   onClick={handleExecute}
-                  disabled={isLoading || !script.trim()}
+                  disabled={isLoading || isBatchRunning || !script.trim()}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                 >
                   <Play className="w-4 h-4 mr-2" />
-                  {isLoading ? 'Starting...' : 'Execute Script'}
+                  {isLoading || isBatchRunning ? 'Running...' : batchTestCases.length > 0 ? 'Run Selected Batch' : 'Execute Script'}
                 </Button>
               </div>
 
