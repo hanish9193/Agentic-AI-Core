@@ -1,5 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Test Suite" tests="6" failures="1" errors="0" time="34.088"><testcase name="TestCase_f31fef8d-7f85-4ca4-a5d3-04e5439c6602" classname="PlaywrightTests" time="34.088"><failure message="Assertion Failed">locator.fill: Timeout 30000ms exceeded.
-Call log:
-[2m  - waiting for getByPlaceholder('Enter Username')[22m
-</failure></testcase></testsuite></testsuites>

@@ -79,7 +79,8 @@ addTimelineEvent('Test completed successfully', 'success');
 function PlaywrightWorkspaceContent() {
   const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
+      let hostname = window.location.hostname;
+      if (hostname === 'localhost') hostname = '127.0.0.1';
       return `http://${hostname}:8000`;
     }
     return 'http://127.0.0.1:8000';
@@ -369,7 +370,10 @@ function PlaywrightWorkspaceContent() {
     setCurrentBatchIndex(0);
     setError(null);
 
-    const activeTestCycleId = testCycleId || 'batch-' + Date.now();
+    const activeTestCycleId = testCycleId || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
 
     for (let i = 0; i < batchTestCases.length; i++) {
       setCurrentBatchIndex(i);
@@ -669,7 +673,7 @@ function PlaywrightWorkspaceContent() {
                     lineNumbers: 'on',
                     automaticLayout: true,
                     tabSize: 2,
-                    readOnly: isFrozen
+                    readOnly: false
                   }}
                 />
               </div>

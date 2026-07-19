@@ -19,19 +19,19 @@ def setup_db():
 def test_login_success(setup_db):
     response = client.post(
         "/api/v1/auth/login",
-        json={"email": "dev@platform.ai", "password": "devpassword"}
+        json={"email": "dev@agenticai.com", "password": "devpassword"}
     )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
     assert "refresh_token" in data
-    assert data["user"]["role"] == "Super Admin"
-    assert data["user"]["email"] == "dev@platform.ai"
+    assert data["user"]["role"] == "Admin"
+    assert data["user"]["email"] == "dev@agenticai.com"
 
 def test_login_invalid_password(setup_db):
     response = client.post(
         "/api/v1/auth/login",
-        json={"email": "dev@platform.ai", "password": "wrongpassword"}
+        json={"email": "dev@agenticai.com", "password": "wrongpassword"}
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password"
@@ -77,7 +77,7 @@ def test_admin_list_users_forbidden(setup_db):
     assert response.status_code == 403
 
 def test_admin_list_users_success(setup_db):
-    # Log in as Super Admin
+    # Log in as Superadmin
     login_response = client.post(
         "/api/v1/auth/login",
         json={"email": "dev@platform.ai", "password": "devpassword"}

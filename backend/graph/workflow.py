@@ -1,14 +1,73 @@
 """
-The graph answers exactly one question: who runs next. It never calls an
-LLM directly - that's each agent's job through BaseAgent.run().
+LangGraph Workflow Orchestration
 
-Today's graph, the complete pipeline per the original roadmap:
-    START -> SupervisorAgent -> ScenarioAgent -> HumanApprovalAgent_1 -> TestCaseAgent -> EvaluationAgent -> HumanApprovalAgent_2 -> PlaywrightAgent -> ExecutionAgent -> ReportAgent -> END
+Purpose:
+    Defines the complete AI test automation pipeline as a LangGraph state machine.
+    Coordinates agent execution order, routing logic, and state transitions.
 
-build_graph() takes optional agent instances instead of hardcoding them
-at module level, needed since these agents call either a real LLM or a
-real subprocess (Playwright CLI): tests build this exact graph with
-agents wired to fakes, without a real API key or Node.js installed.
+Responsibilities:
+    - Build StateGraph with all agent nodes
+    - Define conditional routing edges based on SupervisorAgent decisions
+    - Wire agent dependencies and execution order
+    - Provide default workflow instance for production use
+    - Support dependency injection for testing with mocked agents
+
+Workflow Architecture:
+    The graph answers one question: "Who runs next?"
+    It never calls LLMs directly - that's each agent's responsibility via BaseAgent.run().
+
+Complete Pipeline Flow:
+    START
+        ↓
+    SupervisorAgent (routing decision based on operation)
+        ↓
+    RequirementAnalystAgent (INGEST operation)
+        ↓
+    FeatureInventoryAgent (optional, if RAG enabled)
+        ↓
+    BacklogCreationAgent (BACKLOG operation)
+        ↓
+    QAStoryAnalyzerAgent (optional, backlog flow)
+        ↓
+    ScenarioAgent
+        ↓
+    HumanApprovalAgent (scenario approval)
+        ↓
+    TestCaseAgent
+        ↓
+    EvaluationAgent
+        ↓
+    HumanApprovalAgent (test case approval)
+        ↓
+    PlaywrightAgent
+        ↓
+    ExecutionAgent
+        ↓
+    ExecutionAnalysisAgent
+        ↓
+    DefectManagementAgent
+        ↓
+    ReportAgent
+        ↓
+    END
+
+Operation Types:
+    - INGEST: Requirement ingestion and analysis
+    - BACKLOG: Generate agile backlog from requirements
+    - GENERATE_SCENARIOS: Create test scenarios
+    - GENERATE_TESTCASES: Create detailed test cases
+    - GENERATE_PLAYWRIGHT: Generate automation scripts
+    - EXECUTE: Run automated tests
+    - SYNC_USER_STORY: Sync scenarios to JIRA as Stories
+    - SYNC_BUG: Sync failures to JIRA as Bugs
+
+Testing Support:
+    build_graph() accepts optional agent instances for dependency injection.
+    Tests can provide mock agents to test routing logic without real LLM calls.
+
+LangSmith Integration:
+    All agent nodes are wrapped with @traceable decorator for observability.
+    Gracefully degrades if langsmith is not installed.
 """
 
 from langgraph.graph import END, START, StateGraph
@@ -35,11 +94,16 @@ from backend.models.state import WorkflowState
 try:
     from langsmith import traceable
 except ImportError:
+    # Graceful degradation if langsmith is not installed
     def traceable(*args, **kwargs):
         if len(args) == 1 and callable(args[0]):
             return args[0]
         return lambda f: f
 
+
+# ==========================================================
+# Graph Builder with Dependency Injection
+# ==========================================================
 
 def build_graph(
     scenario_agent: BaseAgent | None = None,
@@ -57,6 +121,37 @@ def build_graph(
     execution_analysis_agent: BaseAgent | None = None,
     defect_management_agent: BaseAgent | None = None,
 ):
+    """
+    Build LangGraph workflow with optional agent dependency injection.
+    
+    Args:
+        scenario_agent: Optional ScenarioAgent instance (defaults to real agent)
+        test_case_agent: Optional TestCaseAgent instance
+        evaluation_agent: Optional EvaluationAgent instance
+        human_approval_agent: Optional HumanApprovalAgent instance
+        playwright_agent: Optional PlaywrightAgent instance
+        execution_agent: Optional ExecutionAgent instance
+        report_agent: Optional ReportAgent instance
+        requirement_analyst_agent: Optional RequirementAnalystAgent instance
+        feature_inventory_agent: Optional FeatureInventoryAgent instance
+        backlog_creation_agent: Optional BacklogCreationAgent instance
+        jira_sync_agent: Optional JiraSyncAgent instance
+        qa_story_analyzer_agent: Optional QAStoryAnalyzerAgent instance
+        execution_analysis_agent: Optional ExecutionAnalysisAgent instance
+        defect_management_agent: Optional DefectManagementAgent instance
+        
+    Returns:
+        Compiled LangGraph CompiledGraph ready for invocation
+        
+    Usage:
+        # Production usage with real agents:
+        graph = build_graph()
+        
+        # Testing usage with mocked agents:
+        mock_scenario = MockScenarioAgent()
+        graph = build_graph(scenario_agent=mock_scenario)
+    """
+    # Initialize agents with defaults if not provided
     supervisor_agent = SupervisorAgent()
     scenario_agent = scenario_agent or ScenarioAgent()
     test_case_agent = test_case_agent or TestCaseAgent()
@@ -232,15 +327,38 @@ def build_graph(
     return builder.compile()
 
 
-# Default real graph - used by run_workflow() below and, later, the API layer.
+# ==========================================================
+# Default Production Graph
+# ==========================================================
+
+# Default real graph - used by run_workflow() and API layer
 graph = build_graph()
 
 
 def run_workflow(requirement: Requirement, graph_instance=None) -> WorkflowState:
-    """Entry point used by the terminal test today, and the API layer later.
-
-    graph_instance lets tests pass a graph built with mocked agents.
-    Defaults to the real module-level graph otherwise.
+    """
+    Execute complete workflow for a requirement.
+    
+    Entry point for workflow execution. Used by API endpoints and integration tests.
+    
+    Args:
+        requirement: Requirement object to process
+        graph_instance: Optional graph instance (for testing with mocked agents)
+        
+    Returns:
+        Final workflow state with all generated artifacts
+        
+    Usage:
+        # Production usage:
+        from backend.graph.workflow import run_workflow
+        from backend.models.requirement import Requirement
+        
+        req = Requirement(title="User Login", description="...")
+        final_state = run_workflow(req)
+        
+        # Testing usage:
+        mock_graph = build_graph(scenario_agent=MockScenarioAgent())
+        final_state = run_workflow(req, graph_instance=mock_graph)
     """
     graph_instance = graph_instance or graph
 

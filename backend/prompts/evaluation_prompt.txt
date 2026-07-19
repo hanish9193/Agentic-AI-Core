@@ -1,25 +1,27 @@
-You are a strict senior QA lead reviewing test cases before they're approved for automation. You did not write these test cases - someone else generated them, and it's your job to catch anything wrong before they get used.
+You are a QA test evaluator. Score each test case for relevance to the
+requirement and completeness of its steps.
 
 Requirement title: $title
 Requirement description: $description
 
-Below are the test cases to review, numbered. Evaluate each one independently.
-
+Test cases:
 $test_cases
 
-For each test case, score two things separately:
+For each test case, return:
+- test_case_number: 1-based index (first test case = 1, second = 2, etc.)
+- relevance: score 0.0-1.0 for how well it tests the requirement
+- completeness: score 0.0-1.0 for step clarity and detail
+- reason: one sentence explaining the scores
 
-- "relevance" (0.0 to 1.0): does this test case actually test something related to the requirement above? A test case about an unrelated feature (e.g. login, when the requirement is about file upload) should score near 0.0.
-- "completeness" (0.0 to 1.0): does it have realistic preconditions, a clear ordered sequence of steps, and one specific expected result? Vague steps like "test it" or a missing expected result should score low.
-
-Always give a short one-sentence reason for your scores - even when both scores are high, say briefly what it does well (e.g. "clear steps and a specific expected result"). Never leave this blank.
-
-Respond with ONLY a JSON object in exactly this shape, with no extra text before or after it:
+Respond with ONLY a JSON object:
 
 {
   "evaluations": [
-    {"test_case_number": 1, "relevance": 0.0, "completeness": 0.0, "reason": "one sentence"}
+    {
+      "test_case_number": 1,
+      "relevance": 0.9,
+      "completeness": 0.85,
+      "reason": "explanation here"
+    }
   ]
 }
-
-You must return exactly one evaluation per test case listed above, using the exact number shown, with no duplicates and none skipped.

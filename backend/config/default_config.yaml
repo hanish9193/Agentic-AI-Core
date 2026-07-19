@@ -20,7 +20,7 @@ llm:
 
 browser:
   type: chromium            # chromium | firefox | webkit
-  headless: false
+  headless: true
 
 rag:
   enabled: false
@@ -40,7 +40,7 @@ evaluation:
 playwright:
   base_url: https://adactinhotelapp.com/
   browser: chromium
-  headless: false
+  headless: true
   timeout: 60
   retries: 0
   workspace_url: http://localhost:3000

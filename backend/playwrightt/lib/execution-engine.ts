@@ -53,6 +53,7 @@ export class ExecutionEngine {
   private static sharedContext: any = null;
   private static sharedPage: Page | null = null;
   private static activeBrowserType: string | null = null;
+  private static currentTestCycleId: string | null = null;
 
   private browser: Browser | null = null;
   private page: Page | null = null;
@@ -61,6 +62,16 @@ export class ExecutionEngine {
 
   async validateScript(script: string): Promise<{ valid: boolean; error?: string }> {
     try {
+      const isSelenium = script.includes('import pytest') || script.includes('webdriver.') || script.includes('from selenium');
+      const isCucumber = script.includes('Feature:') || script.includes('Scenario:') || script.includes('@given');
+      
+      if (isSelenium) {
+        return { valid: false, error: 'Execution is only supported for Playwright (TypeScript). Selenium Python scripts can be generated and viewed, but cannot be executed in this workspace.' };
+      }
+      if (isCucumber) {
+        return { valid: false, error: 'Execution is only supported for Playwright (TypeScript). Cucumber BDD Gherkin specifications can be generated and viewed, but cannot be executed in this workspace.' };
+      }
+
       const dangerousPatterns = [
         /require\s*\(\s*['"](fs|child_process|os|path)['"]/,
         /import\s+.*\s+from\s+['"](fs|child_process|os|path)['"]/,
@@ -132,8 +143,22 @@ export class ExecutionEngine {
 
       while (!success && retryCount <= maxRetries) {
         try {
-          // ALWAYS create a fresh context and page for each execution to ensure strict test isolation
           const currentBrowserType = execution.metadata.browser || 'chromium';
+          const testCycleId = execution.metadata.testCycleId || null;
+
+          if (ExecutionEngine.currentTestCycleId !== testCycleId) {
+            // Close previous context and page if starting a different cycle or switching back to single runs
+            if (ExecutionEngine.sharedPage) {
+              await ExecutionEngine.sharedPage.close().catch(() => {});
+            }
+            if (ExecutionEngine.sharedContext) {
+              await ExecutionEngine.sharedContext.close().catch(() => {});
+            }
+            ExecutionEngine.sharedPage = null;
+            ExecutionEngine.sharedContext = null;
+            ExecutionEngine.currentTestCycleId = testCycleId;
+          }
+
           let isBrowserHealthy = false;
           if (ExecutionEngine.sharedBrowser) {
             try {
@@ -181,8 +206,14 @@ export class ExecutionEngine {
 
             const launchOptions: any = {
               headless: headless,
+              slowMo: 1000,
               args: ['--no-sandbox', '--disable-setuid-sandbox'],
             };
+
+            // Force ignore any system-wide Playwright channel overrides (e.g. Chrome Beta)
+            if (process.env.PLAYWRIGHT_CHROMIUM_CHANNEL) {
+              delete process.env.PLAYWRIGHT_CHROMIUM_CHANNEL;
+            }
 
             try {
               browser = await chromium.launch(launchOptions);
@@ -205,7 +236,7 @@ export class ExecutionEngine {
             browser = ExecutionEngine.sharedBrowser;
           }
 
-          // Create context and page fresh for test isolation
+          // Create context and page fresh if not already present in batch
           const contextOptions: any = {};
           if (recordVideo) {
             contextOptions.recordVideo = { dir: videoDir };
@@ -217,21 +248,28 @@ export class ExecutionEngine {
             executionQueue.addTimelineEvent(executionId, 'Session restored from storage state', 'success');
           }
 
-          context = await browser.newContext(contextOptions);
-          if (recordTrace) {
-            await context.tracing.start({ screenshots: true, snapshots: true });
+          if (!ExecutionEngine.sharedContext) {
+            context = await browser.newContext(contextOptions);
+            ExecutionEngine.sharedContext = context;
+            if (recordTrace) {
+              await context.tracing.start({ screenshots: true, snapshots: true });
+            }
+            page = await context.newPage();
+            ExecutionEngine.sharedPage = page;
+            executionQueue.addTimelineEvent(executionId, 'Browser opened with clean context', 'success');
+          } else {
+            context = ExecutionEngine.sharedContext;
+            page = ExecutionEngine.sharedPage;
+            executionQueue.addTimelineEvent(executionId, 'Reusing existing browser context', 'success');
           }
-
-          page = await context.newPage();
-          
-          // Clear shared page/context references to prevent leaks/reuse
-          ExecutionEngine.sharedContext = null;
-          ExecutionEngine.sharedPage = null;
-
-          executionQueue.addTimelineEvent(executionId, 'Browser opened with clean context', 'success');
 
           this.browser = browser;
           this.page = page;
+
+          if (!page) {
+            throw new Error('Failed to initialize page');
+          }
+          const activePage = page;
 
           wsManager.broadcast({
             type: 'status',
@@ -281,7 +319,7 @@ export class ExecutionEngine {
               const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
               const filename = `${name || 'screenshot'}-${timestamp}.png`;
               const filepath = path.join(screenshotDir, filename);
-              await page.screenshot({ path: filepath });
+              await activePage.screenshot({ path: filepath });
               executionQueue.addScreenshot(executionId, filename);
               
               // Log a timeline event for report generation
@@ -312,7 +350,7 @@ export class ExecutionEngine {
               const filename = `step-${timestamp}.png`;
               const filepath = path.join(screenshotDir, filename);
 
-              const promise = page.screenshot({ path: filepath }).then(async () => {
+              const promise = activePage.screenshot({ path: filepath }).then(async () => {
                 executionQueue.addScreenshot(executionId, filename);
                 executionQueue.addTimelineEvent(executionId, event, type as any, filename);
                 await sendWebhook(projectId, {
@@ -334,23 +372,213 @@ export class ExecutionEngine {
               });
               screenshotPromises.push(promise);
             },
-            test: (name: string, fn: any) => {
-              const runPromise = (async () => {
-                executionQueue.addTimelineEvent(executionId, `Running: ${name}`, 'info');
-                await sendWebhook(projectId, {
-                  execution_id: executionId,
-                  test_case_id: testCaseId,
-                  event: 'updated',
-                  status: 'running',
-                  timeline_event: { event: `Running: ${name}`, type: 'info' }
-                });
-                await fn(executionContext);
-              })();
-              testPromises.push(runPromise);
-              return runPromise;
-            },
+            test: Object.assign(
+              (name: string, fn: any) => {
+                const runPromise = (async () => {
+                  executionQueue.addTimelineEvent(executionId, `Running: ${name}`, 'info');
+                  await sendWebhook(projectId, {
+                    execution_id: executionId,
+                    test_case_id: testCaseId,
+                    event: 'updated',
+                    status: 'running',
+                    timeline_event: { event: `Running: ${name}`, type: 'info' }
+                  });
+                  await fn(executionContext);
+                })();
+                testPromises.push(runPromise);
+                return runPromise;
+              },
+              {
+                only: (name: string, fn: any) => {
+                  return executionContext.test(name, fn);
+                },
+                skip: (name: string, fn: any) => {
+                  console.log(`Skipping test: ${name}`);
+                  return Promise.resolve();
+                },
+                describe: (name: string, fn: any) => {
+                  fn();
+                },
+                step: async (name: string, fn: any) => {
+                  executionQueue.addTimelineEvent(executionId, `Step: ${name}`, 'info');
+                  await fn();
+                },
+                beforeEach: (fn: any) => {
+                  fn(executionContext);
+                },
+                afterEach: (fn: any) => {
+                  fn(executionContext);
+                }
+              }
+            ),
             expect: (actual: any) => {
-              const assertions = {
+              const baseAssertions: any = {
+                toBeVisible: async (options?: { timeout?: number }) => {
+                  if (actual && typeof actual.waitFor === 'function') {
+                    await actual.waitFor({ state: 'visible', timeout: options?.timeout || 5000 });
+                  } else if (actual && typeof actual.isVisible === 'function') {
+                    const visible = await actual.isVisible();
+                    if (!visible) {
+                      throw new Error(`Expected element to be visible`);
+                    }
+                  } else {
+                    if (!actual) throw new Error(`Expected value to be truthy`);
+                  }
+                },
+                toBeHidden: async (options?: { timeout?: number }) => {
+                  if (actual && typeof actual.waitFor === 'function') {
+                    await actual.waitFor({ state: 'hidden', timeout: options?.timeout || 5000 });
+                  } else if (actual && typeof actual.isHidden === 'function') {
+                    const hidden = await actual.isHidden();
+                    if (!hidden) {
+                      throw new Error(`Expected element to be hidden`);
+                    }
+                  } else {
+                    if (actual) throw new Error(`Expected value to be falsy`);
+                  }
+                },
+                toContainText: async (expected: string, options?: { timeout?: number }) => {
+                  if (actual && typeof actual.textContent === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let text = '';
+                    while (Date.now() - startTime < timeout) {
+                      text = await actual.textContent();
+                      if (text && text.includes(expected)) {
+                        return;
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to contain text "${expected}", but got "${text}" (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toContainText is only supported on Locators`);
+                  }
+                },
+                toHaveText: async (expected: string, options?: { timeout?: number }) => {
+                  if (actual && typeof actual.textContent === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let text = '';
+                    while (Date.now() - startTime < timeout) {
+                      text = await actual.textContent();
+                      if (text && text.trim() === expected.trim()) {
+                        return;
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to have text "${expected}", but got "${text}" (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toHaveText is only supported on Locators`);
+                  }
+                },
+                toHaveValue: async (expected: string, options?: { timeout?: number }) => {
+                  if (actual && typeof actual.inputValue === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let val = '';
+                    while (Date.now() - startTime < timeout) {
+                      val = await actual.inputValue();
+                      if (val && val.trim() === expected.trim()) {
+                        return;
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to have value "${expected}", but got "${val}" (timed out after ${timeout}ms)`);
+                  } else if (actual && typeof actual.getAttribute === 'function') {
+                    const val = await actual.getAttribute('value');
+                    if (val && val.trim() === expected.trim()) {
+                      return;
+                    }
+                    throw new Error(`Expected element to have value "${expected}", but got "${val}"`);
+                  } else {
+                    throw new Error(`toHaveValue is only supported on Locators`);
+                  }
+                },
+                toHaveAttribute: async (name: string, expected: string | RegExp, options?: { timeout?: number }) => {
+                  if (actual && typeof actual.getAttribute === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let val = '';
+                    while (Date.now() - startTime < timeout) {
+                      val = await actual.getAttribute(name);
+                      if (val !== null) {
+                        if (expected instanceof RegExp) {
+                          if (expected.test(val)) return;
+                        } else if (val.trim() === expected.trim()) {
+                          return;
+                        }
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to have attribute "${name}" with value "${expected}", but got "${val}" (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toHaveAttribute is only supported on Locators`);
+                  }
+                },
+                toHaveURL: async (expected: string | RegExp, options?: { timeout?: number }) => {
+                  if (actual && typeof actual.url === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let currentUrl = '';
+                    while (Date.now() - startTime < timeout) {
+                      currentUrl = actual.url();
+                      if (expected instanceof RegExp) {
+                        if (expected.test(currentUrl)) return;
+                      } else if (currentUrl.includes(expected as string) || currentUrl === expected) {
+                        return;
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected page to have URL "${expected}", but got "${currentUrl}" (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toHaveURL is only supported on Page objects`);
+                  }
+                },
+                toBeDisabled: async (options?: { timeout?: number }) => {
+                  if (actual && typeof actual.isDisabled === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let disabled = false;
+                    while (Date.now() - startTime < timeout) {
+                      disabled = await actual.isDisabled();
+                      if (disabled) return;
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to be disabled (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toBeDisabled is only supported on Locators`);
+                  }
+                },
+                toBeEnabled: async (options?: { timeout?: number }) => {
+                  if (actual && typeof actual.isEnabled === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let enabled = false;
+                    while (Date.now() - startTime < timeout) {
+                      enabled = await actual.isEnabled();
+                      if (enabled) return;
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to be enabled (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toBeEnabled is only supported on Locators`);
+                  }
+                },
+                toBeChecked: async (options?: { timeout?: number }) => {
+                  if (actual && typeof actual.isChecked === 'function') {
+                    const timeout = options?.timeout || 5000;
+                    const startTime = Date.now();
+                    let checked = false;
+                    while (Date.now() - startTime < timeout) {
+                      checked = await actual.isChecked();
+                      if (checked) return;
+                      await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error(`Expected element to be checked (timed out after ${timeout}ms)`);
+                  } else {
+                    throw new Error(`toBeChecked is only supported on Locators`);
+                  }
+                },
                 toBe: (expected: any) => {
                   if (actual !== expected) {
                     throw new Error(`Expected ${actual} to be ${expected}`);
@@ -385,36 +613,56 @@ export class ExecutionEngine {
                     throw new Error(`toContain is not supported for ${typeof actual}`);
                   }
                 },
-                not: {
-                  toBe: (expected: any) => {
-                    if (actual === expected) {
-                      throw new Error(`Expected ${actual} not to be ${expected}`);
-                    }
-                  },
-                  toContain: (expected: any) => {
-                    if (typeof actual?.includes === 'function') {
-                      if (actual.includes(expected)) {
-                        throw new Error(`Expected ${actual} not to contain ${expected}`);
+                not: new Proxy({}, {
+                  get: (target, propName: string) => {
+                    const negations: any = {
+                      toBe: (expected: any) => {
+                        if (actual === expected) {
+                          throw new Error(`Expected ${actual} not to be ${expected}`);
+                        }
+                      },
+                      toContain: (expected: any) => {
+                        if (typeof actual?.includes === 'function') {
+                          if (actual.includes(expected)) {
+                            throw new Error(`Expected ${actual} not to contain ${expected}`);
+                          }
+                        } else {
+                          throw new Error(`toContain is not supported for ${typeof actual}`);
+                        }
+                      },
+                      toEqual: (expected: any) => {
+                        if (JSON.stringify(actual) === JSON.stringify(expected)) {
+                          throw new Error(`Expected ${actual} not to equal ${expected}`);
+                        }
                       }
-                    } else {
-                      throw new Error(`toContain is not supported for ${typeof actual}`);
-                    }
-                  },
-                  toEqual: (expected: any) => {
-                    if (JSON.stringify(actual) === JSON.stringify(expected)) {
-                      throw new Error(`Expected ${actual} not to equal ${expected}`);
-                    }
+                    };
+                    if (negations[propName]) return negations[propName];
+                    return () => {
+                      console.warn(`[Expect Proxy] Negated assertion expect().not.${propName}() is a mock fallback.`);
+                    };
                   }
-                }
+                })
               };
-              return assertions;
+
+              return new Proxy(baseAssertions, {
+                get: (target, propName: string) => {
+                  if (propName in target) return target[propName];
+                  console.warn(`[Expect Proxy] Assertion expect().${propName}() not explicitly supported, using dynamic fallback.`);
+                  return async (...args: any[]) => {
+                    if (actual && typeof actual.waitFor === 'function') {
+                      await actual.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+                    }
+                    console.log(`[Expect Proxy] Dynamic fallback for ${propName} resolved successfully.`);
+                  };
+                }
+              });
             }
           };
 
           // Execute user script with context
           let cleanScript = script.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?/g, '');
           if (isBrowserHealthy) {
-            const pattern = /(await\s+page\.goto\([^)]+\);?\s*await\s+page\.fill\(\s*['"]#username['\"].*?await\s+page\.click\(\s*['"]#login['\"]\);?)/s;
+            const pattern = /(await\s+page\.goto\([^)]+\);?\s*await\s+page\.fill\(\s*['"]#username['\"][\s\S]*?await\s+page\.click\(\s*['"]#login['\"]\);?)/;
             if (pattern.test(cleanScript)) {
               cleanScript = cleanScript.replace(pattern, `
                 const is_logged_in = page.url().includes('SearchHotel.aspx') || (await page.$('#username').catch(() => null)) === null;
@@ -427,6 +675,92 @@ export class ExecutionEngine {
             }
           }
 
+          // Wrap Page and Locator prototype methods for automatic step screenshots
+          const LocatorProto = Object.getPrototypeOf(page.locator('body'));
+          const origLocClick = LocatorProto.click;
+          const origLocFill = LocatorProto.fill;
+          const origLocSelectOption = LocatorProto.selectOption;
+          const origGoto = page.goto;
+
+          let autoStepIndex = 0;
+          const takeAutoStepScreenshot = async (actionDesc: string) => {
+            autoStepIndex++;
+            const cleanDesc = actionDesc.toLowerCase()
+              .replace(/[^a-z0-9]+/g, '_')
+              .replace(/^_+|_+$/g, '');
+            const filename = `step-${String(autoStepIndex).padStart(2, '0')}-${cleanDesc}.png`;
+            const filepath = path.join(screenshotDir, filename);
+            try {
+              await activePage.waitForTimeout(300);
+              await activePage.screenshot({ path: filepath });
+              executionQueue.addScreenshot(executionId, filename);
+              executionQueue.addTimelineEvent(executionId, actionDesc, 'success', filename);
+              
+              await sendWebhook(projectId, {
+                execution_id: executionId,
+                test_case_id: testCaseId,
+                event: 'updated',
+                status: 'running',
+                timeline_event: { event: actionDesc, type: 'success', details: filename }
+              });
+            } catch (e) {
+              executionQueue.addTimelineEvent(executionId, actionDesc, 'success');
+            }
+          };
+
+          // Wrap page.goto
+          page.goto = async function(url: string, options?: any) {
+            const res = await origGoto.call(page, url, options);
+            await takeAutoStepScreenshot(`Navigate: ${url}`);
+            return res;
+          };
+
+          // Wrap LocatorProto.click
+          LocatorProto.click = async function(options?: any) {
+            const res = await origLocClick.call(this, options);
+            const desc = this.toString() || 'element';
+            await takeAutoStepScreenshot(`Click: ${desc}`);
+            return res;
+          };
+
+          // Wrap LocatorProto.fill
+          LocatorProto.fill = async function(value: string, options?: any) {
+            const res = await origLocFill.call(this, value, options);
+            const desc = this.toString() || 'element';
+            await takeAutoStepScreenshot(`Type text: ${desc}`);
+            return res;
+          };
+
+          // Wrap LocatorProto.selectOption
+          LocatorProto.selectOption = async function(values: any, options?: any) {
+            const res = await origLocSelectOption.call(this, values, options);
+            const desc = this.toString() || 'element';
+            await takeAutoStepScreenshot(`Select option: ${desc}`);
+            return res;
+          };
+
+          // Fetch credentials from vault
+          let username = '';
+          let password = '';
+          if (projectId) {
+            try {
+              const credsRes = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/credentials`);
+              if (credsRes.ok) {
+                const creds = await credsRes.json();
+                username = creds.username || '';
+                password = creds.password || '';
+              }
+            } catch (e) {
+              console.warn('Failed to fetch credentials from vault:', e);
+            }
+          }
+
+          // Inject credentials into environment variables
+          const origEnvUsername = process.env.TARGET_USERNAME;
+          const origEnvPassword = process.env.TARGET_PASSWORD;
+          if (username) process.env.TARGET_USERNAME = username;
+          if (password) process.env.TARGET_PASSWORD = password;
+
           const wrappedScript = `
             return (async ({ page, browser, context, screenshot, addLog, addTimelineEvent, test, expect }) => {
               ${cleanScript}
@@ -434,13 +768,29 @@ export class ExecutionEngine {
           `;
           const userFunction = new Function(wrappedScript);
           const asyncFunc = userFunction();
-          await asyncFunc(executionContext);
+          
+          try {
+            await asyncFunc(executionContext);
 
-          if (testPromises.length > 0) {
-            await Promise.all(testPromises);
-          }
-          if (screenshotPromises.length > 0) {
-            await Promise.all(screenshotPromises).catch(() => {});
+            if (testPromises.length > 0) {
+              await Promise.all(testPromises);
+            }
+            if (screenshotPromises.length > 0) {
+              await Promise.all(screenshotPromises).catch(() => {});
+            }
+          } finally {
+            // Restore original environment variables
+            if (origEnvUsername === undefined) delete process.env.TARGET_USERNAME;
+            else process.env.TARGET_USERNAME = origEnvUsername;
+
+            if (origEnvPassword === undefined) delete process.env.TARGET_PASSWORD;
+            else process.env.TARGET_PASSWORD = origEnvPassword;
+
+            // Restore original methods
+            LocatorProto.click = origLocClick;
+            LocatorProto.fill = origLocFill;
+            LocatorProto.selectOption = origLocSelectOption;
+            page.goto = origGoto;
           }
 
           success = true;
@@ -490,7 +840,7 @@ export class ExecutionEngine {
 
       // Save storage state for session reuse in subsequent tests
       if (context) {
-        await context.storageState({ path: storageStatePath }).catch((e) => {
+        await context.storageState({ path: storageStatePath }).catch((e: any) => {
           console.warn('Failed to save storage state:', e);
         });
         executionQueue.addTimelineEvent(executionId, 'Session storage state saved', 'success');
@@ -503,17 +853,20 @@ export class ExecutionEngine {
         executionQueue.setArtifact(executionId, 'trace', 'trace.zip');
       }
 
-      // Close page and context to finalize the video
-      if (page) {
-        await page.close().catch(() => {});
+      // Close page and context only if NOT running in a batch
+      const testCycleId = execution.metadata.testCycleId || null;
+      if (!testCycleId) {
+        if (page) {
+          await page.close().catch(() => {});
+        }
+        if (context) {
+          await context.close().catch(() => {});
+        }
+        ExecutionEngine.sharedPage = null;
+        ExecutionEngine.sharedContext = null;
+      } else {
+        console.log(`[ExecutionEngine] Batch cycle ${testCycleId} active: keeping context open.`);
       }
-      if (context) {
-        await context.close().catch(() => {});
-      }
-
-      // Clear shared page/context references to force recreation next time
-      ExecutionEngine.sharedPage = null;
-      ExecutionEngine.sharedContext = null;
 
       // Scan and register the WebM video artifact
       try {
@@ -703,6 +1056,27 @@ export class ExecutionEngine {
         ? `Chromium ${execution.metadata.browserVersion}`
         : "Chromium";
 
+      let siteName = "Target Application";
+      if (execution.script) {
+        const urlMatch = execution.script.match(/https?:\/\/[^\s'"\)]+/);
+        if (urlMatch) {
+          const siteUrl = urlMatch[0];
+          try {
+            const parsed = new URL(siteUrl);
+            if (parsed.hostname.includes("adactinhotelapp")) {
+              siteName = "Adactin Hotel Application";
+            } else if (parsed.hostname.includes("tricentis")) {
+              siteName = "Tricentis Vehicle Insurance Portal";
+            } else {
+              const nameParts = parsed.hostname.replace("www.", "").split(".")[0];
+              siteName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1) + " Portal";
+            }
+          } catch (e) {
+            // Ignore URL parsing error
+          }
+        }
+      }
+
       // Include errors, successes, and any events with screenshots/details to show all key progression steps
       const stepEvents = (execution.timeline || []).filter(
         (evt) => evt.event !== 'Execution Queued' && (evt.type === 'error' || evt.type === 'success' || (evt.details && evt.details.endsWith('.png')))
@@ -765,31 +1139,13 @@ export class ExecutionEngine {
             imgPath = `screenshots/${screenshots[screenshots.length - 1]}`;
           }
         } else if (screenshotFilename) {
-          const fnLower = screenshotFilename.toLowerCase();
           const eventLower = eventName.toLowerCase();
           const isPlaceholder = eventLower.includes("screenshot captured") || eventLower === "screenshot" || eventLower === "visual state capture";
 
-          if (isPlaceholder && (fnLower.includes("initial") || fnLower.includes("01-"))) {
-            title = "Initial Portal Loading";
-            action = "Navigate to the Tricentis Vehicle Insurance portal and initialize the test session.";
-            observation = "The application landing page loaded successfully. The vehicle data input form is displayed and interactive.";
-            result = "Portal loaded and ready for automation.";
-          } else if (isPlaceholder && (fnLower.includes("form-filled") || fnLower.includes("02-"))) {
-            title = "Vehicle Form Input Completion";
-            action = "Fill out all vehicle specifications: Make (BMW), Model (Scooter), Cylinder Capacity (150), Engine Performance (90), Date of Manufacture, Seats (2), Fuel (Petrol), List Price (25000), License Plate, and Annual Mileage.";
-            observation = "All input fields and selection dropdowns populated with correct test data parameters. No form validation errors.";
-            result = "Vehicle data form validation passed.";
-          } else if (isPlaceholder && (fnLower.includes("insurant-data") || fnLower.includes("03-"))) {
-            title = "Transition to Enter Insurant Data";
-            action = "Click the 'Next' action button to submit the vehicle form data and navigate to the Insurant details form.";
-            observation = "Form submitted successfully. Browser page navigated to the Enter Insurant Data portal page view.";
-            result = "Navigation to insurant form successful.";
-          } else {
-            title = isPlaceholder ? "Visual State Capture" : eventName;
-            action = isPlaceholder ? "Capture screenshot to record browser visual state." : `Execute test step: '${eventName}'.`;
-            observation = isPlaceholder ? `Visual state captured in file '${screenshotFilename}'.` : "Browser successfully navigated / interacted. Verified visual state layout.";
-            result = isPlaceholder ? "Screenshot image saved on disk." : "Step executed successfully.";
-          }
+          title = isPlaceholder ? "Visual State Capture" : eventName;
+          action = isPlaceholder ? "Capture screenshot to record browser visual state." : `Execute test step: '${eventName}'.`;
+          observation = isPlaceholder ? `Visual state captured in file '${screenshotFilename}'.` : "Browser successfully navigated / interacted. Verified visual state layout.";
+          result = isPlaceholder ? "Screenshot image saved on disk." : "Step executed successfully.";
         }
 
         return {

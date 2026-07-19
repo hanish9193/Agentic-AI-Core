@@ -4,11 +4,10 @@ import * as path from 'path';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ executionId: string }> }
+  { params }: { params: Promise<{ executionId: string }> }
 ) {
   try {
-    const params = await context.params;
-    const { executionId } = params;
+    const { executionId } = await params;
     const videoDir = path.join(
       process.cwd(),
       'public',

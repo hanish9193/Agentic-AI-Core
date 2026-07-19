@@ -156,10 +156,31 @@ def test_jira_webhook_resolves_status():
     client = TestClient(app)
     repo = get_project_repository()
     
+    project = repo.create_project("Webhook Project Test", "Description", "general", "playwright")
+    req = repo.create_requirement(
+        project_id=project.id,
+        title="Webhook Requirement",
+        description="Verify webhook",
+        priority="medium",
+        business_domain="test"
+    )
+    project.requirements.append(req.id)
+    repo.update_project(project)
+    
+    sc_id = uuid4()
+    scenario = Scenario(
+        id=sc_id,
+        requirement_id=req.id,
+        scenario_name="Webhook Mock Scenario",
+        description="Fails initially",
+        approved=True
+    )
+    repo.save_scenarios([scenario])
+    
     # Save a test case with matching JIRA issue key
     jira_key = "BUG-999"
     tc = TestCase(
-        scenario_id=uuid4(),
+        scenario_id=sc_id,
         title="Verify Webhook Triggers Retest",
         preconditions=[],
         steps=["Step 1"],
@@ -185,8 +206,6 @@ def test_jira_webhook_resolves_status():
     assert response.status_code == 200
     assert response.json()["status"] == "success"
     
-    # Wait, in memory fallback might run without DB persistence if not saved.
-    # Let's assert database state or mock returned count if SQL provider is active
     if getattr(repo, "session", None) is not None:
         updated_tc = repo.get_test_case(tc.id)
         assert updated_tc.status == TestCaseStatus.RETEST_PENDING
@@ -195,17 +214,21 @@ def test_jira_webhook_resolves_status():
 def test_import_jira_story():
     from backend.database.db_seeder import seed_database
     from backend.database.db import SessionLocal
-    # Seed database first to make sure authorization user exists
     db = SessionLocal()
-    seed_database(db)
-    db.close()
+    try:
+        seed_database(db)
+    except Exception:
+        pass
+    finally:
+        db.close()
 
-    # Log in to get token
+    # Log in with seeded superuser dev@agenticai.com
     client = TestClient(app)
     login_response = client.post(
         "/api/v1/auth/login",
-        json={"email": "dev@platform.ai", "password": "devpassword"}
+        json={"email": "dev@agenticai.com", "password": "devpassword"}
     )
+    assert login_response.status_code == 200, f"Login failed: {login_response.text}"
     token = login_response.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -222,3 +245,137 @@ def test_import_jira_story():
     assert req_data["jira_issue_key"] == "QA-123"
     assert req_data["jira_sync_status"] == "synced"
 
+
+def test_jira_sync_service_sync_scenario_created():
+    import asyncio
+    from backend.services.jira_sync_service import sync_scenario_created
+    repo = get_project_repository()
+    
+    project = repo.create_project("Sync Scenario Test", "Description", "general", "playwright")
+    req = repo.create_requirement(
+        project_id=project.id,
+        title="Sync Req",
+        description="Verify sync",
+        priority="high",
+        business_domain="test"
+    )
+    project.requirements.append(req.id)
+    repo.update_project(project)
+    
+    scenario = Scenario(
+        requirement_id=req.id,
+        scenario_name="Scenario for Sync",
+        description="Should be sync'd to Jira",
+        confidence=0.85,
+        approved=True
+    )
+    repo.save_scenarios([scenario])
+    
+    # Run sync
+    asyncio.run(sync_scenario_created(scenario.id))
+    
+    updated_sc = repo.get_scenario(scenario.id)
+    assert updated_sc.jira_issue_key is not None
+    assert updated_sc.jira_issue_id is not None
+    assert updated_sc.jira_issue_url is not None
+    assert updated_sc.last_jira_sync_status == "SUCCESS"
+    assert updated_sc.jira_sync_retry_count == 0
+
+
+def test_jira_sync_service_sync_scenario_updated():
+    import asyncio
+    from backend.services.jira_sync_service import sync_scenario_updated
+    repo = get_project_repository()
+    
+    project = repo.create_project("Update Scenario Test", "Description", "general", "playwright")
+    req = repo.create_requirement(project_id=project.id, title="Req", description="desc", priority="medium", business_domain="test")
+    project.requirements.append(req.id)
+    repo.update_project(project)
+    
+    scenario = Scenario(
+        requirement_id=req.id,
+        scenario_name="Scenario to Update",
+        description="Initial description",
+        confidence=0.90,
+        approved=True,
+        jira_issue_key="QA-100",
+        jira_issue_id="10100",
+        jira_issue_url="https://jira.com/browse/QA-100"
+    )
+    repo.save_scenarios([scenario])
+    
+    # Run update sync
+    asyncio.run(sync_scenario_updated(scenario.id))
+    
+    updated_sc = repo.get_scenario(scenario.id)
+    assert updated_sc.last_jira_sync_status == "SUCCESS"
+    assert updated_sc.last_jira_sync_error is None
+
+
+def test_jira_sync_service_sync_execution_finished():
+    import asyncio
+    from backend.services.jira_sync_service import sync_execution_finished
+    repo = get_project_repository()
+    
+    project = repo.create_project("Exec Finished Test", "Description", "general", "playwright")
+    req = repo.create_requirement(project_id=project.id, title="Req", description="desc", priority="medium", business_domain="test")
+    project.requirements.append(req.id)
+    repo.update_project(project)
+    
+    scenario = Scenario(
+        requirement_id=req.id,
+        scenario_name="Scenario for Execution",
+        description="desc",
+        approved=True,
+        jira_issue_key="QA-200",
+        jira_issue_id="20200",
+        jira_issue_url="https://jira.com/browse/QA-200"
+    )
+    repo.save_scenarios([scenario])
+    
+    tc = TestCase(
+        scenario_id=scenario.id,
+        title="Verify Sync Finished",
+        preconditions=[],
+        steps=["Step 1"],
+        expected_result="PASS"
+    )
+    repo.save_test_cases([tc])
+    
+    res = ExecutionResult(
+        test_case_id=tc.id,
+        status="passed",
+        duration_seconds=3.5,
+        error_message=None
+    )
+    repo.save_execution_result(project.id, res)
+    
+    # Compile a mock report with pdf_path to check resilient upload
+    report_payload = {
+        "junit_path": "junit.xml",
+        "html_path": "report.html",
+        "pdf_path": "report.pdf"
+    }
+    repo.save_report(project.id, res.id, report_payload)
+    
+    # Call execution finished sync
+    asyncio.run(sync_execution_finished(scenario.id, res.id))
+    
+    updated_sc = repo.get_scenario(scenario.id)
+    assert updated_sc.last_jira_sync_status == "SUCCESS"
+    
+    # Test failed execution path (creates linked bug)
+    res_fail = ExecutionResult(
+        test_case_id=tc.id,
+        status="failed",
+        duration_seconds=4.0,
+        error_message="Test failed due to timeout."
+    )
+    repo.save_execution_result(project.id, res_fail)
+    
+    asyncio.run(sync_execution_finished(scenario.id, res_fail.id))
+    
+    # Verify bug key is linked on execution result
+    updated_res = repo.get_execution_result(project.id, res_fail.id)
+    assert updated_res.jira_bug_id is not None
+    assert updated_res.jira_bug_url is not None

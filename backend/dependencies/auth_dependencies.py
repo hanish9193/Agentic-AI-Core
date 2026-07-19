@@ -28,15 +28,15 @@ async def get_current_user(
 ) -> UserDB:
     # Under test client runs, bypass check if no credentials header is provided
     if is_running_tests() and (not credentials or not credentials.credentials):
-        user = db.query(UserDB).filter(UserDB.role == "Super Admin").first()
+        user = db.query(UserDB).filter(UserDB.role == "Superadmin").first()
         if user:
             return user
         # Fallback dummy if seeder hasn't run yet in mock DB context
         return UserDB(
             id=UUID("00000000-0000-0000-0000-000000000000"),
-            email="test@platform.ai",
+            email="test@agenticai.com",
             full_name="Test Admin User",
-            role="Super Admin",
+            role="Superadmin",
             is_active=True
         )
 
@@ -67,7 +67,7 @@ async def get_current_user(
 
 def has_permission(module: str, action: str):
     """Enforce permissions dynamically against PostgreSQL mappings.
-    Super Admins bypass checks. Checks user project-specific role first,
+    Superadmins bypass checks. Checks user project-specific role first,
     falling back to their global role if no project-user association exists.
     """
     async def dependency(
@@ -75,8 +75,8 @@ def has_permission(module: str, action: str):
         user: UserDB = Depends(get_current_user),
         db: Session = Depends(get_db)
     ) -> bool:
-        # Super Admin has unrestricted system-wide permissions
-        if getattr(user, "role", None) == "Super Admin":
+        # Superadmin has unrestricted system-wide permissions
+        if getattr(user, "role", None) == "Superadmin":
             return True
 
         # Extract project context from route path parameter

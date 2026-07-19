@@ -1,5 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="8" failures="1" errors="0" time="0.494"><testcase name="TestCase_ab3c07cb-5fde-4627-81ac-cf94c6d4d57e" classname="PlaywrightTests" time="0.494"><failure message="Assertion Failed">page.goto: Target page, context or browser has been closed
-Call log:
-[2m  - navigating to "https://adactinhotelapp.com/", waiting until "load"[22m
-</failure></testcase></testsuite></testsuites>

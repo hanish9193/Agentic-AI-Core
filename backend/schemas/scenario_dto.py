@@ -15,6 +15,7 @@ class ScenarioUpdate(BaseModel):
 class ScenarioResponse(BaseModel):
     id: UUID
     requirement_id: UUID
+    scenario_ref_id: str | None = None  # US01, US02, US03...
     scenario_name: str
     description: str
     priority: Priority
@@ -25,6 +26,11 @@ class ScenarioResponse(BaseModel):
     reviewer: str | None = None
     approved_at: datetime | None = None
     jira_issue_key: str | None = None
+    jira_issue_id: str | None = None
     jira_issue_url: str | None = None
     jira_sync_status: str | None = None
     jira_last_synced_at: datetime | None = None
+    last_jira_sync_at: datetime | None = None
+    last_jira_sync_status: str | None = None
+    last_jira_sync_error: str | None = None
+    jira_sync_retry_count: int = 0

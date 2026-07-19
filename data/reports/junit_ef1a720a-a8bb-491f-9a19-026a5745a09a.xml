@@ -1,6 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="2" failures="0" errors="1" time="0.0"><testcase name="TestCase_24d68dd7-3a02-47b2-be4b-b63dd299a96f" classname="PlaywrightTests" time="0.0"><error message="Execution Error">Playwright did not produce report.json. Last output: reasonCode: 'StrictNumericEscape',
-loc: Position { line: 12, column: 69, index: 436 },
-pos: 436,
-syntaxPlugin: undefined
-}</error></testcase></testsuite></testsuites>

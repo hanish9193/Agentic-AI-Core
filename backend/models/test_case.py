@@ -48,6 +48,7 @@ class EvaluationStatus(str, Enum):
 class TestCase(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     scenario_id: UUID
+    test_case_ref_id: str | None = None  # US01-TC01, US01-TC02... (auto-generated)
     title: str = Field(min_length=1, max_length=200)
     preconditions: list[str] = Field(default_factory=list)
     steps: list[str] = Field(min_length=1)
@@ -68,4 +69,4 @@ class TestCase(BaseModel):
     jira_last_synced_at: datetime | None = None
     test_data: dict[str, str] = Field(default_factory=dict)
     execution_type: str = "UI Automation"
-    automation_framework: str = "playwright"
+    automation_framework: str = "playwright"

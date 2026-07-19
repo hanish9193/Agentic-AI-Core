@@ -6,6 +6,7 @@ import * as path from 'path';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  console.log('[API Status GET] Request url:', request.url);
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -63,6 +64,8 @@ export async function GET(request: NextRequest) {
               started: dbEx.executed_at,
               finished: dbEx.executed_at,
               duration: dbEx.duration_seconds,
+              testCycleId: dbEx.test_cycle_id,
+              testCaseIds: [dbEx.test_case_id],
             },
             script: '',
             timeline: timeline,
@@ -105,6 +108,8 @@ export async function GET(request: NextRequest) {
                   started: dbEx.executed_at,
                   finished: dbEx.executed_at,
                   duration: dbEx.duration_seconds,
+                  testCycleId: dbEx.test_cycle_id,
+                  testCaseIds: [dbEx.test_case_id],
                 },
                 script: '', 
                 timeline: [],

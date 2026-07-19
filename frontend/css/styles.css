@@ -82,12 +82,12 @@ aside.sidebar {
 
 .sidebar-logo {
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: 1rem;
   letter-spacing: 0.5px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sidebar-logo span {
@@ -132,6 +132,38 @@ nav.sidebar-nav {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+/* Indented navigation items */
+.nav-item-indented {
+  margin-left: 20px;
+  font-size: 0.9rem;
+  opacity: 0.85;
+  position: relative;
+}
+
+/* Connecting line indicator */
+.nav-item-indented::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background-color: var(--border-color);
+}
+
+/* Hover state (same as regular nav items) */
+.nav-item-indented:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  opacity: 1;
+}
+
+/* Active state */
+.nav-item-indented.active {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  opacity: 1;
 }
 
 /* Top Navbar */
@@ -243,12 +275,12 @@ header.top-nav {
 
 /* Page Views */
 .view-panel {
-  display: none;
+  display: none !important;
   animation: fadeIn 0.2s ease-in-out;
 }
 
 .view-panel.active {
-  display: block;
+  display: block !important;
 }
 
 @keyframes fadeIn {
@@ -1225,7 +1257,7 @@ body.light-theme {
 
 /* Redesigned Enterprise QA Dashboard custom styles */
 .kpi-grid {
-  grid-template-columns: repeat(6, 1fr) !important;
+  grid-template-columns: repeat(7, 1fr) !important;
 }
 @media (max-width: 1200px) {
   .kpi-grid {
@@ -1301,7 +1333,265 @@ body.light-theme {
   margin-top: 24px;
 }
 
+/* Project Combobox */
+.project-combobox {
+  position: relative;
+}
+.project-combobox-display {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 200px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: border var(--transition-fast);
+}
+.project-combobox-display:hover {
+  border-color: var(--accent-primary);
+}
+.project-combobox-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 260px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  z-index: 1000;
+  overflow: hidden;
+}
+.project-combobox-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font-family);
+  outline: none;
+}
+.project-combobox-search::placeholder {
+  color: var(--text-secondary);
+}
+.project-combobox-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.project-combobox-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background var(--transition-fast);
+}
+.project-combobox-item:hover,
+.project-combobox-item.active {
+  background-color: var(--bg-tertiary);
+}
+.project-combobox-item-create {
+  color: var(--accent-primary);
+  font-weight: 600;
+  border-top: 1px solid var(--border-color);
+}
+.project-combobox-item-create:hover {
+  background-color: var(--bg-tertiary);
+}
 
+/* Search Autocomplete Suggestions */
+.search-suggestions-container {
+  position: relative;
+  width: 100%;
+}
+.search-suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-top: 4px;
+}
+.search-suggestions-option {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: background-color 0.2s, color 0.2s;
+  text-align: left;
+}
+.search-suggestions-option:hover,
+.search-suggestions-option.active {
+  background-color: rgba(255, 255, 255, 0.07);
+  color: var(--accent-primary);
+}
+.search-suggestions-option:last-child {
+  border-bottom: none;
+}
 
+/* Requirement Documents Section */
+#requirement-documents-section {
+  transition: all var(--transition-normal);
+}
 
+.requirement-documents-header {
+  user-select: none;
+}
 
+.requirement-documents-header:hover h2 {
+  color: var(--accent-primary);
+}
+
+#req-docs-toggle-icon {
+  display: inline-block;
+  transition: transform var(--transition-normal);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+#requirement-documents-section.collapsed #req-docs-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+#requirement-documents-section.collapsed #requirement-documents-grid {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin-top: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+#requirement-documents-section:not(.collapsed) #requirement-documents-grid {
+  max-height: 1000px;
+  opacity: 1;
+  margin-top: 20px;
+  pointer-events: auto;
+  transition: max-height 0.35s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+}
+
+.requirement-documents-grid {
+  transition: max-height 0.35s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+}
+
+.requirement-document-card:nth-child(1) { animation-delay: 0.0s; }
+.requirement-document-card:nth-child(2) { animation-delay: 0.06s; }
+.requirement-document-card:nth-child(3) { animation-delay: 0.12s; }
+.requirement-document-card:nth-child(4) { animation-delay: 0.18s; }
+.requirement-document-card:nth-child(5) { animation-delay: 0.24s; }
+.requirement-document-card:nth-child(6) { animation-delay: 0.30s; }
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.requirement-document-card {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  animation: slideInFromLeft 0.35s ease-out both;
+}
+
+.requirement-document-card:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.req-doc-card-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.req-doc-card-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.req-doc-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.req-doc-stat-label {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.req-doc-stat-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.req-doc-stat-value.passed {
+  color: var(--color-success);
+}
+
+.req-doc-stat-value.failed {
+  color: var(--color-danger);
+}
+
+.req-doc-stat-value.pending {
+  color: var(--color-warning);
+}
+
+.req-doc-card-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+  .requirement-documents-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .requirement-documents-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

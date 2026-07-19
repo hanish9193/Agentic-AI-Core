@@ -6,12 +6,13 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ executionId: string; filename: string }> }
+  { params }: { params: Promise<{ executionId: string; filename: string }> }
 ) {
   try {
-    const params = await context.params;
-    const { executionId, filename } = params;
-    const artifactPath = path.join(
+    const { executionId, filename } = await params;
+    
+    // Construct path to screenshot in public/artifacts
+    const screenshotPath = path.join(
       process.cwd(),
       'public',
       'artifacts',
@@ -20,7 +21,9 @@ export async function GET(
       filename
     );
 
-    const fileBuffer = await fs.readFile(artifactPath);
+    // Read the image file
+    const fileBuffer = await fs.readFile(screenshotPath);
+    
     return new Response(fileBuffer, {
       headers: {
         'Content-Type': 'image/png',
@@ -28,6 +31,10 @@ export async function GET(
       },
     });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 });
+    console.error(`[Screenshot API] Error serving ${params}:`, error.message);
+    return NextResponse.json(
+      { error: 'Screenshot not found', details: error.message },
+      { status: 404 }
+    );
   }
 }

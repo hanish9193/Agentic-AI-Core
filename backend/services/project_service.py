@@ -132,6 +132,12 @@ class ProjectService:
     def get_test_case(self, test_case_id: UUID) -> TestCase | None:
         return self.repo.get_test_case(test_case_id)
 
+    def delete_execution(self, execution_id: UUID, deleted_by: UUID | None = None) -> bool:
+        return self.repo.delete_execution(execution_id, deleted_by)
+
+    def delete_failed_executions(self, project_id: UUID, deleted_by: UUID | None = None) -> int:
+        return self.repo.delete_failed_executions(project_id, deleted_by)
+
     def update_test_case(
         self,
         test_case_id: UUID,

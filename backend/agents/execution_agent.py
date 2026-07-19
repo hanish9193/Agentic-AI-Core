@@ -1,24 +1,51 @@
 """
-ExecutionAgent doesn't generate or judge anything - no LLM, no prompt,
-same "doesn't think" category as HumanApprovalAgent. It calls
-PlaywrightRunner (never subprocess/npx directly) for every approved test
-case that has a generated script, and records what actually happened.
+ExecutionAgent
 
-This is the first agent to write TestCase.status - that field has been
-sitting at its PENDING default since the very first model was written,
-specifically reserved for this moment ("status moves to PASSED/FAILED/
-BLOCKED once ExecutionAgent actually runs it" - see test_case.py).
+Purpose:
+    Orchestrates test execution by invoking PlaywrightRunner for approved test cases.
+    Collects execution results, artifacts, and status updates.
 
-Only test cases with BOTH approval and a generated script get run.
-Approved-but-no-script shouldn't happen in the normal pipeline order
-(PlaywrightAgent runs before this), but it's not an error here - it
-just means nothing to execute for that one, not a broken state.
+Responsibilities:
+    - Validate that approved test cases have generated Playwright scripts
+    - Build execution queue with state dependencies and priorities
+    - Invoke BatchQueueManager for parallel/sequential execution
+    - Map execution results back to test case status
+    - Collect artifacts (screenshots, videos, traces, console logs)
+    - Append execution results to workflow state
 
-_execute() catches PlaywrightRunnerError per test case rather than
-letting it propagate out of the loop. Without this, one bad test case
-(e.g. npx unavailable, discovered mid-batch) would lose the results for
-every other test case that hadn't run yet - the batch should keep going
-and report what happened to each one individually.
+Workflow Position:
+    Dashboard/API
+        ↓
+    SupervisorAgent (validates preconditions)
+        ↓
+    ExecutionAgent
+        ↓
+    PlaywrightRunner/BatchQueueManager (subprocess execution)
+        ↓
+    ExecutionAnalysisAgent
+        ↓
+    DefectManagementAgent
+        ↓
+    ReportAgent
+
+Inputs:
+    - state.approved_test_cases(): Test cases with evaluation_status=APPROVED or human-approved
+    - test_case.playwright_script: Generated TypeScript/Python/Gherkin code
+    - state.requirement: Context for logging
+
+Outputs:
+    - state.execution_results: List of ExecutionResult objects with status, duration, artifacts
+    - test_case.status: Updated to PASSED, FAILED, or BLOCKED based on execution outcome
+
+Dependencies:
+    - PlaywrightRunner: Subprocess wrapper for npx playwright test
+    - BatchQueueManager: Orchestrates multi-test execution with state management
+    - BatchContext: Queue data structure with task metadata
+
+Error Handling:
+    - Catches PlaywrightRunnerError per test case to isolate failures
+    - One test failure does not stop batch execution
+    - Records error messages and marks status as BLOCKED on runner exceptions
 """
 
 import datetime
@@ -31,6 +58,10 @@ from backend.services.playwright_runner import PlaywrightRunner, PlaywrightRunne
 from backend.models.batch_context import BatchContext, QueueItem
 from backend.services.batch_queue_manager import BatchQueueManager
 
+# ==========================================================
+# Status Mapping Configuration
+# ==========================================================
+
 _STATUS_MAP = {
     "passed": TestCaseStatus.PASSED,
     "failed": TestCaseStatus.FAILED,
@@ -40,13 +71,50 @@ _STATUS_MAP = {
 
 
 class ExecutionAgent(BaseAgent):
+    """
+    Test execution orchestrator using Playwright Runner.
+    
+    This agent does not call LLMs. It coordinates subprocess execution
+    and artifact collection.
+    """
+    
     name = "Execution Agent"
 
-    def __init__(self, runner: PlaywrightRunner | None = None, on_log = None):
+    def __init__(self, runner: PlaywrightRunner | None = None, on_log = None, project_id = None):
+        """
+        Initialize execution agent with runner, logging callback, and project ID.
+        
+        Args:
+            runner: PlaywrightRunner instance (injected for testing)
+            on_log: Optional callback for real-time execution logging
+            project_id: Optional UUID of the active project for credential retrieval
+        """
         self.runner = runner or PlaywrightRunner()
         self.on_log = on_log
+        self.project_id = project_id
 
     def run(self, state: WorkflowState) -> WorkflowState:
+        """
+        Execute all approved test cases with Playwright scripts.
+        
+        Args:
+            state: Workflow state containing approved test cases
+            
+        Returns:
+            Updated state with execution_results populated
+            
+        Raises:
+            ValueError: If state.requirement is None
+            
+        Execution Flow:
+            1. Filter for approved test cases with scripts
+            2. Build execution queue with state dependencies
+            3. Create BatchContext with batch_id and queue
+            4. Execute via BatchQueueManager
+            5. Map results back to test case status
+            6. Collect artifacts (screenshots, videos, traces, console logs)
+            7. Append ExecutionResult objects to state.execution_results
+        """
         if state.requirement is None:
             raise ValueError(f"{self.name} requires state.requirement to be set")
 
@@ -88,7 +156,7 @@ class ExecutionAgent(BaseAgent):
         batch_id = f"BATCH-{datetime.date.today().strftime('%Y%m%d')}-{int(datetime.datetime.now().timestamp()) % 1000:03d}"
         context = BatchContext(
             batch_id=batch_id,
-            project_id=uuid4(),
+            project_id=self.project_id or uuid4(),
             queue=queue
         )
 
@@ -133,4 +201,4 @@ class ExecutionAgent(BaseAgent):
 
         passed = sum(1 for r in state.execution_results[-len(runnable):] if r.status == ExecutionStatus.PASSED)
         state.add_log(f"{self.name} finished: {passed}/{len(runnable)} passed")
-        return state
+        return state

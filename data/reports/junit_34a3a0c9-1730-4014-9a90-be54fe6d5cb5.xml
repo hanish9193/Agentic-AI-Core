@@ -1,6 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="8" failures="1" errors="0" time="2.39"><testcase name="TestCase_ab3c07cb-5fde-4627-81ac-cf94c6d4d57e" classname="PlaywrightTests" time="2.39"><failure message="Assertion Failed">page.type: Target page, context or browser has been closed
-Call log:
-[2m  - waiting for locator('#password')[22m
-[2m    - locator resolved to &lt;input value="" id="password" type="password" name="password" class="login_input"/&gt;[22m
-</failure></testcase></testsuite></testsuites>

@@ -85,7 +85,13 @@ def test_create_and_get_requirements(client):
     assert reqs[0]["priority"] == "high"
 
 
-def test_get_and_write_settings(client):
+def test_get_and_write_settings(client, monkeypatch):
+    # Temporarily remove env overrides so PUT settings can be verified
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    from backend.config.settings import get_settings
+    get_settings.cache_clear()
+
     # Get settings
     response = client.get("/api/v1/settings")
     assert response.status_code == 200
@@ -113,6 +119,7 @@ def test_get_and_write_settings(client):
     override_path = Path(__file__).parent.parent / "config" / "override.yaml"
     if override_path.exists():
         os.remove(override_path)
+    get_settings.cache_clear()
 
 
 def test_update_and_delete_project(client):

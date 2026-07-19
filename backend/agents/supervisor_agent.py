@@ -1,3 +1,43 @@
+"""
+SupervisorAgent
+
+Purpose:
+    Orchestrates workflow routing and enforces precondition gates before agent execution.
+    Acts as the control plane for the LangGraph state machine.
+
+Responsibilities:
+    - Route workflow based on operation type (INGEST, GENERATE_SCENARIOS, EXECUTE, etc.)
+    - Validate preconditions before allowing transitions (approved scenarios before test case generation)
+    - Make conditional routing decisions after agent execution
+    - Enforce business rules (e.g., rejected test cases cannot proceed to automation)
+
+Workflow Position:
+    START
+        ↓
+    SupervisorAgent (route_start) → Determines entry point based on operation
+        ↓
+    [Agent Execution]
+        ↓
+    SupervisorAgent (route_after_*) → Determines next step or END
+        ↓
+    [Next Agent or END]
+
+Routing Logic:
+    - INGEST → RequirementAnalystAgent → FeatureInventoryAgent (if RAG enabled) → END
+    - BACKLOG → BacklogCreationAgent → QAStoryAnalyzerAgent (optional) → ScenarioAgent
+    - GENERATE_SCENARIOS → ScenarioAgent → HumanApprovalAgent → END
+    - GENERATE_TESTCASES → TestCaseAgent → EvaluationAgent → HumanApprovalAgent → END
+    - GENERATE_PLAYWRIGHT → PlaywrightAgent → END
+    - EXECUTE → ExecutionAgent → ExecutionAnalysisAgent → DefectManagementAgent → ReportAgent → END
+    - SYNC_USER_STORY → JiraSyncAgent → END
+    - SYNC_BUG → JiraSyncAgent → END
+
+Dependencies:
+    - WorkflowState: Reads requirement, scenarios, test_cases
+    - RunnableConfig: Reads operation type from configurable.operation
+    - Settings: Reads RAG configuration for feature inventory routing
+"""
+
 import logging
 from langchain_core.runnables import RunnableConfig
 from backend.agents.base import BaseAgent
@@ -23,14 +63,59 @@ OPERATION_ROUTING_MAP = {
 }
 
 class SupervisorAgent(BaseAgent):
+    """
+    Workflow routing orchestrator and precondition gatekeeper.
+    
+    This agent does not call LLMs or perform data transformations.
+    It enforces business logic gates and determines workflow paths.
+    """
+    
     name = "Supervisor Agent"
 
     def run(self, state: WorkflowState) -> WorkflowState:
+        """
+        Logs supervisor activation. Actual routing happens in conditional edge functions.
+        
+        Args:
+            state: Current workflow state
+            
+        Returns:
+            Unmodified state with supervisor start log entry
+        """
         state.add_log(f"{self.name} started")
         return state
 
     def route_start(self, state: WorkflowState, config: RunnableConfig | None = None) -> str:
-        """Determines the starting node based on config operation and validates prerequisites."""
+        """
+        Determines the starting node based on config operation and validates prerequisites.
+        
+        Args:
+            state: Current workflow state with requirement and scenarios
+            config: LangGraph config containing configurable.operation
+            
+        Returns:
+            String node name for next agent to execute, or "end" to terminate
+            
+        Raises:
+            ValueError: If operation prerequisites are not met
+            
+        Routing Logic:
+            - No operation configured → Start full pipeline at scenario_agent
+            - INGEST → requirement_analyst_agent
+            - BACKLOG → backlog_creation_agent (requires scenarios)
+            - GENERATE_SCENARIOS → scenario_agent
+            - GENERATE_TESTCASES → test_case_agent (requires approved scenarios)
+            - GENERATE_PLAYWRIGHT → playwright_agent (requires approved test cases)
+            - EXECUTE → execution_agent (requires approved test cases with scripts)
+            - SYNC_USER_STORY → jira_sync_agent (requires approved scenarios)
+            - SYNC_BUG → jira_sync_agent (requires execution results)
+            - RETEST_BUG → jira_sync_agent
+            
+        Business Rules:
+            - Test case generation requires at least one approved scenario
+            - Playwright generation requires at least one approved test case
+            - Execution requires approved test cases with playwright_script populated
+        """
         configurable = config.get("configurable", {}) if config else {}
         op = configurable.get("operation")
 

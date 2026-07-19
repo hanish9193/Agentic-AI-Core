@@ -125,18 +125,25 @@ class ScenarioDB(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     requirement_id = Column(UUID(as_uuid=True), ForeignKey("requirements.id", ondelete="CASCADE"), nullable=False, index=True)
+    scenario_ref_id = Column(String(20), nullable=True, index=True)  # US01, US02, US03...
     scenario_name = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     priority = Column(String(50), nullable=False, default="medium")
     confidence = Column(Float, nullable=False, default=0.0)
     approved = Column(Boolean, nullable=False, default=False, index=True)
+    rejected = Column(Boolean, nullable=False, default=False, index=True)
+    path_type = Column(String(100), nullable=False, default="happy_path")
+    tags = Column(JSON, nullable=False, default=list)
     reviewer = Column(String(100), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     generated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     jira_issue_key = Column(String(100), nullable=True, index=True)
+    jira_issue_id = Column(String(100), nullable=True)
     jira_issue_url = Column(String(500), nullable=True)
     jira_sync_status = Column(String(50), nullable=True)
     jira_last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    last_jira_sync_error = Column(Text, nullable=True)
+    jira_sync_retry_count = Column(Integer, default=0, nullable=False)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
@@ -155,6 +162,7 @@ class TestCaseDB(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     scenario_id = Column(UUID(as_uuid=True), ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    test_case_ref_id = Column(String(30), nullable=True, index=True)  # US01-TC01, US01-TC02...
     title = Column(String(200), nullable=False)
     preconditions = Column(JSON, nullable=False, default=list)
     steps = Column(JSON, nullable=False, default=list)
@@ -201,6 +209,8 @@ class ExecutionDB(Base):
     trace_path = Column(String(500), nullable=True)
     browser_version = Column(String(100), nullable=True)
     executed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    timeline = Column(JSON, nullable=True)
+    screenshots = Column(JSON, nullable=True)
 
     failure_category = Column(String(100), nullable=True)
     root_cause_summary = Column(Text, nullable=True)
@@ -226,6 +236,8 @@ class ReportDB(Base):
     junit_path = Column(String(500), nullable=True)
     html_path = Column(String(500), nullable=True)
     pdf_path = Column(String(500), nullable=True)
+    jira_attachment_id = Column(String(100), nullable=True)
+    jira_last_uploaded_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     

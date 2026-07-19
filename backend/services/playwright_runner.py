@@ -67,7 +67,12 @@ _CONFIG_TEMPLATE = """\
 import {{ defineConfig }} from '@playwright/test';
 export default defineConfig({{
   use: {{
+    browserName: 'chromium',
     headless: {headless_js},
+    launchOptions: {{
+      slowMo: 1000,
+      args: ['--disable-blink-features=AutomationControlled']
+    }},
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     {storage_state_config}
@@ -97,6 +102,7 @@ class PlaywrightRunResult(BaseModel):
     screenshot_path: str | None = None
     video_path: str | None = None
     trace_path: str | None = None
+    stdout_lines: list[str] = []  # Capture console output for timeline extraction
 
 
 class PlaywrightRunnerError(Exception):
@@ -163,7 +169,94 @@ class PlaywrightRunner:
             except OSError:
                 pass
 
+        # Clean screenshots folder
+        screenshots_dir = run_dir / "screenshots"
+        if screenshots_dir.exists():
+            try:
+                shutil.rmtree(screenshots_dir)
+            except Exception:
+                pass
+        screenshots_dir.mkdir(parents=True, exist_ok=True)
+
         spec_content = script
+        
+        # Inject the automatic screenshot wrapper block
+        screenshot_wrapper = """
+import { test, expect } from '@playwright/test';
+import * as path from 'path';
+import * as fs from 'fs';
+
+test.beforeEach(async ({ page }) => {
+  const screenshotsDir = path.join(__dirname, 'screenshots');
+  if (!fs.existsSync(screenshotsDir)) {
+    fs.mkdirSync(screenshotsDir, { recursive: true });
+  }
+
+  let stepIndex = 0;
+  let lastTimelineMessage = '';
+
+  const origConsoleLog = console.log;
+  console.log = function(...args) {
+    origConsoleLog(...args);
+    const msg = args.join(' ');
+    if (msg.startsWith('[Timeline]')) {
+      lastTimelineMessage = msg.replace('[Timeline]', '').trim();
+    }
+  };
+
+  const sanitizeFilename = (str) => {
+    return str.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  };
+
+  const takeStepScreenshot = async (actionName: string) => {
+    stepIndex++;
+    const cleanDesc = sanitizeFilename(lastTimelineMessage || actionName);
+    const filename = `step-${String(stepIndex).padStart(2, '0')}-${cleanDesc}.png`;
+    const filepath = path.join(screenshotsDir, filename);
+    try {
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: filepath });
+      console.log(`[Timeline] Screenshot: ${filename}`);
+    } catch (e) {
+      // Ignore screenshot errors
+    }
+  };
+
+  const origGoto = page.goto.bind(page);
+  page.goto = async (url, options) => {
+    const res = await origGoto(url, options);
+    await takeStepScreenshot('goto');
+    return res;
+  };
+
+  const LocatorProto = Object.getPrototypeOf(page.locator('body'));
+
+  const origLocClick = LocatorProto.click;
+  LocatorProto.click = async function(options) {
+    const res = await origLocClick.call(this, options);
+    await takeStepScreenshot('click');
+    return res;
+  };
+
+  const origLocFill = LocatorProto.fill;
+  LocatorProto.fill = async function(value, options) {
+    const res = await origLocFill.call(this, value, options);
+    await takeStepScreenshot('fill');
+    return res;
+  };
+
+  const origLocSelectOption = LocatorProto.selectOption;
+  LocatorProto.selectOption = async function(values, options) {
+    const res = await origLocSelectOption.call(this, values, options);
+    await takeStepScreenshot('selectOption');
+    return res;
+  };
+});
+"""
+        spec_content = screenshot_wrapper + "\n" + spec_content
+
         if storage_state_path:
             escaped_state_path = storage_state_path.replace("\\", "/")
             spec_content += f"\n\ntest.afterEach(async ({{ page }}) => {{\n  try {{\n    await page.context().storageState({{ path: '{escaped_state_path}' }});\n  }} catch (e) {{\n    console.error('Failed to save storage state:', e);\n  }}\n}});\n"
@@ -190,6 +283,8 @@ class PlaywrightRunner:
         
         # Load vault credentials into child process environment
         child_env = os.environ.copy()
+        if "PLAYWRIGHT_CHROMIUM_CHANNEL" in child_env:
+            del child_env["PLAYWRIGHT_CHROMIUM_CHANNEL"]
         if project_id:
             try:
                 from backend.services.vault_service import VaultService
@@ -237,6 +332,7 @@ class PlaywrightRunner:
                     status="error",
                     duration_seconds=float(hard_timeout),
                     error_message=f"Playwright did not finish within {hard_timeout}s and was force-killed.",
+                    stdout_lines=stdout_lines,
                 )
 
             try:
@@ -269,6 +365,7 @@ class PlaywrightRunner:
             return PlaywrightRunResult(
                 status="error",
                 error_message=f"Playwright did not produce report.json. Last output: {err_msg}",
+                stdout_lines=stdout_lines,
             )
 
         try:
@@ -277,11 +374,12 @@ class PlaywrightRunner:
             return PlaywrightRunResult(
                 status="error",
                 error_message=f"Failed to read report.json: {exc}",
+                stdout_lines=stdout_lines,
             )
 
-        return self._parse_report(report)
+        return self._parse_report(report, stdout_lines)
 
-    def _parse_report(self, report: dict) -> PlaywrightRunResult:
+    def _parse_report(self, report: dict, stdout_lines: list[str]) -> PlaywrightRunResult:
         suites = report.get("suites", [])
         specs = suites[0].get("specs", []) if suites else []
 
@@ -291,7 +389,7 @@ class PlaywrightRunner:
             # pass/fail verdict.
             errors = report.get("errors", [])
             message = errors[0].get("message") if errors else "No test found in the generated script"
-            return PlaywrightRunResult(status="error", error_message=_strip_ansi(str(message)))
+            return PlaywrightRunResult(status="error", error_message=_strip_ansi(str(message)), stdout_lines=stdout_lines)
 
         test_result = specs[0]["tests"][0]["results"][0]
         status = test_result["status"]
@@ -313,4 +411,5 @@ class PlaywrightRunner:
             screenshot_path=attachments.get("screenshot"),
             video_path=attachments.get("video"),
             trace_path=attachments.get("trace"),
+            stdout_lines=stdout_lines,
         )

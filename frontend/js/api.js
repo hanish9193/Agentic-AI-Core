@@ -156,6 +156,24 @@ export const API = {
     });
   },
 
+  // External Tools
+  async getExternalTools() {
+    return request('/external-tools');
+  },
+
+  async saveExternalTool(toolConfig) {
+    return request('/external-tools', {
+      method: 'POST',
+      body: JSON.stringify(toolConfig)
+    });
+  },
+
+  async deleteExternalTool(toolId) {
+    return request(`/external-tools/${toolId}`, {
+      method: 'DELETE'
+    });
+  },
+
   async syncRequirementJira(projectId, requirementId) {
     return request(`/projects/${projectId}/requirements/${requirementId}/sync-jira`, {
       method: 'POST'
@@ -253,6 +271,10 @@ export const API = {
     return request(`/projects/${projectId}/testcases`);
   },
 
+  async getGoldenDatasetComparison(projectId) {
+    return request(`/projects/${projectId}/testcases/golden-dataset-comparison`);
+  },
+
   async generateTestCases(projectId, requirementId) {
     return request(`/projects/${projectId}/requirements/${requirementId}/generate-testcases`, {
       method: 'POST'
@@ -272,6 +294,18 @@ export const API = {
     });
   },
 
+  async deleteExecution(projectId, executionId) {
+    return request(`/projects/${projectId}/executions/${executionId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async deleteFailedExecutions(projectId) {
+    return request(`/projects/${projectId}/executions/failed`, {
+      method: 'DELETE'
+    });
+  },
+
   // Test Case Notes
   async getTestCaseNotes(testCaseId) {
     return request(`/testcases/${testCaseId}/notes`);
@@ -285,10 +319,14 @@ export const API = {
   },
 
   // Playwright Code Generation
-  async generatePlaywrightScript(projectId, testCaseId) {
-    return request(`/projects/${projectId}/testcases/${testCaseId}/generate-script`, {
+  async generatePlaywrightScript(projectId, testCaseId, framework) {
+    const options = {
       method: 'POST'
-    });
+    };
+    if (framework) {
+      options.body = JSON.stringify({ framework });
+    }
+    return request(`/projects/${projectId}/testcases/${testCaseId}/generate-script`, options);
   },
 
   async saveTestCaseScript(projectId, testCaseId, script) {

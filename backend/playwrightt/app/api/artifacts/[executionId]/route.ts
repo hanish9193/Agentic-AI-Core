@@ -7,11 +7,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ executionId: string }> }
+  { params }: { params: Promise<{ executionId: string }> }
 ) {
+  console.log("--- GET ARTIFACTS DYNAMIC ROUTE HIT ---");
   try {
-    const params = await context.params;
-    const { executionId } = params;
+    const { executionId } = await params;
+    console.log("GET ARTIFACTS executionId:", executionId);
 
     // First try to get from execution queue
     const execution = executionQueue.getExecution(executionId);

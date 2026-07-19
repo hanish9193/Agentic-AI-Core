@@ -1,8 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="1" failures="1" errors="0" time="6.771"><testcase name="TestCase_a236e051-ad41-40fb-ab79-bfac23a7a15b" classname="PlaywrightTests" time="6.771"><failure message="Assertion Failed">locator.click: Error: strict mode violation: getByRole('link', { name: 'Vehicle' }) resolved to 2 elements:
-    1) &lt;a name="Logo" id="branding" href="index.php"&gt;…&lt;/a&gt; aka getByRole('link', { name: 'Tricentis Logo Vehicle' })
-    2) &lt;a href="#" tabindex="-1" id="entervehicledata" name="Enter Vehicle Data"&gt;…&lt;/a&gt; aka getByRole('link', { name: 'Enter Vehicle Data' })
-
-Call log:
-[2m  - waiting for getByRole('link', { name: 'Vehicle' })[22m
-</failure></testcase></testsuite></testsuites>

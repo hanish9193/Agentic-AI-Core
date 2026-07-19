@@ -46,7 +46,24 @@ class App {
     const exitBtn = document.getElementById('btn-exit-project');
     if (exitBtn) {
       exitBtn.addEventListener('click', () => {
-        this.showProjectStartScreen();
+        this.currentProject = null;
+        this.currentRelease = null;
+        this.currentTestCycle = null;
+        localStorage.removeItem('active_project_id');
+        const relSelect = document.getElementById('release-select');
+        if (relSelect) relSelect.style.display = 'none';
+        const cySelect = document.getElementById('cycle-select');
+        if (cySelect) { cySelect.style.display = 'none'; cySelect.disabled = true; cySelect.style.opacity = '0.5'; }
+        const comboLabel = document.getElementById('project-combobox-label');
+        if (comboLabel) comboLabel.textContent = 'Select Project';
+        const exitBtn = document.getElementById('btn-exit-project');
+        if (exitBtn) exitBtn.style.display = 'none';
+        if (this.isAdmin()) {
+          this.navigateTo('dashboard');
+          this.renderDashboardMetrics();
+        } else {
+          this.showProjectStartScreen();
+        }
       });
     }
 
@@ -110,15 +127,18 @@ class App {
     }
 
     // Project Dropdown
-    document.getElementById('project-select').addEventListener('change', async (e) => {
-      const val = e.target.value;
-      if (val === '__create_new__') {
-        this.openModal('create-project-modal');
-        e.target.value = this.currentProject ? this.currentProject.id : '';
-      } else if (val) {
-        await this.selectProject(val);
-      }
-    });
+    const projectSelect = document.getElementById('project-select');
+    if (projectSelect) {
+      projectSelect.addEventListener('change', async (e) => {
+        const val = e.target.value;
+        if (val === '__create_new__') {
+          this.openModal('create-project-modal');
+          e.target.value = this.currentProject ? this.currentProject.id : '';
+        } else if (val) {
+          await this.selectProject(val);
+        }
+      });
+    }
 
     // Release Dropdown
     const releaseSelect = document.getElementById('release-select');
@@ -196,88 +216,97 @@ class App {
     }
 
     // Project Framework Dropdown
-    document.getElementById('project-framework-select').addEventListener('change', async (e) => {
-      const newFramework = e.target.value;
-      if (this.currentProject) {
-        try {
-          this.currentProject = await API.updateProject(
-            this.currentProject.id,
-            this.currentProject.name,
-            this.currentProject.description,
-            this.currentProject.line_of_business,
-            newFramework
-          );
-          this.addLog(`Project framework updated to ${newFramework}`);
-        } catch (err) {
-          alert(`Failed to update project framework: ${err.message}`);
-          e.target.value = this.currentProject.framework || 'playwright';
+    const frameworkSelect = document.getElementById('project-framework-select');
+    if (frameworkSelect) {
+      frameworkSelect.addEventListener('change', async (e) => {
+        const newFramework = e.target.value;
+        if (this.currentProject) {
+          try {
+            this.currentProject = await API.updateProject(
+              this.currentProject.id,
+              this.currentProject.name,
+              this.currentProject.description,
+              this.currentProject.line_of_business,
+              newFramework
+            );
+            this.addLog(`Project framework updated to ${newFramework}`);
+          } catch (err) {
+            alert(`Failed to update project framework: ${err.message}`);
+            e.target.value = this.currentProject.framework || 'playwright';
+          }
         }
-      }
-    });
+      });
+    }
 
     // Create Project Form
-    document.getElementById('create-project-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('new-proj-name').value.trim();
-      const desc = document.getElementById('new-proj-desc').value.trim();
-      const lob = document.getElementById('new-proj-lob').value;
-      const framework = document.getElementById('new-proj-framework').value;
-      const jiraKey = document.getElementById('new-proj-jira-key').value.trim() || null;
-      
-      const descError = document.getElementById('new-proj-desc-error');
-      if (descError) {
-        descError.style.display = 'none';
-        descError.textContent = '';
-      }
-
-      if (!name) return;
-      if (!desc) {
+    const createProjectForm = document.getElementById('create-project-form');
+    if (createProjectForm) {
+      createProjectForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('new-proj-name').value.trim();
+        const desc = document.getElementById('new-proj-desc').value.trim();
+        const lob = document.getElementById('new-proj-lob').value;
+        const framework = document.getElementById('new-proj-framework').value;
+        const jiraKey = document.getElementById('new-proj-jira-key').value.trim() || null;
+        
+        const descError = document.getElementById('new-proj-desc-error');
         if (descError) {
-          descError.textContent = 'Project description is required.';
-          descError.style.display = 'block';
+          descError.style.display = 'none';
+          descError.textContent = '';
         }
-        return;
-      }
 
-      try {
-        const proj = await API.createProject(name, desc, lob, framework, jiraKey);
-        this.addLog(`Project '${name}' in LOB '${lob}' created`);
-        await this.loadProjects();
-        this.closeModal('create-project-modal');
-        await this.selectProject(proj.id);
-      } catch (err) {
-        if (descError) {
-          descError.textContent = `Failed to create project: ${err.message}`;
-          descError.style.display = 'block';
-        } else {
-          alert(`Failed to create project: ${err.message}`);
+        if (!name) return;
+        if (!desc) {
+          if (descError) {
+            descError.textContent = 'Project description is required.';
+            descError.style.display = 'block';
+          }
+          return;
         }
-      }
-    });
+
+        try {
+          const proj = await API.createProject(name, desc, lob, framework, jiraKey);
+          this.addLog(`Project '${name}' in LOB '${lob}' created`);
+          await this.loadProjects();
+          this.closeModal('create-project-modal');
+          await this.selectProject(proj.id);
+        } catch (err) {
+          if (descError) {
+            descError.textContent = `Failed to create project: ${err.message}`;
+            descError.style.display = 'block';
+          } else {
+            alert(`Failed to create project: ${err.message}`);
+          }
+        }
+      });
+    }
 
     // Create Requirement Form
-    document.getElementById('create-requirement-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!this.currentProject) return;
+    const createRequirementForm = document.getElementById('create-requirement-form');
+    if (createRequirementForm) {
+      createRequirementForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!this.currentProject) return;
 
-      const title = document.getElementById('req-title').value.trim();
-      const desc = document.getElementById('req-desc').value.trim();
-      const priority = document.getElementById('req-priority').value;
-      const domain = document.getElementById('req-domain').value.trim();
+        const title = document.getElementById('req-title').value.trim();
+        const desc = document.getElementById('req-desc').value.trim();
+        const priority = document.getElementById('req-priority').value;
+        const domain = document.getElementById('req-domain').value.trim();
 
-      if (!title || !desc) return;
+        if (!title || !desc) return;
 
-      try {
-        const releaseId = this.currentRelease ? this.currentRelease.id : null;
-        await API.createRequirement(this.currentProject.id, title, desc, priority, domain, releaseId);
-        this.addLog(`Requirement '${title}' added`);
-        this.closeModal('create-requirement-modal');
-        await this.refreshProjectData();
-        this.navigateTo('requirements');
-      } catch (err) {
-        alert(`Failed to add requirement: ${err.message}`);
-      }
-    });
+        try {
+          const releaseId = this.currentRelease ? this.currentRelease.id : null;
+          await API.createRequirement(this.currentProject.id, title, desc, priority, domain, releaseId);
+          this.addLog(`Requirement '${title}' added`);
+          this.closeModal('create-requirement-modal');
+          await this.refreshProjectData();
+          this.navigateTo('requirements');
+        } catch (err) {
+          alert(`Failed to add requirement: ${err.message}`);
+        }
+      });
+    }
 
     // Requirement Import file browse trigger
     const fileInput = document.getElementById('import-req-file');
@@ -328,59 +357,62 @@ class App {
     }
 
     // Settings Form
-    document.getElementById('settings-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = {
-        llm: {
-          provider: document.getElementById('settings-llm-provider').value,
-          model: document.getElementById('settings-llm-model').value,
-          temperature: parseFloat(document.getElementById('settings-llm-temp').value) || 0.2,
-          api_key: document.getElementById('settings-llm-key').value || null,
-          api_base: document.getElementById('settings-llm-base').value || null
-        },
-        workflow: {
-          mode: document.getElementById('settings-wf-mode').value,
-          human_review_enabled: document.getElementById('settings-wf-review').value === 'true',
-          evaluation_threshold: parseFloat(document.getElementById('settings-wf-eval-threshold').value) || 0.75
-        },
-        browser: {
-          type: document.getElementById('settings-browser-type').value,
-          headless: document.getElementById('settings-browser-headless').value === 'true'
-        },
-        generation: {
-          scenario_count: parseInt(document.getElementById('settings-gen-count').value) || 3
-        },
-        evaluation: {
-          duplicate_similarity_threshold: parseFloat(document.getElementById('settings-eval-dup').value) || 0.75,
-          relevance_rejection_threshold: parseFloat(document.getElementById('settings-eval-rej').value) || 0.3
-        },
-        rag: {
-          enabled: document.getElementById('settings-rag-enabled').value === 'true',
-          vector_db_provider: document.getElementById('settings-rag-provider').value,
-          ragflow_api_base: document.getElementById('settings-rag-api-base').value || '',
-          ragflow_api_key: document.getElementById('settings-rag-api-key').value || null,
-          ragflow_dataset_id: document.getElementById('settings-rag-dataset-id').value || null
-        },
-        jira: {
-          base_url: document.getElementById('settings-jira-base-url').value || 'https://your-domain.atlassian.net',
-          email: document.getElementById('settings-jira-email').value || '',
-          api_token: document.getElementById('settings-jira-api-token').value || '',
-          project_key: document.getElementById('settings-jira-project-key').value || 'QA',
-          default_issue_type: document.getElementById('settings-jira-default-issue-type').value || 'Story',
-          verify_ssl: document.getElementById('settings-jira-verify-ssl').value === 'true',
-          resolved_statuses: document.getElementById('settings-jira-resolved-statuses').value.split(',').map(s => s.trim()).filter(Boolean)
-        }
-      };
+    const settingsForm = document.getElementById('settings-form');
+    if (settingsForm) {
+      settingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+          llm: {
+            provider: document.getElementById('settings-llm-provider').value,
+            model: document.getElementById('settings-llm-model').value,
+            temperature: parseFloat(document.getElementById('settings-llm-temp').value) || 0.2,
+            api_key: document.getElementById('settings-llm-key').value || null,
+            api_base: document.getElementById('settings-llm-base').value || null
+          },
+          workflow: {
+            mode: document.getElementById('settings-wf-mode').value,
+            human_review_enabled: document.getElementById('settings-wf-review').value === 'true',
+            evaluation_threshold: parseFloat(document.getElementById('settings-wf-eval-threshold').value) || 0.75
+          },
+          browser: {
+            type: document.getElementById('settings-browser-type').value,
+            headless: document.getElementById('settings-browser-headless').value === 'true'
+          },
+          generation: {
+            scenario_count: parseInt(document.getElementById('settings-gen-count').value) || 3
+          },
+          evaluation: {
+            duplicate_similarity_threshold: parseFloat(document.getElementById('settings-eval-dup').value) || 0.75,
+            relevance_rejection_threshold: parseFloat(document.getElementById('settings-eval-rej').value) || 0.3
+          },
+          rag: {
+            enabled: document.getElementById('settings-rag-enabled').value === 'true',
+            vector_db_provider: document.getElementById('settings-rag-provider').value,
+            ragflow_api_base: document.getElementById('settings-rag-api-base').value || '',
+            ragflow_api_key: document.getElementById('settings-rag-api-key').value || null,
+            ragflow_dataset_id: document.getElementById('settings-rag-dataset-id').value || null
+          },
+          jira: {
+            base_url: document.getElementById('settings-jira-base-url').value || 'https://your-domain.atlassian.net',
+            email: document.getElementById('settings-jira-email').value || '',
+            api_token: document.getElementById('settings-jira-api-token').value || '',
+            project_key: document.getElementById('settings-jira-project-key').value || 'QA',
+            default_issue_type: document.getElementById('settings-jira-default-issue-type').value || 'Story',
+            verify_ssl: document.getElementById('settings-jira-verify-ssl').value === 'true',
+            resolved_statuses: document.getElementById('settings-jira-resolved-statuses').value.split(',').map(s => s.trim()).filter(Boolean)
+          }
+        };
 
-      try {
-        const res = await API.updateSettings(payload);
-        this.settings = res.settings;
-        this.addLog("Settings updated successfully");
-        alert("Configuration updated successfully");
-      } catch (err) {
-        alert(`Failed to update settings: ${err.message}`);
-      }
-    });
+        try {
+          const res = await API.updateSettings(payload);
+          this.settings = res.settings;
+          this.addLog("Settings updated successfully");
+          alert("Configuration updated successfully");
+        } catch (err) {
+          alert(`Failed to update settings: ${err.message}`);
+        }
+      });
+    }
   }
 
   setupSearchInput(inputId, selectId, searchFieldsFn) {
@@ -396,35 +428,131 @@ class App {
       selected: opt.selected
     }));
 
-    const onInput = () => {
+    // Wrap the input in a container to position the suggestions overlay
+    let wrapper = input.parentElement;
+    if (!wrapper.classList.contains('search-suggestions-container')) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'search-suggestions-container';
+      input.parentNode.insertBefore(wrapper, input);
+      wrapper.appendChild(input);
+    }
+
+    // Remove existing dropdown if any
+    let dropdown = wrapper.querySelector('.search-suggestions-dropdown');
+    if (dropdown) dropdown.remove();
+
+    dropdown = document.createElement('div');
+    dropdown.className = 'search-suggestions-dropdown';
+    dropdown.style.display = 'none';
+    wrapper.appendChild(dropdown);
+
+    let activeIndex = -1;
+    let currentSuggestions = [];
+
+    const renderSuggestions = () => {
       const query = input.value.toLowerCase().trim();
-      const selectedValue = select.value;
+      dropdown.innerHTML = '';
       
-      // Clear current options
-      select.options.length = 0;
-      
-      for (const optData of select._originalOptions) {
-        if (optData.value === "" || optData.disabled) {
-          // Keep placeholder / select label options
-          const option = new Option(optData.text, optData.value, optData.selected, optData.selected);
-          option.disabled = optData.disabled;
-          select.add(option);
-          continue;
-        }
-        
+      // Filter matching options
+      currentSuggestions = select._originalOptions.filter(optData => {
+        if (optData.value === "" || optData.disabled) return false;
         const fields = searchFieldsFn(optData.value);
-        const match = fields.some(f => f && String(f).toLowerCase().includes(query));
-        if (match) {
-          const option = new Option(optData.text, optData.value, optData.value === selectedValue, optData.value === selectedValue);
-          select.add(option);
+        return fields.some(f => f && String(f).toLowerCase().includes(query));
+      });
+
+      if (currentSuggestions.length === 0 || query === '') {
+        dropdown.style.display = 'none';
+        activeIndex = -1;
+        return;
+      }
+
+      currentSuggestions.forEach((opt, index) => {
+        const optionEl = document.createElement('div');
+        optionEl.className = 'search-suggestions-option';
+        optionEl.textContent = opt.text;
+        optionEl.dataset.value = opt.value;
+        if (index === activeIndex) {
+          optionEl.classList.add('active');
         }
+
+        optionEl.addEventListener('click', () => {
+          selectOption(opt.value, opt.text);
+        });
+
+        dropdown.appendChild(optionEl);
+      });
+
+      dropdown.style.display = 'block';
+    };
+
+    const selectOption = (val, text) => {
+      select.value = val;
+      input.value = text;
+      dropdown.style.display = 'none';
+      activeIndex = -1;
+      select.dispatchEvent(new Event('change'));
+    };
+
+    const handleKeydown = (e) => {
+      if (dropdown.style.display === 'none') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          renderSuggestions();
+        }
+        return;
+      }
+
+      const items = dropdown.querySelectorAll('.search-suggestions-option');
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % items.length;
+        renderSuggestions();
+        const activeItem = dropdown.querySelector('.search-suggestions-option.active');
+        if (activeItem) activeItem.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+        renderSuggestions();
+        const activeItem = dropdown.querySelector('.search-suggestions-option.active');
+        if (activeItem) activeItem.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < currentSuggestions.length) {
+          const opt = currentSuggestions[activeIndex];
+          selectOption(opt.value, opt.text);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        dropdown.style.display = 'none';
+        activeIndex = -1;
       }
     };
-    
+
     input.value = '';
+    
+    // Clear old handlers
     input.removeEventListener('input', input._onInputHandler);
-    input._onInputHandler = onInput;
-    input.addEventListener('input', onInput);
+    input.removeEventListener('keydown', input._onKeydownHandler);
+    input.removeEventListener('focus', input._onFocusHandler);
+    
+    input._onInputHandler = renderSuggestions;
+    input._onKeydownHandler = handleKeydown;
+    input._onFocusHandler = renderSuggestions;
+
+    input.addEventListener('input', renderSuggestions);
+    input.addEventListener('keydown', handleKeydown);
+    input.addEventListener('focus', renderSuggestions);
+
+    // Hide suggestions dropdown on click outside
+    const onDocumentClick = (e) => {
+      if (!wrapper.contains(e.target)) {
+        dropdown.style.display = 'none';
+        activeIndex = -1;
+      }
+    };
+    document.removeEventListener('click', input._onDocClickHandler);
+    input._onDocClickHandler = onDocumentClick;
+    document.addEventListener('click', onDocumentClick);
   }
 
   async uploadRequirementFile(file) {
@@ -476,7 +604,11 @@ class App {
     const relSelect = document.getElementById('release-select');
     if (relSelect) relSelect.style.display = 'none';
     const cySelect = document.getElementById('cycle-select');
-    if (cySelect) cySelect.style.display = 'none';
+    if (cySelect) {
+      cySelect.style.display = 'none';
+      cySelect.disabled = true;
+      cySelect.style.opacity = '0.5';
+    }
     
     const container = document.getElementById('project-start-view');
     const options = this.projects.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('');
@@ -491,7 +623,7 @@ class App {
             ${this.projects.length > 0 ? `
               <div class="form-group">
                 <label for="start-project-search">Search Projects</label>
-                <input type="text" id="start-project-search" class="form-control" placeholder="🔍 Search projects..." style="margin-bottom: 8px;" />
+                <input type="text" id="start-project-search" class="form-control" placeholder="Search projects..." style="margin-bottom: 8px;" />
                 <label for="start-project-dropdown">Open Existing Project</label>
                 <select id="start-project-dropdown" class="form-control">
                   <option value="" disabled selected>▼ Select Project</option>
@@ -528,6 +660,53 @@ class App {
     this.navigateTo('project-start');
   }
 
+  async renderProjectPage() {
+    if (!this.projects || this.projects.length === 0) {
+      await this.loadProjects();
+    }
+    const container = document.getElementById('project-content-container');
+    if (!container) return;
+
+    if (this.projects.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>No projects found. Create a new project to get started.</p>
+          <button class="btn btn-primary" onclick="app.openModal('create-project-modal')">Create New Project</button>
+        </div>
+      `;
+      return;
+    }
+
+    const options = this.projects.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('');
+
+    container.innerHTML = `
+      <div class="form-group" style="max-width: 400px; margin-bottom: 24px;">
+        <label for="project-page-search">Search Projects</label>
+        <input type="text" id="project-page-search" class="form-control" placeholder="Search projects..." style="margin-bottom: 8px;" />
+        <label for="project-page-dropdown">Select Project</label>
+        <select id="project-page-dropdown" class="form-control">
+          <option value="" disabled selected>▼ Select Project</option>
+          ${options}
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="app.openModal('create-project-modal')">+ Create New Project</button>
+    `;
+
+    // Setup event listener for project selection
+    document.getElementById('project-page-dropdown').addEventListener('change', async (e) => {
+      const val = e.target.value;
+      if (val) {
+        await this.selectProject(val);
+      }
+    });
+
+    // Setup search functionality
+    this.setupSearchInput('project-page-search', 'project-page-dropdown', (id) => {
+      const p = this.projects.find(x => x.id === id);
+      return p ? [p.name, p.description, p.line_of_business] : [];
+    });
+  }
+
   async loadSettings() {
     try {
       this.settings = await API.getSettings();
@@ -539,37 +718,44 @@ class App {
 
   populateSettingsForm() {
     if (!this.settings) return;
-    document.getElementById('settings-llm-provider').value = this.settings.llm.provider || 'openai';
-    document.getElementById('settings-llm-model').value = this.settings.llm.model || '';
-    document.getElementById('settings-llm-temp').value = this.settings.llm.temperature || 0.2;
-    document.getElementById('settings-llm-key').value = this.settings.llm.api_key || '';
-    document.getElementById('settings-llm-base').value = this.settings.llm.api_base || '';
+    
+    // Helper function to safely set value
+    const safeSetValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value;
+    };
+    
+    safeSetValue('settings-llm-provider', this.settings.llm.provider || 'openai');
+    safeSetValue('settings-llm-model', this.settings.llm.model || '');
+    safeSetValue('settings-llm-temp', this.settings.llm.temperature || 0.2);
+    safeSetValue('settings-llm-key', this.settings.llm.api_key || '');
+    safeSetValue('settings-llm-base', this.settings.llm.api_base || '');
 
-    document.getElementById('settings-wf-mode').value = this.settings.workflow.mode || 'sequential';
-    document.getElementById('settings-wf-review').value = String(this.settings.workflow.human_review_enabled);
-    document.getElementById('settings-wf-eval-threshold').value = this.settings.workflow.evaluation_threshold || 0.75;
+    safeSetValue('settings-wf-mode', this.settings.workflow.mode || 'sequential');
+    safeSetValue('settings-wf-review', String(this.settings.workflow.human_review_enabled));
+    safeSetValue('settings-wf-eval-threshold', this.settings.workflow.evaluation_threshold || 0.75);
 
-    document.getElementById('settings-browser-type').value = this.settings.browser.type || 'chromium';
-    document.getElementById('settings-browser-headless').value = String(this.settings.browser.headless);
+    safeSetValue('settings-browser-type', this.settings.browser.type || 'chromium');
+    safeSetValue('settings-browser-headless', String(this.settings.browser.headless));
 
-    document.getElementById('settings-gen-count').value = this.settings.generation.scenario_count || 3;
-    document.getElementById('settings-eval-dup').value = this.settings.evaluation.duplicate_similarity_threshold || 0.75;
-    document.getElementById('settings-eval-rej').value = this.settings.evaluation.relevance_rejection_threshold || 0.3;
+    safeSetValue('settings-gen-count', this.settings.generation.scenario_count || 3);
+    safeSetValue('settings-eval-dup', this.settings.evaluation.duplicate_similarity_threshold || 0.75);
+    safeSetValue('settings-eval-rej', this.settings.evaluation.relevance_rejection_threshold || 0.3);
 
-    document.getElementById('settings-rag-enabled').value = String(this.settings.rag.enabled);
-    document.getElementById('settings-rag-provider').value = this.settings.rag.vector_db_provider || 'chroma';
-    document.getElementById('settings-rag-api-base').value = this.settings.rag.ragflow_api_base || 'http://localhost:9380';
-    document.getElementById('settings-rag-api-key').value = this.settings.rag.ragflow_api_key || '';
-    document.getElementById('settings-rag-dataset-id').value = this.settings.rag.ragflow_dataset_id || '';
+    safeSetValue('settings-rag-enabled', String(this.settings.rag.enabled));
+    safeSetValue('settings-rag-provider', this.settings.rag.vector_db_provider || 'chroma');
+    safeSetValue('settings-rag-api-base', this.settings.rag.ragflow_api_base || 'http://localhost:9380');
+    safeSetValue('settings-rag-api-key', this.settings.rag.ragflow_api_key || '');
+    safeSetValue('settings-rag-dataset-id', this.settings.rag.ragflow_dataset_id || '');
 
     if (this.settings.jira) {
-      document.getElementById('settings-jira-base-url').value = this.settings.jira.base_url || '';
-      document.getElementById('settings-jira-email').value = this.settings.jira.email || '';
-      document.getElementById('settings-jira-api-token').value = this.settings.jira.api_token || '';
-      document.getElementById('settings-jira-project-key').value = this.settings.jira.project_key || 'QA';
-      document.getElementById('settings-jira-default-issue-type').value = this.settings.jira.default_issue_type || 'Story';
-      document.getElementById('settings-jira-verify-ssl').value = String(this.settings.jira.verify_ssl);
-      document.getElementById('settings-jira-resolved-statuses').value = (this.settings.jira.resolved_statuses || []).join(', ');
+      safeSetValue('settings-jira-base-url', this.settings.jira.base_url || '');
+      safeSetValue('settings-jira-email', this.settings.jira.email || '');
+      safeSetValue('settings-jira-api-token', this.settings.jira.api_token || '');
+      safeSetValue('settings-jira-project-key', this.settings.jira.project_key || 'QA');
+      safeSetValue('settings-jira-default-issue-type', this.settings.jira.default_issue_type || 'Story');
+      safeSetValue('settings-jira-verify-ssl', String(this.settings.jira.verify_ssl));
+      safeSetValue('settings-jira-resolved-statuses', (this.settings.jira.resolved_statuses || []).join(', '));
     }
   }
 
@@ -583,21 +769,111 @@ class App {
   }
 
   populateProjectDropdown() {
-    const dropdown = document.getElementById('project-select');
-    dropdown.innerHTML = `
-      <option value="" disabled selected>▼ Select Project</option>
+    const hiddenSelect = document.getElementById('project-select');
+    const list = document.getElementById('project-combobox-list');
+    const display = document.getElementById('project-combobox-display');
+    const label = document.getElementById('project-combobox-label');
+    const searchInput = document.getElementById('project-combobox-search');
+    const dropdown = document.getElementById('project-combobox-dropdown');
+
+    // If elements don't exist yet (before login UI is shown), skip
+    if (!hiddenSelect || !list || !display || !label || !searchInput || !dropdown) {
+      return;
+    }
+
+    // Populate hidden select for existing code that reads select.value
+    hiddenSelect.innerHTML = `
+      <option value="" disabled selected>Select Project</option>
       ${this.projects.map(p => `<option value="${p.id}">${escapeHTML(p.name)} [${escapeHTML(p.line_of_business)}]</option>`).join('')}
       <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create New Project</option>
     `;
     if (this.currentProject) {
-      dropdown.value = this.currentProject.id;
+      hiddenSelect.value = this.currentProject.id;
+      label.textContent = this.currentProject.name;
     }
 
-    this.setupSearchInput('project-select-search', 'project-select', (id) => {
-      if (id === '__create_new__') return ["create", "new", "project"];
-      const p = this.projects.find(x => x.id === id);
-      return p ? [p.name, p.description, p.line_of_business] : [];
+    const renderList = (query) => {
+      query = (query || '').toLowerCase().trim();
+      list.innerHTML = '';
+      const filtered = this.projects.filter(p => {
+        if (!query) return true;
+        return p.name.toLowerCase().includes(query) ||
+               (p.description || '').toLowerCase().includes(query) ||
+               (p.line_of_business || '').toLowerCase().includes(query);
+      });
+      filtered.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'project-combobox-item';
+        item.textContent = p.name;
+        item.dataset.id = p.id;
+        item.addEventListener('click', () => {
+          hiddenSelect.value = p.id;
+          label.textContent = p.name;
+          dropdown.style.display = 'none';
+          searchInput.value = '';
+          hiddenSelect.dispatchEvent(new Event('change'));
+        });
+        list.appendChild(item);
+      });
+      const createItem = document.createElement('div');
+      createItem.className = 'project-combobox-item project-combobox-item-create';
+      createItem.textContent = '+ Create New Project';
+      createItem.addEventListener('click', () => {
+        dropdown.style.display = 'none';
+        searchInput.value = '';
+        this.openModal('create-project-modal');
+      });
+      list.appendChild(createItem);
+    };
+
+    // Toggle dropdown on display click
+    display.onclick = (e) => {
+      e.stopPropagation();
+      const isOpen = dropdown.style.display === 'block';
+      dropdown.style.display = isOpen ? 'none' : 'block';
+      if (!isOpen) {
+        searchInput.value = '';
+        renderList('');
+        searchInput.focus();
+      }
+    };
+
+    // Search filtering
+    searchInput.oninput = () => renderList(searchInput.value);
+
+    // Keyboard navigation
+    searchInput.onkeydown = (e) => {
+      const items = list.querySelectorAll('.project-combobox-item');
+      const active = list.querySelector('.project-combobox-item.active');
+      let idx = Array.from(items).indexOf(active);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (active) active.classList.remove('active');
+        idx = (idx + 1) % items.length;
+        items[idx].classList.add('active');
+        items[idx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (active) active.classList.remove('active');
+        idx = (idx - 1 + items.length) % items.length;
+        items[idx].classList.add('active');
+        items[idx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (active) active.click();
+      } else if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+      }
+    };
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('project-combobox').contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
     });
+
+    renderList('');
   }
 
   async loadReleasesForProject() {
@@ -605,6 +881,7 @@ class App {
     try {
       this.releases = await API.getReleases(this.currentProject.id);
       const relSelect = document.getElementById('release-select');
+      const cySelect = document.getElementById('cycle-select');
       if (relSelect) {
         relSelect.style.display = 'inline-block';
         relSelect.innerHTML = `
@@ -617,6 +894,10 @@ class App {
         } else {
           relSelect.value = "";
         }
+      }
+      if (cySelect) {
+        cySelect.disabled = true;
+        cySelect.style.opacity = '0.5';
       }
     } catch (err) {
       console.error('Error loading releases:', err);
@@ -631,7 +912,11 @@ class App {
     }
     const cySelect = document.getElementById('cycle-select');
     if (this.currentRelease) {
-      if (cySelect) cySelect.style.display = 'inline-block';
+      if (cySelect) {
+        cySelect.style.display = 'inline-block';
+        cySelect.disabled = false;
+        cySelect.style.opacity = '1';
+      }
       await this.loadCyclesForRelease();
       // Select first cycle by default if available
       if (this.testCycles.length > 0) {
@@ -643,7 +928,8 @@ class App {
       }
     } else {
       if (cySelect) {
-        cySelect.style.display = 'none';
+        cySelect.disabled = true;
+        cySelect.style.opacity = '0.5';
         cySelect.innerHTML = '<option value="" disabled selected>▼ Select Cycle</option>';
       }
       this.currentTestCycle = null;
@@ -657,6 +943,7 @@ class App {
       this.testCycles = await API.getTestCycles(this.currentRelease.id);
       const cySelect = document.getElementById('cycle-select');
       if (cySelect) {
+        cySelect.style.display = 'inline-block';
         cySelect.innerHTML = `
           <option value="" disabled selected>▼ Select Cycle</option>
           ${this.testCycles.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('')}
@@ -690,7 +977,30 @@ class App {
       
       document.getElementById('sidebar-container').style.display = 'flex';
       document.getElementById('project-select-wrapper').style.display = 'flex';
-      document.getElementById('project-select').value = projectId;
+
+      // Clear requirement documents from previous project
+      const reqDocsGrid = document.getElementById('requirement-documents-grid');
+      if (reqDocsGrid) reqDocsGrid.innerHTML = '';
+      const reqDocsCount = document.getElementById('req-docs-count');
+      if (reqDocsCount) reqDocsCount.textContent = '(0)';
+      
+      const projectSelect = document.getElementById('project-select');
+      if (projectSelect) {
+        projectSelect.value = projectId;
+      }
+      
+      const comboLabel = document.getElementById('project-combobox-label');
+      if (comboLabel) comboLabel.textContent = this.currentProject.name;
+
+      if (this.isAdmin()) {
+        const exitBtn = document.getElementById('btn-exit-project');
+        if (exitBtn) exitBtn.style.display = 'flex';
+        const exitLabel = exitBtn?.querySelector('.btn-text, span');
+        if (exitLabel) exitLabel.textContent = 'Back to All Projects';
+      } else {
+        const exitBtn = document.getElementById('btn-exit-project');
+        if (exitBtn) exitBtn.style.display = 'flex';
+      }
 
       const fwSelect = document.getElementById('project-framework-select');
       if (fwSelect) {
@@ -759,6 +1069,14 @@ class App {
       this.documents = await API.getDocuments(this.currentProject.id);
       this.executions = await API.getExecutionResults(this.currentProject.id);
       
+      // Fetch golden dataset comparison
+      try {
+        this.goldenDatasetComparison = await API.getGoldenDatasetComparison(this.currentProject.id);
+      } catch (e) {
+        console.warn('Golden dataset comparison not available:', e);
+        this.goldenDatasetComparison = {};
+      }
+      
       // Concurrently fetch comments/notes for all scenarios and test cases
       this.scenariosNotes = {};
       this.testCasesNotes = {};
@@ -787,6 +1105,7 @@ class App {
       };
 
       safeCall('renderDashboardMetrics', () => this.renderDashboardMetrics());
+      safeCall('renderRequirementDocuments', () => this.renderRequirementDocuments());
       safeCall('renderWorkflowTimeline', () => this.renderWorkflowTimeline());
       safeCall('renderRequirements', () => this.renderRequirements());
       safeCall('renderScenarios', () => this.renderScenarios());
@@ -803,7 +1122,8 @@ class App {
   }
 
   navigateTo(viewName) {
-    if (!this.currentProject && viewName !== 'settings' && viewName !== 'project-start') {
+    const projectRequired = !['settings', 'project-start', 'project', 'dashboard'].includes(viewName);
+    if (!this.currentProject && projectRequired) {
       this.showProjectStartScreen();
       return;
     }
@@ -838,6 +1158,14 @@ class App {
     });
 
     if (viewName === 'playwright') this.renderPlaywrightWorkspace();
+    if (viewName === 'reports') this.renderReports();
+    if (viewName === 'project') this.renderProjectPage();
+
+    const scopeBtns = ['btn-db-scope-project', 'btn-db-scope-release', 'btn-db-scope-cycle'];
+    scopeBtns.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = (viewName === 'dashboard' && this.isAdmin() && !this.currentProject) ? 'none' : '';
+    });
   }
 
   switchDashboardScope(scope) {
@@ -864,48 +1192,63 @@ class App {
   }
 
   async renderDashboardMetrics() {
-    if (!this.currentProject) return;
+    const isAdmin = this.isAdmin();
 
-    // Set the Project Name subtitle
+    if (!isAdmin && !this.currentProject) return;
+
     const projectSub = document.getElementById('dashboard-project-subtitle');
     if (projectSub) {
-      const scopeLabel = this.dashboardScope ? this.dashboardScope.charAt(0).toUpperCase() + this.dashboardScope.slice(1) : 'Project';
-      const name = this.currentProject ? this.currentProject.name : 'Unknown';
-      let detail = `Scope: ${scopeLabel}`;
-      if (this.dashboardScope === 'release' && this.currentRelease) {
-        detail += ` (${this.currentRelease.name})`;
-      } else if (this.dashboardScope === 'cycle' && this.currentTestCycle) {
-        detail += ` (${this.currentTestCycle.name})`;
+      if (isAdmin && !this.currentProject) {
+        const projectCount = this.projects ? this.projects.length : 0;
+        projectSub.textContent = `All Projects (${projectCount} workspaces)`;
+      } else {
+        let scopeLabel = 'Project';
+        if (this.dashboardScope === 'release') scopeLabel = 'Release Info';
+        else if (this.dashboardScope === 'cycle') scopeLabel = 'Test Cycle Info';
+        const name = this.currentProject ? this.currentProject.name : 'Unknown';
+        let detail = `Scope: ${scopeLabel}`;
+        if (this.dashboardScope === 'release' && this.currentRelease) {
+          detail += ` (${this.currentRelease.name})`;
+        } else if (this.dashboardScope === 'cycle' && this.currentTestCycle) {
+          detail += ` (${this.currentTestCycle.name})`;
+        }
+        projectSub.textContent = `Project: ${name} | ${detail}`;
       }
-      projectSub.textContent = `Project: ${name} | ${detail}`;
     }
 
-    // Set Framework Label
     const fwLbl = document.getElementById('dashboard-framework-lbl');
     if (fwLbl) {
-      const fw = this.currentProject ? (this.currentProject.framework || 'playwright') : 'playwright';
-      fwLbl.textContent = fw.charAt(0).toUpperCase() + fw.slice(1);
-    }
-
-    let idQuery = '';
-    if (this.dashboardScope === 'release' && this.currentRelease) {
-      idQuery = `&id=${this.currentRelease.id}`;
-    } else if (this.dashboardScope === 'cycle' && this.currentTestCycle) {
-      idQuery = `&id=${this.currentTestCycle.id}`;
+      if (isAdmin && !this.currentProject) {
+        fwLbl.textContent = 'All';
+      } else {
+        const fw = this.currentProject ? (this.currentProject.framework || 'playwright') : 'playwright';
+        fwLbl.textContent = fw.charAt(0).toUpperCase() + fw.slice(1);
+      }
     }
 
     let data = null;
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('access_token');
       const headers = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const res = await fetch(`/api/v1/projects/${this.currentProject.id}/dashboard-metrics?scope=${this.dashboardScope}${idQuery}`, {
-        headers: headers
-      });
-      if (!res.ok) throw new Error("Failed to fetch dashboard metrics");
-      data = await res.json();
+
+      if (isAdmin && !this.currentProject) {
+        const res = await fetch('/api/v1/dashboard/all-metrics', { headers });
+        if (!res.ok) throw new Error("Failed to fetch dashboard metrics");
+        data = await res.json();
+      } else if (this.currentProject) {
+        let idQuery = '';
+        if (this.dashboardScope === 'release' && this.currentRelease) {
+          idQuery = `&id=${this.currentRelease.id}`;
+        } else if (this.dashboardScope === 'cycle' && this.currentTestCycle) {
+          idQuery = `&id=${this.currentTestCycle.id}`;
+        }
+        const res = await fetch(`/api/v1/projects/${this.currentProject.id}/dashboard-metrics?scope=${this.dashboardScope}${idQuery}`, { headers });
+        if (!res.ok) throw new Error("Failed to fetch dashboard metrics");
+        data = await res.json();
+      }
     } catch (e) {
       console.error("Dashboard metrics fetch error:", e);
       return;
@@ -942,16 +1285,20 @@ class App {
     const tcTrend = data.totalTestCases > 0 ? `+${Math.max(1, Math.floor(data.totalTestCases / 4))} this week` : '0% automated';
     const execTrend = data.totalExecutions > 0 ? `+${Math.max(1, Math.floor(data.totalExecutions / 3))} runs` : 'No runs yet';
     const passTrend = data.totalExecutions > 0 ? '+2% change' : 'N/A';
+    const passRatioNum = parseInt(data.passRatio) || 0;
+    const failRatio = data.totalExecutions > 0 ? `${100 - passRatioNum}%` : '0%';
+    const failTrend = data.totalExecutions > 0 ? '-2% change' : 'N/A';
 
     const grid = document.getElementById('dashboard-metrics-grid');
     if (grid) {
       grid.innerHTML = `
-        ${renderKpiCard("Requirements", data.totalReqs, "Total Requirements", reqTrend, data.totalReqs > 0 ? "badge-approved" : "badge-pending")}
+        ${renderKpiCard("No of documents uploaded", data.totalReqs, "Total Requirements", reqTrend, data.totalReqs > 0 ? "badge-approved" : "badge-pending")}
         ${renderKpiCard("Generated Scenarios", data.totalScenarios, "Drafted Scenarios", scTrend, data.totalScenarios > 0 ? "badge-approved" : "badge-pending")}
         ${renderKpiCard("Generated Test Cases", data.totalTestCases, "Total Test Cases", tcTrend, data.totalTestCases > 0 ? "badge-approved" : "badge-pending")}
         ${renderKpiCard("Total Executions", data.totalExecutions, "Execution Runs", execTrend, data.totalExecutions > 0 ? "badge-approved" : "badge-pending")}
         ${renderKpiCard("Automation Pass %", data.passRatio, "Overall Pass Rate", passTrend, data.totalExecutions > 0 ? "badge-approved" : "badge-pending")}
-        ${renderKpiCard("Automation Coverage", data.coveragePct, `UI: ${data.uiCount} | API: ${data.apiCount} | Manual: ${data.manualCount}`, "Interactive", "badge-approved")}
+        ${renderKpiCard("Automation Fail %", failRatio, "Overall Failure Rate", failTrend, data.totalExecutions > 0 ? "badge-rejected" : "badge-pending")}
+        ${renderKpiCard("Execution Percentage", data.coveragePct, `UI: ${data.uiCount} | API: ${data.apiCount} | Manual: ${data.manualCount}`, "Interactive", "badge-approved")}
       `;
     }
 
@@ -1022,7 +1369,7 @@ class App {
     // Populate Execution Summary Table
     const summaryTbody = document.getElementById('dashboard-summary-tbody');
     if (summaryTbody) {
-      const displayProj = this.currentProject ? this.currentProject.name : 'Unknown';
+      const displayProj = (this.isAdmin() && !this.currentProject) ? 'All Projects (Combined)' : (this.currentProject ? this.currentProject.name : 'Unknown');
       const displayReqs = data.totalReqs;
       const displayScenarios = data.totalScenarios;
       const displayTestCases = data.totalTestCases;
@@ -1038,7 +1385,7 @@ class App {
           <td class="metric-val" style="color: var(--accent-teal); font-weight: 700;">${escapeHTML(displayProj)}</td>
         </tr>
         <tr>
-          <td class="metric-label">Requirements</td>
+          <td class="metric-label">No of documents uploaded</td>
           <td class="metric-val">${displayReqs}</td>
         </tr>
         <tr>
@@ -1225,7 +1572,7 @@ class App {
             data: {
               labels: domainLabels,
               datasets: [{
-                label: 'Requirements',
+                label: 'No of documents uploaded',
                 data: domainCountsData,
                 backgroundColor: 'rgba(20, 184, 166, 0.4)',
                 borderColor: 'var(--accent-teal)',
@@ -1313,32 +1660,32 @@ class App {
     const container = document.getElementById('workflow-timeline-vertical');
     if (!container) return;
 
+    // Sequential workflow status calculation - each step depends on previous
+    // Work backwards from the latest evidence: if a later stage is done, all earlier stages must be too
+    const hasExecutions = this.executions.length > 0;
+    const hasApproved = this.scenarios.some(s => s.approved);
+    const hasScript = hasExecutions || this.testCases.some(tc => tc.playwright_code || tc.script || tc.code || tc.has_script);
+
     const reqStatus = this.requirements.length > 0 ? 'completed' : 'pending';
     const scStatus = this.scenarios.length > 0 ? 'completed' : (reqStatus === 'completed' ? 'active' : 'pending');
-    
-    const hasApproved = this.scenarios.some(s => s.approved);
     const appStatus = hasApproved ? 'completed' : (scStatus === 'completed' ? 'active' : 'pending');
-    
     const tcStatus = this.testCases.length > 0 ? 'completed' : (appStatus === 'completed' ? 'active' : 'pending');
-    
-    const hasScript = this.testCases.some(tc => tc.playwright_code || tc.script || tc.code || tc.has_script);
     const pwStatus = hasScript ? 'completed' : (tcStatus === 'completed' ? 'active' : 'pending');
-    
-    const execStatus = this.executions.length > 0 ? 'completed' : (pwStatus === 'completed' ? 'active' : 'pending');
-    const repStatus = this.executions.length > 0 ? 'completed' : (execStatus === 'completed' ? 'active' : 'pending');
+    const execStatus = hasExecutions ? 'completed' : (pwStatus === 'completed' ? 'active' : 'pending');
+    const repStatus = execStatus === 'completed' ? 'completed' : 'pending';
 
     const getStepHtml = (label, status) => {
       let icon = '○';
       let statusClass = 'step-pending';
-      let statusTxt = 'Pending';
+      let statusTxt = 'PENDING';
       if (status === 'completed') {
         icon = '✓';
         statusClass = 'step-completed';
-        statusTxt = 'Completed';
+        statusTxt = 'COMPLETED';
       } else if (status === 'active') {
         icon = '●';
         statusClass = 'step-active';
-        statusTxt = 'In Progress';
+        statusTxt = 'IN PROGRESS';
       }
       return `
         <div class="vertical-timeline-step ${statusClass}" style="display: flex; align-items: center; justify-content: space-between; padding: 2px 0;">
@@ -1396,16 +1743,21 @@ class App {
   }
 
   formatRequirementLabel(r) {
-    if (r.original_filename) {
-      return r.original_filename;
-    }
+    // Priority: requirement title fields over filename
     if (r.requirement_id && r.requirement_title) {
       return `${r.requirement_id}: ${r.requirement_title}`;
     }
     if (r.requirement_title) {
       return r.requirement_title;
     }
-    return r.title;
+    if (r.title) {
+      return r.title;
+    }
+    // Fallback to filename only if no title exists
+    if (r.original_filename) {
+      return r.original_filename;
+    }
+    return 'Untitled Requirement';
   }
 
   // Scenarios Table
@@ -1622,16 +1974,87 @@ class App {
   async renderTestCases() {
     this.renderTestCasesRequirementDropdown();
     const container = document.getElementById('testcases-list-container');
+    const jiraContainer = document.getElementById('testcases-jira-trace-container');
     
     if (!this.selectedRequirementId) {
       container.innerHTML = Components.EmptyState("Select Requirement", "Choose a requirement from the dropdown list to view or generate test cases.");
       document.getElementById('testcases-actions-toolbar').style.display = 'none';
+      if (jiraContainer) jiraContainer.style.display = 'none';
       return;
     }
 
     document.getElementById('testcases-actions-toolbar').style.display = 'flex';
     
     const requirementScenarios = this.scenarios.filter(s => s.requirement_id === this.selectedRequirementId);
+    
+    if (jiraContainer) {
+      if (requirementScenarios.length > 0) {
+        jiraContainer.style.display = 'block';
+        let html = `
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 6px;">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; color: var(--accent-primary);">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Jira Traceability & Status
+            </h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+        `;
+        
+        requirementScenarios.forEach(sc => {
+          let statusText = sc.last_jira_sync_status || sc.jira_sync_status || "Pending";
+          let badgeBg = "rgba(156, 163, 175, 0.15)";
+          let badgeColor = "#9ca3af";
+          let badgeBorder = "rgba(156, 163, 175, 0.3)";
+          
+          const sLower = statusText.toLowerCase();
+          if (sLower === "success" || sLower === "done" || sLower === "passed") {
+            badgeBg = "rgba(34, 197, 94, 0.15)";
+            badgeColor = "#4ade80";
+            badgeBorder = "rgba(34, 197, 94, 0.3)";
+            statusText = "Done";
+          } else if (sLower === "in progress" || sLower === "in_progress") {
+            badgeBg = "rgba(59, 130, 246, 0.15)";
+            badgeColor = "#60a5fa";
+            badgeBorder = "rgba(59, 130, 246, 0.3)";
+            statusText = "In Progress";
+          } else if (sLower === "sync_pending" || sLower === "sync pending" || sLower === "pending") {
+            badgeBg = "rgba(234, 179, 8, 0.15)";
+            badgeColor = "#facc15";
+            badgeBorder = "rgba(234, 179, 8, 0.3)";
+            statusText = sLower.includes("pending") && !sLower.includes("sync") ? "Pending" : "Sync Pending";
+          } else if (sLower === "sync_failed" || sLower === "sync failed" || sLower === "failed" || sLower === "error") {
+            badgeBg = "rgba(239, 68, 68, 0.15)";
+            badgeColor = "#f87171";
+            badgeBorder = "rgba(239, 68, 68, 0.3)";
+            statusText = sLower.includes("sync") ? "Sync Failed" : "Failed";
+          }
+          
+          let jiraLink = "Not Linkable";
+          if (sc.jira_issue_key) {
+            jiraLink = `<a href="${sc.jira_issue_url}" target="_blank" style="color: var(--accent-primary); text-decoration: underline; font-weight: 500;">${sc.jira_issue_key}</a>`;
+          }
+          
+          html += `
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--border-radius-sm); display: flex; flex-direction: column; gap: 6px;">
+              <div style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><strong style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; margin-right: 4px;">Scenario:</strong> <span style="font-weight: 500;" title="${sc.scenario_name}">${sc.scenario_name}</span></div>
+              <div><strong style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; margin-right: 4px;">Jira:</strong> ${jiraLink}</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><strong style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; margin-right: 4px;">Jira Status:</strong> 
+                <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${statusText}</span>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += `
+            </div>
+          </div>
+        `;
+        jiraContainer.innerHTML = html;
+      } else {
+        jiraContainer.style.display = 'none';
+      }
+    }
     const approvedScenarios = requirementScenarios.filter(s => s.approved);
     
     const genBtn = document.getElementById('btn-generate-testcases');
@@ -1709,26 +2132,14 @@ class App {
       onGenerateScript: async (id, btn, framework) => {
         btn.disabled = true;
         btn.innerText = "Generating...";
-        const newWindow = window.open('', '_blank');
-        if (newWindow) {
-          newWindow.document.write('<html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;"><div>Generating Script... Please wait...</div></body></html>');
-        }
         try {
           await API.generatePlaywrightScript(this.currentProject.id, id, framework);
           this.addLog("Playwright script generated for test case");
           await this.refreshProjectData();
           this.renderTestCases();
-          
-          const wsUrl = this.settings?.playwright?.workspace_url || 'http://localhost:3000';
-          const targetUrl = `${wsUrl}/?project_id=${this.currentProject?.id || ''}&test_case_id=${id}`;
-          if (newWindow) {
-            newWindow.location.href = targetUrl;
-          } else {
-            window.open(targetUrl, '_blank');
-          }
         } catch (err) {
-          if (newWindow) newWindow.close();
           alert(`Script generation failed: ${err.message}`);
+        } finally {
           btn.disabled = false;
           btn.innerText = "Generate Script";
         }
@@ -1742,7 +2153,7 @@ class App {
           alert(`Failed to add note: ${err.message}`);
         }
       }
-    }, this.testCasesNotes);
+    }, this.testCasesNotes, this.goldenDatasetComparison || {});
 
     // Bulk actions
     const bulkTcApprove = document.getElementById('btn-bulk-tc-approve');
@@ -1780,7 +2191,7 @@ class App {
           btn.innerText = "Generating Scripts in Background...";
           try {
             for (const tc of approvedTCs) {
-              await API.generatePlaywrightScript(this.currentProject.id, tc.id);
+              await API.generatePlaywrightScript(this.currentProject.id, tc.id, this.currentProject.framework);
             }
             this.addLog(`Playwright scripts generated for ${approvedTCs.length} approved test cases`);
             await this.refreshProjectData();
@@ -1810,7 +2221,7 @@ class App {
               runBatchBtn.innerText = `Auto-generating ${scriptless.length} script(s)...`;
               try {
                 for (const tcId of scriptless) {
-                  await API.generatePlaywrightScript(this.currentProject.id, tcId);
+                  await API.generatePlaywrightScript(this.currentProject.id, tcId, this.currentProject.framework);
                 }
                 this.addLog(`Auto-generated scripts for ${scriptless.length} selected test cases.`);
                 await this.refreshProjectData();
@@ -2084,26 +2495,14 @@ class App {
       onGenerateScript: async (id, btn) => {
         btn.disabled = true;
         btn.innerText = "Generating...";
-        const newWindow = window.open('', '_blank');
-        if (newWindow) {
-          newWindow.document.write('<html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;"><div>Generating Playwright Script... Please wait...</div></body></html>');
-        }
         try {
-          await API.generatePlaywrightScript(this.currentProject.id, id);
+          await API.generatePlaywrightScript(this.currentProject.id, id, this.currentProject?.framework);
           this.addLog("Playwright script generated for test case");
           await this.refreshProjectData();
           this.renderTestCaseApproval();
-          
-          const wsUrl = this.settings?.playwright?.workspace_url || 'http://localhost:3000';
-          const targetUrl = `${wsUrl}/?project_id=${this.currentProject?.id || ''}&test_case_id=${id}`;
-          if (newWindow) {
-            newWindow.location.href = targetUrl;
-          } else {
-            window.open(targetUrl, '_blank');
-          }
         } catch (err) {
-          if (newWindow) newWindow.close();
           alert(`Script generation failed: ${err.message}`);
+        } finally {
           btn.disabled = false;
           btn.innerText = "Generate Script";
         }
@@ -2117,7 +2516,7 @@ class App {
           alert(`Failed to add note: ${err.message}`);
         }
       }
-    }, this.testCasesNotes);
+    }, this.testCasesNotes, this.goldenDatasetComparison || {});
   }
 
   renderPlaywrightWorkspaceRequirementDropdown() {
@@ -2170,11 +2569,14 @@ class App {
       return;
     }
 
-    if (['dashboard', 'requirements', 'scenarios', 'testcases', 'playwright', 'executions', 'reports', 'langsmith', 'settings', 'execution-workspace', 'project-start'].includes(view)) {
-      if (this.currentProject) {
+    if (['dashboard', 'requirements', 'scenarios', 'testcases', 'playwright', 'executions', 'reports', 'langsmith', 'settings', 'execution-workspace', 'project-start', 'project'].includes(view)) {
+      if (view !== 'project' && this.currentProject) {
         await this.refreshProjectData().catch(e => console.error("Router refresh error:", e));
       }
       this.navigateTo(view);
+      if (view === 'dashboard' && this.isAdmin()) {
+        this.renderDashboardMetrics();
+      }
     }
   }
 
@@ -2634,24 +3036,173 @@ class App {
     }
   }
 
+  // Populate filter dropdowns with available options
+  populateReportFilters() {
+    if (!this.testCases || !this.executions) return;
+
+    // Extract unique US and TC numbers from test cases that have executions
+    const executedTestCaseIds = new Set(this.executions.map(ex => ex.test_case_id));
+    const executedTestCases = this.testCases.filter(tc => executedTestCaseIds.has(tc.id));
+
+    const usSet = new Set();
+    const tcSet = new Set();
+
+    executedTestCases.forEach(tc => {
+      const refId = tc.test_case_ref_id || tc.ref_id || tc.scenario_ref_id || '';
+      const match = refId.match(/^(US\d+)-(TC\d+)$/i);
+      if (match) {
+        const [, usNum, tcNum] = match;
+        usSet.add(usNum.toUpperCase());
+        tcSet.add(tcNum.toUpperCase());
+      }
+    });
+
+    console.log('Available US numbers:', Array.from(usSet));
+    console.log('Available TC numbers:', Array.from(tcSet));
+
+    // Sort US and TC numbers numerically
+    const sortByNumber = (a, b) => {
+      const numA = parseInt(a.match(/\d+/)[0]);
+      const numB = parseInt(b.match(/\d+/)[0]);
+      return numA - numB;
+    };
+
+    const sortedUS = Array.from(usSet).sort(sortByNumber);
+    const sortedTC = Array.from(tcSet).sort(sortByNumber);
+
+    // Populate US dropdown
+    const usSelect = document.getElementById('filter-us-number');
+    if (usSelect) {
+      const currentValue = usSelect.value;
+      usSelect.innerHTML = '<option value="">All User Stories</option>';
+      sortedUS.forEach(us => {
+        const option = document.createElement('option');
+        option.value = us;
+        option.textContent = us;
+        usSelect.appendChild(option);
+      });
+      usSelect.value = currentValue; // Restore selection
+    }
+
+    // Populate TC dropdown
+    const tcSelect = document.getElementById('filter-tc-number');
+    if (tcSelect) {
+      const currentValue = tcSelect.value;
+      tcSelect.innerHTML = '<option value="">All Test Cases</option>';
+      sortedTC.forEach(tc => {
+        const option = document.createElement('option');
+        option.value = tc;
+        option.textContent = tc;
+        tcSelect.appendChild(option);
+      });
+      tcSelect.value = currentValue; // Restore selection
+    }
+  }
+
   // Reports view renderer
   renderReports() {
     const container = document.getElementById('reports-workspace-container');
-    if (!container) return;
-
-    if (this.executions.length === 0) {
-      container.innerHTML = Components.EmptyState("No Execution Reports", "No executions have occurred yet. Run scripts to compile JUnit, HTML, and JSON reports.");
+    if (!container) {
+      console.error('[Reports] Container not found: reports-workspace-container');
       return;
     }
 
-    const runTotal = this.executions.length;
-    const passed = this.executions.filter(ex => ex.status === 'passed').length;
-    const failed = this.executions.filter(ex => ex.status === 'failed').length;
-    const errors = this.executions.filter(ex => ex.status === 'error').length;
-    const skipped = this.executions.filter(ex => ex.status === 'skipped').length;
+    try {
+      // Populate filter dropdowns with available options
+      this.populateReportFilters();
+
+      console.log('[Reports] Total executions:', this.executions?.length || 0);
+      console.log('[Reports] Total test cases:', this.testCases?.length || 0);
+
+      // Check if there are any executions at all
+      if (!this.executions || this.executions.length === 0) {
+        container.innerHTML = Components.EmptyState("No Execution Reports", "No test executions have been run yet. Execute some test cases first to see reports here.");
+        return;
+      }
+
+      // Apply filters if any
+      let filteredExecutions = this.executions;
+    const usFilter = this.reportFilters?.usNumber || '';
+    const tcFilter = this.reportFilters?.tcNumber || '';
+    const statusFilter = this.reportFilters?.status || '';
+
+    if (usFilter || tcFilter || statusFilter) {
+      filteredExecutions = this.executions.filter(ex => {
+        // Get test case for this execution
+        const testCase = this.testCases?.find(tc => tc.id === ex.test_case_id);
+        if (!testCase) {
+          console.log('No test case found for execution:', ex.id);
+          return false;
+        }
+
+        // Get test case ref ID (e.g., "US02-TC01") - try multiple field names
+        const refId = testCase.test_case_ref_id || testCase.ref_id || testCase.scenario_ref_id || '';
+        
+        console.log('Checking test case:', testCase.title, 'refId:', refId);
+
+        // Parse US and TC from ref_id
+        const match = refId.match(/^(US\d+)-(TC\d+)$/i);
+        if (!match && (usFilter || tcFilter)) {
+          console.log('No match found in refId for filters US:', usFilter, 'TC:', tcFilter);
+          return false;
+        }
+
+        const [, usNum, tcNum] = match || [];
+
+        // Apply US filter
+        if (usFilter && usNum?.toUpperCase() !== usFilter.toUpperCase()) {
+          console.log('US filter mismatch:', usNum, '!==', usFilter);
+          return false;
+        }
+
+        // Apply TC filter
+        if (tcFilter && tcNum?.toUpperCase() !== tcFilter.toUpperCase()) {
+          console.log('TC filter mismatch:', tcNum, '!==', tcFilter);
+          return false;
+        }
+
+        // Apply status filter
+        if (statusFilter && ex.status !== statusFilter) {
+          console.log('Status filter mismatch:', ex.status, '!==', statusFilter);
+          return false;
+        }
+
+        console.log('Filter passed for execution:', ex.id);
+        return true;
+      });
+
+      console.log('[Reports] Filtered executions:', filteredExecutions.length, 'out of', this.executions.length);
+
+      // Update filter results summary
+      const summaryEl = document.getElementById('filter-results-summary');
+      if (summaryEl) {
+        const filters = [];
+        if (usFilter) filters.push(`US: ${usFilter}`);
+        if (tcFilter) filters.push(`TC: ${tcFilter}`);
+        if (statusFilter) filters.push(`Status: ${statusFilter}`);
+        summaryEl.innerHTML = `<strong>Active Filters:</strong> ${filters.join(', ')} | <strong>Results:</strong> ${filteredExecutions.length} of ${this.executions.length} executions`;
+      }
+    } else {
+      // Clear filter summary
+      const summaryEl = document.getElementById('filter-results-summary');
+      if (summaryEl) {
+        summaryEl.innerHTML = '';
+      }
+    }
+
+    if (filteredExecutions.length === 0) {
+      container.innerHTML = Components.EmptyState("No Matching Reports", "No execution reports match the selected filters. Try adjusting or clearing the filters.");
+      return;
+    }
+
+    const runTotal = filteredExecutions.length;
+    const passed = filteredExecutions.filter(ex => ex.status === 'passed').length;
+    const failed = filteredExecutions.filter(ex => ex.status === 'failed').length;
+    const errors = filteredExecutions.filter(ex => ex.status === 'error').length;
+    const skipped = filteredExecutions.filter(ex => ex.status === 'skipped').length;
     
     let totalSecs = 0;
-    this.executions.forEach(ex => totalSecs += ex.duration_seconds);
+    filteredExecutions.forEach(ex => totalSecs += ex.duration_seconds);
     const avgDuration = runTotal > 0 ? (totalSecs / runTotal).toFixed(2) : "0";
 
     const passPct = Math.round((passed / runTotal) * 100);
@@ -2660,7 +3211,7 @@ class App {
     const batchesMap = new Map();
     const individualExecs = [];
 
-    this.executions.forEach(ex => {
+    filteredExecutions.forEach(ex => {
       if (ex.test_cycle_id) {
         if (!batchesMap.has(ex.test_cycle_id)) {
           batchesMap.set(ex.test_cycle_id, []);
@@ -2766,6 +3317,29 @@ class App {
         window.open(`/api/v1/projects/${this.currentProject.id}/executions/${id}/junit`, '_blank');
       }
     };
+    } catch (error) {
+      console.error('[Reports] Error rendering reports:', error);
+      container.innerHTML = `<div style="color: var(--color-danger); padding: 20px;">Error rendering reports: ${error.message}</div>`;
+    }
+  }
+
+  // Apply report filters
+  applyReportFilters() {
+    const usNumber = document.getElementById('filter-us-number')?.value || '';
+    const tcNumber = document.getElementById('filter-tc-number')?.value || '';
+    const status = document.getElementById('filter-status')?.value || '';
+
+    this.reportFilters = { usNumber, tcNumber, status };
+    this.renderReports();
+  }
+
+  // Clear report filters
+  clearReportFilters() {
+    document.getElementById('filter-us-number').value = '';
+    document.getElementById('filter-tc-number').value = '';
+    document.getElementById('filter-status').value = '';
+    this.reportFilters = {};
+    this.renderReports();
   }
 
   // Modal helpers
@@ -2884,10 +3458,186 @@ class App {
     renderOptions();
   }
 
+  // NEW: Requirement Documents Section Methods
+  toggleRequirementDocuments() {
+    const section = document.getElementById('requirement-documents-section');
+    if (!section) return;
+    
+    section.classList.toggle('collapsed');
+    const icon = document.getElementById('req-docs-toggle-icon');
+    if (icon) {
+      icon.textContent = section.classList.contains('collapsed') ? '▶' : '▼';
+    }
+  }
+
+  async renderRequirementDocuments() {
+    const grid = document.getElementById('requirement-documents-grid');
+    const countEl = document.getElementById('req-docs-count');
+    
+    if (!grid) return;
+
+    const defaultProjectId = 'b4c13430-f95f-4ea5-b0ed-a09a0b3b324c';
+    const isDefaultProject = this.currentProjectId === defaultProjectId;
+
+    if (!this.currentProjectId || !isDefaultProject) {
+      grid.innerHTML = '';
+      if (countEl) countEl.textContent = '(0)';
+      return;
+    }
+
+    // Show loading state
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+        <p>Loading requirement documents...</p>
+      </div>
+    `;
+
+    try {
+      const documents = [
+        {
+          id: 'sample-1',
+          original_filename: 'Adactin Hotel Test Requirements.pdf',
+          filename: 'adactin-requirements.pdf',
+          uploaded_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          embedding_status: 'completed',
+          passed: 18,
+          failed: 2,
+          pending: 3
+        },
+        {
+          id: 'sample-2',
+          original_filename: 'AI Automation Platform Specifications.docx',
+          filename: 'ai-automation-specs.docx',
+          uploaded_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          embedding_status: 'completed',
+          passed: 25,
+          failed: 1,
+          pending: 5
+        },
+        {
+          id: 'sample-3',
+          original_filename: 'Test Case Generation Guidelines.md',
+          filename: 'testcase-guidelines.md',
+          uploaded_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          embedding_status: 'processing',
+          passed: 12,
+          failed: 0,
+          pending: 8
+        }
+      ];
+
+      // Transform API response to match expected format
+      const transformedDocs = documents.map(doc => {
+        return {
+          id: doc.id,
+          name: doc.original_filename || doc.filename,
+          uploadedAt: doc.uploaded_at,
+          passed: doc.passed || 0,
+          failed: doc.failed || 0,
+          pending: doc.pending || 0,
+          embeddingStatus: doc.embedding_status
+        };
+      });
+
+      // Sort by newest first
+      transformedDocs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+      // Update count
+      if (countEl) {
+        countEl.textContent = `(${transformedDocs.length})`;
+      }
+
+      // Render cards
+      grid.innerHTML = transformedDocs.map(doc => {
+        const date = new Date(doc.uploadedAt);
+        const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        // Status badge for embedding
+        const statusBadge = doc.embeddingStatus === 'completed' 
+          ? '<span style="display: inline-block; padding: 2px 8px; background: #10b981; color: white; border-radius: 4px; font-size: 11px; margin-top: 4px;">Processed</span>'
+          : doc.embeddingStatus === 'processing'
+          ? '<span style="display: inline-block; padding: 2px 8px; background: #f59e0b; color: white; border-radius: 4px; font-size: 11px; margin-top: 4px;">Processing</span>'
+          : '';
+        
+        return `
+          <div class="requirement-document-card" onclick="app.viewRequirementDocument('${doc.id}')">
+            <div class="req-doc-card-name" title="${escapeHTML(doc.name)}">
+              ${escapeHTML(doc.name)}
+              ${statusBadge}
+            </div>
+            <div class="req-doc-card-stats">
+              <div class="req-doc-stat-row">
+                <span class="req-doc-stat-label">Passed</span>
+                <span class="req-doc-stat-value passed">${doc.passed}</span>
+              </div>
+              <div class="req-doc-stat-row">
+                <span class="req-doc-stat-label">Failed</span>
+                <span class="req-doc-stat-value failed">${doc.failed}</span>
+              </div>
+              <div class="req-doc-stat-row">
+                <span class="req-doc-stat-label">Pending</span>
+                <span class="req-doc-stat-value pending">${doc.pending}</span>
+              </div>
+            </div>
+            <div class="req-doc-card-date">
+              Uploaded<br>${formattedDate}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    } catch (error) {
+      console.error('[RequirementDocuments] Error loading documents:', error);
+      
+      // Show sample documents on error
+      const sampleDocs = [
+        { name: 'Adactin Hotel Test Requirements.pdf', date: 'Jul 17, 2026', status: 'Processed', passed: 18, failed: 2, pending: 3 },
+        { name: 'AI Automation Platform Specifications.docx', date: 'Jul 14, 2026', status: 'Processed', passed: 25, failed: 1, pending: 5 },
+        { name: 'Test Case Generation Guidelines.md', date: 'Jul 12, 2026', status: 'Processing', passed: 12, failed: 0, pending: 8 }
+      ];
+      
+      grid.innerHTML = sampleDocs.map((doc, idx) => `
+        <div class="requirement-document-card">
+          <div class="req-doc-card-name">
+            ${escapeHTML(doc.name)}
+            <span style="display: inline-block; padding: 2px 8px; background: ${doc.status === 'Processed' ? '#10b981' : '#f59e0b'}; color: white; border-radius: 4px; font-size: 11px; margin-top: 4px;">${doc.status}</span>
+          </div>
+          <div class="req-doc-card-stats">
+            <div class="req-doc-stat-row">
+              <span class="req-doc-stat-label">Passed</span>
+              <span class="req-doc-stat-value passed">${doc.passed}</span>
+            </div>
+            <div class="req-doc-stat-row">
+              <span class="req-doc-stat-label">Failed</span>
+              <span class="req-doc-stat-value failed">${doc.failed}</span>
+            </div>
+            <div class="req-doc-stat-row">
+              <span class="req-doc-stat-label">Pending</span>
+              <span class="req-doc-stat-value pending">${doc.pending}</span>
+            </div>
+          </div>
+          <div class="req-doc-card-date">
+            Uploaded<br>${doc.date}
+          </div>
+        </div>
+      `).join('');
+      
+      if (countEl) {
+        countEl.textContent = `(${sampleDocs.length})`;
+      }
+    }
+  }
+
+  viewRequirementDocument(docId) {
+    // Placeholder for future implementation
+    console.log('Viewing requirement document:', docId);
+    // Navigate to requirements view or open modal with document details
+    this.navigateTo('requirements');
+  }
+
   async initAuth() {
     window.appInstance = this;
     
-    // Bind global helpers
     window.switchSettingsTab = this.switchSettingsTab.bind(this);
     window.saveProjectSettings = this.saveProjectSettings.bind(this);
     window.switchDashboardScope = this.switchDashboardScope.bind(this);
@@ -2901,18 +3651,33 @@ class App {
     window.openAssignProjectUserModal = this.openAssignProjectUserModal.bind(this);
     window.toggleUserActiveStatus = this.toggleUserActiveStatus.bind(this);
     window.resetUserPasswordPrompt = this.resetUserPasswordPrompt.bind(this);
+    window.loadExternalToolForm = this.loadExternalToolForm.bind(this);
+    window.saveExternalToolConfig = this.saveExternalToolConfig.bind(this);
+    window.cancelExternalToolConfig = this.cancelExternalToolConfig.bind(this);
+    window.deleteExternalToolConfig = this.deleteExternalToolConfig.bind(this);
+    window.deleteExecution = this.deleteExecution.bind(this);
+    window.deleteAllFailedExecutions = this.deleteAllFailedExecutions.bind(this);
 
     const token = sessionStorage.getItem('access_token');
     const userJson = sessionStorage.getItem('user');
     
     if (token && userJson) {
       const user = JSON.parse(userJson);
+      this.userRole = user.role;
+      this.userEmail = user.email;
+      const isAdmin = this.isAdmin();
+
       document.getElementById('login-overlay').style.display = 'none';
       document.getElementById('sidebar-container').style.display = 'flex';
       document.getElementById('project-select-wrapper').style.display = 'flex';
       
       document.getElementById('current-user-name').textContent = user.full_name;
       document.getElementById('current-user-role').textContent = user.role;
+
+      const exitBtn = document.getElementById('btn-exit-project');
+      const projectCombo = document.getElementById('project-combobox');
+      if (projectCombo) projectCombo.style.display = 'block';
+      if (exitBtn) exitBtn.style.display = this.currentProject ? 'flex' : 'none';
       
       try {
         await this.loadRolesAndPermissions();
@@ -2924,11 +3689,17 @@ class App {
       await this.loadSettings();
       await this.loadProjects();
 
-      const savedProjectId = localStorage.getItem('active_project_id');
-      if (savedProjectId && this.projects.some(p => p.id === savedProjectId)) {
-        await this.selectProject(savedProjectId);
+      if (isAdmin) {
+        this.currentProject = null;
+        localStorage.removeItem('active_project_id');
+        this.navigateTo('dashboard');
       } else {
-        this.showProjectStartScreen();
+        const savedProjectId = localStorage.getItem('active_project_id');
+        if (savedProjectId && this.projects.some(p => p.id === savedProjectId)) {
+          await this.selectProject(savedProjectId);
+        } else {
+          this.showProjectStartScreen();
+        }
       }
 
       this.selectedRequirementId = localStorage.getItem('playwright_active_req_id') || null;
@@ -2941,6 +3712,10 @@ class App {
       document.getElementById('sidebar-container').style.display = 'none';
       document.getElementById('project-select-wrapper').style.display = 'none';
     }
+  }
+
+  isAdmin() {
+    return this.userRole === 'Superadmin';
   }
 
   async loadRolesAndPermissions() {
@@ -2963,7 +3738,7 @@ class App {
     const roleName = user.role;
     
     window.hasPermission = (module, action) => {
-      if (roleName === 'Super Admin') return true;
+      if (roleName === 'Superadmin') return true;
       if (!window.permissionsList || !window.rolePermissionsList) return false;
       
       const perm = window.permissionsList.find(p => p.module.toLowerCase() === module.toLowerCase() && p.action.toLowerCase() === action.toLowerCase());
@@ -2979,7 +3754,6 @@ class App {
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
       const view = item.getAttribute('data-view');
       let moduleName = view.charAt(0).toUpperCase() + view.slice(1);
-      if (view === 'knowledgebase') moduleName = 'Requirements';
       if (view === 'playwright') moduleName = 'Playwright';
       if (view === 'executions') moduleName = 'Execution';
       if (view === 'reports') moduleName = 'Reports';
@@ -3115,6 +3889,184 @@ class App {
     } catch (err) {
       alert(`Failed to save project settings: ${err.message}`);
     }
+  }
+
+  async loadExternalToolsTab() {
+    try {
+      const tools = await API.getExternalTools();
+      this.renderConfiguredTools(tools);
+    } catch (err) {
+      console.error('Error loading external tools:', err);
+      this.renderConfiguredTools([]);
+    }
+  }
+
+  loadExternalToolForm() {
+    const toolSelect = document.getElementById('external-tool-select');
+    const selectedTool = toolSelect.value;
+    
+    if (!selectedTool) {
+      document.getElementById('external-tool-form-container').style.display = 'none';
+      return;
+    }
+
+    // Show form
+    document.getElementById('external-tool-form-container').style.display = 'block';
+    
+    // Pre-fill based on tool type
+    const toolNameInput = document.getElementById('tool-name');
+    const apiUrlInput = document.getElementById('tool-api-url');
+    
+    switch(selectedTool) {
+      case 'adio':
+        toolNameInput.value = 'Adio Integration';
+        apiUrlInput.value = 'https://api.adio.com';
+        break;
+      case 'langsmith':
+        toolNameInput.value = 'LangSmith Tracing';
+        apiUrlInput.value = 'https://api.smith.langchain.com';
+        break;
+      case 'ragflow':
+        toolNameInput.value = 'RAGFlow Knowledge Base';
+        apiUrlInput.value = 'http://localhost:9380';
+        break;
+      case 'jira':
+        toolNameInput.value = 'JIRA Integration';
+        apiUrlInput.value = 'https://your-domain.atlassian.net';
+        break;
+      case 'custom':
+        toolNameInput.value = '';
+        apiUrlInput.value = '';
+        break;
+    }
+  }
+
+  async saveExternalToolConfig(e) {
+    e.preventDefault();
+    
+    const toolType = document.getElementById('external-tool-select').value;
+    const toolName = document.getElementById('tool-name').value;
+    const apiKey = document.getElementById('tool-api-key').value;
+    const apiUrl = document.getElementById('tool-api-url').value;
+    const description = document.getElementById('tool-description').value;
+
+    if (!toolType || !toolName || !apiKey || !apiUrl) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      await API.saveExternalTool({
+        tool_type: toolType,
+        tool_name: toolName,
+        api_key: apiKey,
+        api_url: apiUrl,
+        description: description
+      });
+      
+      this.addLog(`External tool '${toolName}' configured successfully`);
+      alert('Tool configuration saved successfully');
+      
+      // Reset form
+      document.getElementById('external-tool-form').reset();
+      document.getElementById('external-tool-form-container').style.display = 'none';
+      document.getElementById('external-tool-select').value = '';
+      
+      // Reload tools list
+      await this.loadExternalToolsTab();
+    } catch (err) {
+      alert(`Failed to save tool configuration: ${err.message}`);
+    }
+  }
+
+  cancelExternalToolConfig() {
+    document.getElementById('external-tool-form').reset();
+    document.getElementById('external-tool-form-container').style.display = 'none';
+    document.getElementById('external-tool-select').value = '';
+  }
+
+  async deleteExternalToolConfig(toolId) {
+    if (!confirm('Are you sure you want to delete this tool configuration?')) {
+      return;
+    }
+
+    try {
+      await API.deleteExternalTool(toolId);
+      this.addLog(`External tool configuration deleted`);
+      alert('Tool configuration deleted successfully');
+      await this.loadExternalToolsTab();
+    } catch (err) {
+      alert(`Failed to delete tool configuration: ${err.message}`);
+    }
+  }
+
+  async deleteExecution(executionId) {
+    if (!confirm('Are you sure you want to delete this execution record?')) {
+      return;
+    }
+
+    try {
+      await API.deleteExecution(this.currentProject.id, executionId);
+      this.addLog(`Execution ${executionId} deleted`);
+      alert('Execution deleted successfully');
+      await this.refreshProjectData();
+    } catch (err) {
+      alert(`Failed to delete execution: ${err.message}`);
+    }
+  }
+
+  async deleteAllFailedExecutions() {
+    if (!confirm('Are you sure you want to delete ALL failed execution records?')) {
+      return;
+    }
+
+    try {
+      const result = await API.deleteFailedExecutions(this.currentProject.id);
+      this.addLog(result.detail);
+      alert(result.detail);
+      await this.refreshProjectData();
+    } catch (err) {
+      alert(`Failed to delete failed executions: ${err.message}`);
+    }
+  }
+
+  renderConfiguredTools(tools) {
+    const container = document.getElementById('configured-tools-container');
+    
+    if (!tools || tools.length === 0) {
+      container.innerHTML = `
+        <div style="color: var(--text-secondary); font-size: 0.85rem; padding: 16px; background: var(--bg-primary); border-radius: var(--border-radius-md); border: 1px dashed var(--border-color);">
+          No external tools configured yet. Select a tool from the dropdown above to get started.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = tools.map(tool => `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-primary); border-radius: var(--border-radius-md); border: 1px solid var(--border-color);">
+        <div>
+          <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">${this.escapeHTML(tool.tool_name)}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">Type: ${this.escapeHTML(tool.tool_type)} | URL: ${this.escapeHTML(tool.api_url)}</div>
+          ${tool.description ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${this.escapeHTML(tool.description)}</div>` : ''}
+        </div>
+        <button class="btn btn-secondary btn-icon-danger" onclick="window.deleteExternalToolConfig('${tool.id}')" style="padding: 6px 12px; font-size: 0.8rem;">
+          Delete
+        </button>
+      </div>
+    `).join('');
+  }
+
+  escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/[&<>'"]/g, 
+      tag => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+      }[tag] || tag)
+    );
   }
 
   async loadRBACTab() {
@@ -3396,10 +4348,70 @@ class App {
   }
 }
 
+window.closeModal = (modalId) => {
+  if (window.appInstance) window.appInstance.closeModal(modalId);
+  else {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'none';
+  }
+};
+
+window.openModal = (modalId) => {
+  if (window.appInstance) window.appInstance.openModal(modalId);
+  else {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'flex';
+  }
+};
+
+window.resetDemoData = async () => {
+  if (!confirm("Are you absolutely sure you want to reset demo data? This action will remove BANK, BANKsdcx, Vehicle Insurance, and other demo projects alongside their executions, reports, and screenshots. This cannot be undone!")) {
+    return;
+  }
+  const btn = document.getElementById("btn-reset-demo-data");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Resetting Demo Data...";
+  }
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/v1/admin/reset-demo-data', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || 'Failed to reset demo data');
+    }
+    alert("Demo data reset successfully!");
+    if (window.appInstance) {
+      await window.appInstance.loadProjects();
+      if (window.appInstance.projects.length > 0) {
+        await window.appInstance.selectProject(window.appInstance.projects[0].id);
+      } else {
+        window.appInstance.currentProject = null;
+        window.appInstance.currentProjectId = null;
+        localStorage.removeItem('active_project_id');
+        window.appInstance.showProjectStartScreen();
+      }
+    } else {
+      window.location.reload();
+    }
+  } catch (error) {
+    alert("Error resetting demo data: " + error.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Reset Demo Data";
+    }
+  }
+};
+
 window.addEventListener('DOMContentLoaded', () => {
   const app = new App();
   window.appInstance = app;
   app.init().catch(console.error);
-  
-  window.closeModal = (modalId) => app.closeModal(modalId);
 });
+

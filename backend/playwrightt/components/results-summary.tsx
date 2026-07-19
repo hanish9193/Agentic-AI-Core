@@ -79,27 +79,10 @@ function mapEventToStep(event: TimelineEvent, index: number, executionId: string
     const eventLower = eventName.toLowerCase();
     const isPlaceholder = eventLower.includes("screenshot captured") || eventLower === "screenshot" || eventLower === "visual state capture";
 
-    if (isPlaceholder && (fnLower.includes("initial") || fnLower.includes("01-"))) {
-      title = "Initial Portal Loading";
-      action = "Navigate to the Tricentis Vehicle Insurance portal and initialize the test session.";
-      observation = "The application landing page loaded successfully. The vehicle data input form is displayed and interactive.";
-      result = "Portal loaded and ready for automation.";
-    } else if (isPlaceholder && (fnLower.includes("form-filled") || fnLower.includes("02-"))) {
-      title = "Vehicle Form Input Completion";
-      action = "Fill out all vehicle specifications: Make (BMW), Model (Scooter), Cylinder Capacity (150), Engine Performance (90), Date of Manufacture, Seats (2), Fuel (Petrol), List Price (25000), License Plate, and Annual Mileage.";
-      observation = "All input fields and selection dropdowns populated with correct test data parameters. No form validation errors.";
-      result = "Vehicle data form validation passed.";
-    } else if (isPlaceholder && (fnLower.includes("insurant-data") || fnLower.includes("03-"))) {
-      title = "Transition to Enter Insurant Data";
-      action = "Click the 'Next' action button to submit the vehicle form data and navigate to the Insurant details form.";
-      observation = "Form submitted successfully. Browser page navigated to the Enter Insurant Data portal page view.";
-      result = "Navigation to insurant form successful.";
-    } else {
-      title = isPlaceholder ? "Visual State Capture" : eventName;
-      action = isPlaceholder ? "Capture screenshot to record browser visual state." : `Execute test step: '${eventName}'.`;
-      observation = isPlaceholder ? `Visual state captured in file '${screenshotFilename}'.` : "Browser successfully navigated / interacted. Verified visual state layout.";
-      result = isPlaceholder ? "Screenshot image saved on disk." : "Step executed successfully.";
-    }
+    title = isPlaceholder ? "Visual State Capture" : eventName;
+    action = isPlaceholder ? "Capture screenshot to record browser visual state." : `Execute test step: '${eventName}'.`;
+    observation = isPlaceholder ? `Visual state captured in file '${screenshotFilename}'.` : "Browser successfully navigated / interacted. Verified visual state layout.";
+    result = isPlaceholder ? "Screenshot image saved on disk." : "Step executed successfully.";
   }
 
   let finalScreenshotUrl = screenshotUrl;
@@ -134,7 +117,7 @@ export function ResultsSummary({
   timeline,
   executionId,
 }: ResultsSummaryProps) {
-  const isPassed = status === 'completed' || status === 'passed';
+  const isPassed = status === 'completed';
   const statusColor = isPassed ? 'text-green-600' : 'text-red-600';
   const statusBgColor = isPassed ? 'bg-green-50' : 'bg-red-50';
   const statusBorder = isPassed ? 'border-green-200' : 'border-red-200';

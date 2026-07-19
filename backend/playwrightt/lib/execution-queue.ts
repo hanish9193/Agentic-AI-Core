@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export type ExecutionStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'stopped';
 
@@ -50,6 +52,76 @@ class ExecutionQueueManager {
   private maxConcurrent: number = 1;
   private pausedExecutions: Set<string> = new Set();
 
+  private static ACTIVE_FILE = path.join(process.cwd(), 'public', 'artifacts', 'active_executions.json');
+
+  private saveToDisk(executionId: string): void {
+    const execution = this.executions.get(executionId);
+    if (!execution) return;
+    try {
+      const dir = path.join(process.cwd(), 'public', 'artifacts', executionId);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(dir, 'metadata.json'), JSON.stringify(execution, null, 2), 'utf8');
+
+      // Update the shared active_executions.json file
+      let active: Record<string, Execution> = {};
+      const activePath = ExecutionQueueManager.ACTIVE_FILE;
+      const parentDir = path.dirname(activePath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+      if (fs.existsSync(activePath)) {
+        try {
+          active = JSON.parse(fs.readFileSync(activePath, 'utf8'));
+        } catch {}
+      }
+      active[executionId] = execution;
+      
+      // Prune old completed executions from active list to keep it fast
+      const keys = Object.keys(active);
+      if (keys.length > 50) {
+        keys.sort((a, b) => new Date(active[b].metadata.started).getTime() - new Date(active[a].metadata.started).getTime());
+        const pruned: Record<string, Execution> = {};
+        keys.slice(0, 50).forEach(k => {
+          pruned[k] = active[k];
+        });
+        active = pruned;
+      }
+
+      fs.writeFileSync(activePath, JSON.stringify(active, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[ExecutionQueueManager] Failed to write metadata to disk:', err);
+    }
+  }
+
+  private loadFromDisk(executionId: string): Execution | undefined {
+    try {
+      const activePath = ExecutionQueueManager.ACTIVE_FILE;
+      if (fs.existsSync(activePath)) {
+        const content = fs.readFileSync(activePath, 'utf8');
+        const active = JSON.parse(content);
+        if (active[executionId]) {
+          this.executions.set(executionId, active[executionId]);
+          return active[executionId];
+        }
+      }
+    } catch {}
+
+    try {
+      const filePath = path.join(process.cwd(), 'public', 'artifacts', executionId, 'metadata.json');
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const execution = JSON.parse(content);
+        this.executions.set(executionId, execution);
+        return execution;
+      }
+    } catch (err) {
+      // ignore
+    }
+    return undefined;
+  }
+
   createExecution(script: string, metadata?: Partial<ExecutionMetadata>): string {
     const executionId = uuidv4();
     const now = new Date().toISOString();
@@ -84,15 +156,34 @@ class ExecutionQueueManager {
 
     this.executions.set(executionId, execution);
     this.queue.push(executionId);
+    this.saveToDisk(executionId);
 
     return executionId;
   }
 
   getExecution(executionId: string): Execution | undefined {
-    return this.executions.get(executionId);
+    let exec = this.executions.get(executionId);
+    if (!exec) {
+      exec = this.loadFromDisk(executionId);
+    }
+    return exec;
   }
 
   getAllExecutions(): Execution[] {
+    try {
+      const activePath = ExecutionQueueManager.ACTIVE_FILE;
+      if (fs.existsSync(activePath)) {
+        try {
+          const content = fs.readFileSync(activePath, 'utf8');
+          const active = JSON.parse(content);
+          Object.keys(active).forEach(key => {
+            this.executions.set(key, active[key]);
+          });
+        } catch {}
+      }
+    } catch (err) {
+      console.error('[ExecutionQueueManager] Failed to read active executions from disk:', err);
+    }
     return Array.from(this.executions.values());
   }
 
@@ -120,6 +211,8 @@ class ExecutionQueueManager {
       details,
       type,
     });
+
+    this.saveToDisk(executionId);
   }
 
   setStatus(executionId: string, status: ExecutionStatus): void {
@@ -186,6 +279,7 @@ class ExecutionQueueManager {
     const execution = this.executions.get(executionId);
     if (execution) {
       execution.metadata.browserVersion = version;
+      this.saveToDisk(executionId);
     }
   }
 
@@ -194,6 +288,7 @@ class ExecutionQueueManager {
     if (!execution) return;
 
     execution.artifacts.logs.push(log);
+    this.saveToDisk(executionId);
   }
 
   addConsole(executionId: string, message: string): void {
@@ -201,6 +296,7 @@ class ExecutionQueueManager {
     if (!execution) return;
 
     execution.artifacts.console.push(message);
+    this.saveToDisk(executionId);
   }
 
   setError(executionId: string, error: string): void {

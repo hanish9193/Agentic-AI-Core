@@ -1,2 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="8" failures="1" errors="0" time="33.614"><testcase name="TestCase_ab3c07cb-5fde-4627-81ac-cf94c6d4d57e" classname="PlaywrightTests" time="33.614"><failure message="Assertion Failed">expect(...).toBeDefined is not a function</failure></testcase></testsuite></testsuites>

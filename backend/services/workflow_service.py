@@ -192,7 +192,7 @@ class WorkflowService:
 active_execution_events = {}
 
 
-def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID, test_case_id: UUID, execution_id: UUID = None) -> None:
+def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID, test_case_id: UUID, execution_id: UUID = None, background_tasks = None) -> None:
     tc_id_str = str(test_case_id)
     events = []
     active_execution_events[tc_id_str] = events
@@ -217,6 +217,10 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
         scenario = workflow_service.repo.get_scenario(test_case.scenario_id)
         if not scenario:
             raise ValueError(f"Scenario {test_case.scenario_id} not found")
+
+        # Trigger execution started JIRA sync asynchronously
+        from backend.services.jira_sync_service import run_with_background_tasks, sync_execution_started, sync_execution_finished
+        run_with_background_tasks(background_tasks, sync_execution_started, scenario.id)
 
         requirement = workflow_service.repo.get_requirement(scenario.requirement_id)
         if not requirement:
@@ -277,7 +281,7 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
         from backend.graph.workflow import build_graph
         from backend.models.operation import WorkflowOperation
         
-        exec_agent = ExecutionAgent(on_log=on_log_callback)
+        exec_agent = ExecutionAgent(on_log=on_log_callback, project_id=project_id)
         local_graph = build_graph(
             execution_agent=exec_agent,
             execution_analysis_agent=LoggingExecutionAnalysisAgent(),
@@ -299,7 +303,11 @@ def run_execution_and_stream(workflow_service: WorkflowService, project_id: UUID
         # Compile reports automatically via ReportService
         from backend.services.report_service import ReportService
         report_service = ReportService(workflow_service.repo)
-        report_service.compile_reports(project_id, result)
+        # Use engine selection method to respect feature flag
+        report_service.compile_reports_with_engine_selection(project_id, result)
+
+        # Trigger execution finished JIRA sync asynchronously
+        run_with_background_tasks(background_tasks, sync_execution_finished, scenario.id, result.id)
         
         log_event("Reporting", "Finalizing execution report", "Exporting JUnit XML and JSON report format...")
         

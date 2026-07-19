@@ -1,4 +1,93 @@
+"""
+JiraSyncAgent
+
+Purpose:
+    Synchronizes workflow artifacts (scenarios, test cases, execution results) with JIRA.
+    Creates user stories for scenarios and bug tickets for test failures.
+    Implements duplicate detection to avoid creating redundant JIRA issues.
+
+Responsibilities:
+    - Sync approved scenarios to JIRA as Story issues
+    - Sync failed test executions to JIRA as Bug issues
+    - Detect duplicate JIRA issues using label-based JQL queries
+    - Link execution results to existing bug tickets via comments
+    - Transition bug tickets through workflow states (In Progress, Ready for Testing)
+    - Upload execution artifacts (screenshots) to JIRA issues
+    - Update workflow state with JIRA issue keys and URLs
+    - Log audit trail for JIRA operations
+
+Workflow Position:
+    Triggered via dedicated operation routing (not in main pipeline):
+    
+    Operation: SYNC_USER_STORY
+    SupervisorAgent → JiraSyncAgent → END
+    
+    Operation: SYNC_BUG
+    ExecutionAgent → ExecutionAnalysisAgent → DefectManagementAgent → ReportAgent → END
+    (Alternate path: SupervisorAgent → JiraSyncAgent for manual sync)
+    
+    Operation: RETEST_BUG
+    SupervisorAgent → JiraSyncAgent → END
+
+Inputs (Operation-Dependent):
+    - SYNC_USER_STORY:
+        - state.generated_scenarios: Approved scenarios to sync
+    - SYNC_BUG:
+        - state.execution_results: Failed execution results
+        - state.generated_test_cases: Test case details for bug description
+    - RETEST_BUG:
+        - Test cases with open bugs (status check via JIRA API)
+
+Outputs:
+    - scenario.jira_issue_key: JIRA Story key
+    - scenario.jira_issue_url: Full JIRA issue URL
+    - scenario.jira_sync_status: "synced"
+    - test_case.jira_issue_key: JIRA Bug key
+    - test_case.jira_issue_url: Full JIRA issue URL
+    - test_case.jira_sync_status: "created" or "linked"
+    - test_case.status: Updated to RETEST_PENDING for bugs
+    - Audit log entries via log_audit()
+
+Duplicate Detection:
+    Uses label-based tagging strategy:
+    - Scenario: Label "scenario_{scenario.id}"
+    - Test Case: Label "test_{test_case.id}"
+    
+    JQL query: project = 'QA' AND labels = 'scenario_abc123' AND status != 'Closed'
+    
+    If existing issue found:
+    - Reuse existing issue key
+    - Add comment with new execution details
+    - Transition to appropriate state
+
+JIRA Issue Creation:
+    - User Story:
+        - Summary: "Scenario Story: {scenario_name}"
+        - Description: Scenario description + reviewer info
+        - Issue Type: Story
+        - Labels: ["platform_sync", "scenario_{id}"]
+        
+    - Bug:
+        - Summary: "Bug: Test Case Failure - {test_case_title}"
+        - Description: Test case details + runtime error log
+        - Issue Type: Bug
+        - Labels: ["platform_sync", "test_{id}", "bug"]
+        - Attachments: Screenshots from execution artifacts
+
+Dependencies:
+    - JiraService: JIRA REST API client
+    - ProjectRepository: Database access for scenarios and test cases
+    - AuditService: Audit logging for JIRA operations
+    - VaultService (indirect): Credentials for JIRA API
+
+Design Decision:
+    Duplicate detection is critical to avoid JIRA spam.
+    Labels provide reliable correlation across workflow runs.
+    Comments link multiple execution failures to single bug ticket.
+"""
+
 import logging
+import os
 from datetime import datetime, timezone
 from uuid import UUID
 from backend.agents.base import BaseAgent
@@ -12,12 +101,44 @@ logger = logging.getLogger("backend.agents.jira_sync_agent")
 
 
 class JiraSyncAgent(BaseAgent):
+    """
+    JIRA integration agent for workflow artifact synchronization.
+    
+    This agent does not call LLMs. It orchestrates JIRA API calls
+    and maintains issue linkage.
+    """
+    
     name = "Jira Sync Agent"
 
     def __init__(self, jira_service: JiraService | None = None):
+        """
+        Initialize JIRA sync agent.
+        
+        Args:
+            jira_service: JIRA service instance (injected for testing)
+        """
         self.jira_service = jira_service or JiraService()
 
     def run(self, state: WorkflowState, config: dict | None = None) -> WorkflowState:
+        """
+        Synchronize workflow artifacts with JIRA.
+        
+        Args:
+            state: Workflow state with scenarios, test cases, and execution results
+            config: LangGraph config containing operation and user_id
+            
+        Returns:
+            Updated state with JIRA issue keys and URLs populated
+            
+        Process:
+            1. Extract operation type from config (sync_user_story, sync_bug, retest_bug)
+            2. Resolve project context and JIRA project key
+            3. Route to appropriate sync handler:
+                - sync_user_story: _sync_scenarios_as_stories()
+                - sync_bug: _sync_failures_as_bugs()
+                - retest_bug: _process_bug_retests()
+            4. Log completion
+        """
         state.add_log(f"{self.name} started")
         
         configurable = config.get("configurable", {}) if config else {}

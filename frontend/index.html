@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Test Automation Platform</title>
+  <title>Agentic AI Automation</title>
   <link rel="stylesheet" href="/css/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/loader.min.js"></script>
@@ -17,17 +17,17 @@
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; color: var(--accent-primary);">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
         </svg>
-        <span>Platform</span>.ai
+        <span style="color: var(--text-primary);">Agentic </span><span style="color: white;">AI</span><span style="color: var(--text-primary);"> Automation</span>
       </div>
       <h2 style="font-size: 1.4rem; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Sign In</h2>
       <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 24px;">Access AI Test Automation Platform</p>
       
       <div id="login-error-msg" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; padding: 12px; border-radius: var(--border-radius-md); font-size: 0.85rem; margin-bottom: 20px; text-align: left;"></div>
       
-      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+      <form id="login-form">
         <div class="form-group" style="text-align: left; margin-bottom: 16px;">
           <label for="login-email" style="font-size: 0.8rem; margin-bottom: 6px; color: var(--text-secondary);">Email Address</label>
-          <input type="email" id="login-email" class="form-control" placeholder="admin@platform.ai" required style="padding: 12px; font-size: 0.9rem;" />
+          <input type="email" id="login-email" class="form-control" placeholder="admin@agenticai.com" required style="padding: 12px; font-size: 0.9rem;" />
         </div>
         <div class="form-group" style="text-align: left; margin-bottom: 24px;">
           <label for="login-password" style="font-size: 0.8rem; margin-bottom: 6px; color: var(--text-secondary);">Password</label>
@@ -45,54 +45,56 @@
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 24px; height: 24px; color: var(--accent-primary);">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
         </svg>
-        <span>Platform</span>.ai
+        <span style="color: var(--accent-primary);">Agentic </span><span style="color: white;">AI</span><span style="color: var(--accent-primary);"> Automation</span>
       </div>
     </div>
     
     <nav class="sidebar-nav">
-      <div class="nav-item active" data-view="dashboard">
+      <!-- Level 0: Global items -->
+      <div class="nav-item active" data-view="dashboard" data-level="0">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
         </svg>
         QA Testing Dashboard
       </div>
       
-      <div class="nav-item" data-view="requirements">
+      <div class="nav-item" data-view="project" data-level="0">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+        Project
+      </div>
+      
+      <!-- Level 1: Project-specific items (hidden by default) -->
+      <div class="nav-item nav-item-indented" data-view="requirements" data-level="1" style="display: none;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        Requirements
+        Requirement
       </div>
 
-      <div class="nav-item" data-view="knowledgebase">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
-        </svg>
-        Knowledge Base (RAG)
-      </div>
-
-      <div class="nav-item" data-view="scenarios">
+      <div class="nav-item nav-item-indented" data-view="scenarios" data-level="1" style="display: none;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
         </svg>
         Scenarios
       </div>
 
-      <div class="nav-item" data-view="testcases">
+      <div class="nav-item nav-item-indented" data-view="testcases" data-level="1" style="display: none;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
         </svg>
         Test Cases
       </div>
 
-      <div class="nav-item" data-view="playwright">
+      <div class="nav-item nav-item-indented" data-view="playwright" data-level="1" style="display: none;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         Test Automation
       </div>
 
-      <div class="nav-item" data-view="executions">
+      <div class="nav-item nav-item-indented" data-view="executions" data-level="1" style="display: none;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -100,26 +102,27 @@
         Execution Workspace
       </div>
 
-      <div class="nav-item" data-view="reports">
+      <div class="nav-item nav-item-indented" data-view="reports" data-level="1" style="display: none;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
         Reports
       </div>
 
-      <div class="nav-item" data-view="langsmith">
+      <!-- Level 0: Global items (continued) -->
+      <div class="nav-item" data-view="langsmith" data-level="0">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
         </svg>
         LangSmith
       </div>
 
-      <div class="nav-item" data-view="settings" style="margin-top: auto;">
+      <div class="nav-item" data-view="settings" data-level="0" style="margin-top: auto;">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
-        Settings
+        Master Settings
       </div>
     </nav>
   </aside>
@@ -129,34 +132,26 @@
     
     <!-- Top Navbar -->
     <header class="top-nav" id="project-select-wrapper" style="display: none;">
-      <div class="project-selector-container" style="display: flex; align-items: center; gap: 8px;">
-        <input type="text" id="project-select-search" class="form-control" placeholder="🔍 Search projects..." style="width: 160px; padding: 6px 12px; font-size: 0.85rem;" />
-        <select id="project-select" class="project-dropdown">
-          <option value="" disabled selected>▼ Select Project</option>
-        </select>
-        <select id="release-select" class="project-dropdown" style="width: 130px; display: none;">
-          <option value="" disabled selected>▼ Select Release</option>
-          <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create Release</option>
-        </select>
-        <select id="cycle-select" class="project-dropdown" style="width: 130px; display: none;">
-          <option value="" disabled selected>▼ Select Cycle</option>
-          <option value="__create_new__" style="color: var(--accent-primary); font-weight: 600;">+ Create Cycle</option>
-        </select>
-        <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; margin-left: 8px;">Framework:</span>
-        <select id="project-framework-select" class="form-control" style="width: 120px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-          <option value="playwright">Playwright</option>
-          <option value="selenium">Selenium</option>
-          <option value="cucumber">Cucumber</option>
-        </select>
-        <button class="btn btn-secondary" onclick="openModal('create-project-modal')" style="padding: 6px 12px; font-size: 0.85rem; height: 32px;">+ New Workspace</button>
+      <div class="project-selector-container" style="display: flex; align-items: center; gap: 12px;">
+        <select id="project-select" style="display: none;"></select>
+        <div id="project-combobox" class="project-combobox" style="position: relative;">
+          <div id="project-combobox-display" class="project-combobox-display" tabindex="0" style="cursor: pointer; display: flex; align-items: center; gap: 6px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 6px 12px; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); min-width: 200px; height: 32px;">
+            <svg style="width: 14px; height: 14px; color: var(--text-secondary); flex-shrink: 0;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            <span id="project-combobox-label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Select Project</span>
+            <svg style="width: 12px; height: 12px; color: var(--text-secondary); margin-left: auto; flex-shrink: 0;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div id="project-combobox-dropdown" class="project-combobox-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 280px; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 1000; overflow: hidden;">
+            <input id="project-combobox-search" type="text" placeholder="Search projects..." style="width: 100%; padding: 8px 12px; border: none; border-bottom: 1px solid var(--border-color); background-color: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; font-family: var(--font-family); outline: none;" />
+            <div id="project-combobox-list" class="project-combobox-list" style="max-height: 240px; overflow-y: auto;"></div>
+          </div>
+        </div>
+        <select id="release-select" class="project-dropdown" style="display: none; background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 32px 6px 12px; border-radius: var(--border-radius-md); font-size: 0.85rem; font-weight: 500; cursor: pointer; outline: none; min-width: 160px; height: 32px; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23666'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px;"></select>
+        <select id="cycle-select" class="project-dropdown" disabled style="display: none; background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 32px 6px 12px; border-radius: var(--border-radius-md); font-size: 0.85rem; font-weight: 500; cursor: pointer; outline: none; min-width: 160px; height: 32px; opacity: 0.5; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23666'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px;"></select>
       </div>
-      
-      <div class="top-nav-actions" style="display: flex; align-items: center; gap: 16px;">
-        <button class="btn btn-danger" id="btn-exit-project" style="display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 8px 16px; border-radius: var(--border-radius-md); height: 36px; font-size: 0.85rem;">
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 16px; height: 16px;">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Exit Project
+      <div class="top-nav-actions" style="display: flex; align-items: center; gap: 16px; margin-left: auto;">
+        <button class="btn btn-secondary" id="btn-exit-project" title="Exit Project" style="display: none; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem; height: 32px; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--border-radius-md); cursor: pointer;">
+          <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          <span class="btn-text">Exit Project</span>
         </button>
         <button class="btn btn-secondary" id="theme-toggle-btn" title="Toggle Theme" style="padding: 8px; border-radius: 50%; min-width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;">
           <svg id="theme-toggle-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 18px; height: 18px; color: var(--text-primary);">
@@ -180,6 +175,19 @@
       <!-- VIEW: Project Start -->
       <div class="view-panel" id="project-start-view"></div>
 
+      <!-- VIEW: Project -->
+      <div class="view-panel" id="project-view" style="display: none;">
+        <div class="page-header">
+          <h1>Projects</h1>
+          <input type="text" id="project-search" placeholder="Search projects..." 
+                 class="form-control" style="max-width: 300px;" />
+        </div>
+        <p class="page-description">Select a project to continue or create a new one.</p>
+        <div id="project-grid-container" class="project-grid">
+          <!-- Project cards will be populated dynamically -->
+        </div>
+      </div>
+
       <!-- VIEW: Dashboard -->
       <div class="view-panel active" id="dashboard-view">
         
@@ -189,10 +197,6 @@
             <h1 style="font-size: 1.8rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">QA Testing Dashboard</h1>
             <div style="display: flex; align-items: center; gap: 24px; font-size: 0.9rem; color: var(--text-secondary); margin-top: 8px; flex-wrap: wrap;">
               <span id="dashboard-project-subtitle" style="color: var(--accent-teal); font-weight: 600;">Project: Loading...</span>
-              <span style="display: inline-flex; align-items: center; gap: 4px;">
-                <span style="background-color: var(--accent-primary); width: 8px; height: 8px; border-radius: 50%;"></span>
-                Framework: <strong id="dashboard-framework-lbl" style="color: var(--text-primary);">Playwright</strong>
-              </span>
               <span>Last Execution: <strong id="dashboard-last-exec-lbl" style="color: var(--text-primary);">Today 09:35 AM</strong></span>
             </div>
           </div>
@@ -200,12 +204,12 @@
 
         <div class="dashboard-scope-tabs" style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
           <button id="btn-db-scope-project" class="tab-btn active" onclick="window.switchDashboardScope('project')" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 6px 16px; font-weight: 600; font-size: 0.85rem; border-bottom: 2px solid var(--accent-primary); border-radius: 0;">Project Overview</button>
-          <button id="btn-db-scope-release" class="tab-btn" onclick="window.switchDashboardScope('release')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 16px; font-weight: 500; font-size: 0.85rem; border-radius: 0;">Release Scope</button>
-          <button id="btn-db-scope-cycle" class="tab-btn" onclick="window.switchDashboardScope('cycle')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 16px; font-weight: 500; font-size: 0.85rem; border-radius: 0;">Cycle Scope</button>
+          <button id="btn-db-scope-release" class="tab-btn" onclick="window.switchDashboardScope('release')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 16px; font-weight: 500; font-size: 0.85rem; border-radius: 0;">Release Info</button>
+          <button id="btn-db-scope-cycle" class="tab-btn" onclick="window.switchDashboardScope('cycle')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 16px; font-weight: 500; font-size: 0.85rem; border-radius: 0;">Test Cycle Info</button>
         </div>
 
         <!-- Row 1: KPI Cards -->
-        <div class="dashboard-grid kpi-grid" id="dashboard-metrics-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="dashboard-grid kpi-grid" id="dashboard-metrics-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 16px; margin-bottom: 24px;">
           <!-- KPI Cards populated dynamically (6 equal columns) -->
         </div>
 
@@ -231,6 +235,20 @@
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        <!-- NEW: Requirement Documents Section -->
+        <div class="section-card" id="requirement-documents-section" style="margin-bottom: 24px;">
+          <div class="requirement-documents-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="app.toggleRequirementDocuments()">
+            <h2 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+              <span id="req-docs-toggle-icon">▼</span>
+              <span>Requirement Documents</span>
+              <span id="req-docs-count" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">(0)</span>
+            </h2>
+          </div>
+          <div id="requirement-documents-grid" class="requirement-documents-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 20px;">
+            <!-- Document cards will be rendered here dynamically -->
           </div>
         </div>
 
@@ -349,7 +367,7 @@
       <!-- VIEW: Requirements -->
       <div class="view-panel" id="requirements-view">
         <div class="page-header">
-          <h1>Requirements</h1>
+          <h1>Requirement</h1>
           <div class="gap-12" style="display: flex; align-items: center; gap: 12px;">
             <div style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: var(--border-radius); overflow: hidden; height: 38px;">
               <input type="text" id="jira-story-key-input" placeholder="JIRA Story Key (e.g. QA-101)" style="border: none; padding: 0 12px; font-size: 0.85rem; background: var(--bg-secondary); color: var(--text-primary); outline: none; width: 220px; height: 100%;" />
@@ -390,7 +408,7 @@
         
         <div class="form-group" style="max-width: 400px; margin-bottom: 24px; gap: 8px;">
           <label for="scenario-req-search">Search Requirement</label>
-          <input type="text" id="scenario-req-search" class="form-control" placeholder="🔍 Search requirement by title, ID, desc..." style="padding: 6px 12px; font-size: 0.85rem;" />
+          <input type="text" id="scenario-req-search" class="form-control" placeholder="Search requirement by title, ID, desc..." style="padding: 6px 12px; font-size: 0.85rem;" />
           <label for="scenario-req-select">Select Active Requirement</label>
           <select id="scenario-req-select" class="form-control">
             <option value="" disabled selected>▼ Choose Requirement</option>
@@ -402,7 +420,6 @@
         </div>
       </div>
 
-      <!-- VIEW: Test Cases -->
       <div class="view-panel" id="testcases-view">
         <div class="page-header">
           <h1>Test Cases Workspace</h1>
@@ -414,9 +431,13 @@
           </div>
         </div>
 
+        <div id="testcases-jira-trace-container" style="display: none; background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 16px; margin-bottom: 24px; font-size: 0.9rem;">
+          <!-- Populated dynamically -->
+        </div>
+
         <div class="form-group" style="max-width: 400px; margin-bottom: 24px; gap: 8px;">
           <label for="tc-req-search">Search Requirement</label>
-          <input type="text" id="tc-req-search" class="form-control" placeholder="🔍 Search requirement by title, ID, desc..." style="padding: 6px 12px; font-size: 0.85rem;" />
+          <input type="text" id="tc-req-search" class="form-control" placeholder="Search requirement by title, ID, desc..." style="padding: 6px 12px; font-size: 0.85rem;" />
           <label for="tc-req-select">Select Active Requirement</label>
           <select id="tc-req-select" class="form-control">
             <option value="" disabled selected>▼ Choose Requirement</option>
@@ -427,9 +448,19 @@
           <!-- Loaded dynamically -->
         </div>
 
-        <div id="testcase-bulk-script-container" style="display: none; margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
-          <button class="btn btn-primary" id="btn-generate-all-scripts" style="padding: 10px 20px; font-size: 0.9rem;">Generate Playwright Scripts for All Approved Test Cases</button>
-          <button class="btn btn-primary" id="btn-run-selected-batch" style="padding: 10px 20px; font-size: 0.9rem; background-color: var(--color-success); border-color: var(--color-success);">Run Selected Batch</button>
+        <div id="testcase-framework-footer" style="margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Framework:</span>
+            <select id="project-framework-select" class="form-control" style="width: 120px; padding: 4px 8px; font-size: 0.85rem; height: 36px;">
+              <option value="playwright">Playwright</option>
+              <option value="selenium">Selenium</option>
+              <option value="cucumber">Cucumber</option>
+            </select>
+          </div>
+          <div id="testcase-bulk-script-container" style="display: none; gap: 12px;">
+            <button class="btn btn-primary" id="btn-generate-all-scripts" style="padding: 10px 20px; font-size: 0.9rem;">Generate Playwright Scripts for All Approved Test Cases</button>
+            <button class="btn btn-primary" id="btn-run-selected-batch" style="padding: 10px 20px; font-size: 0.9rem; background-color: var(--color-success); border-color: var(--color-success);">Run Selected Batch</button>
+          </div>
         </div>
       </div>
 
@@ -531,28 +562,43 @@
           <h1>Execution Reports</h1>
         </div>
         <p class="page-description">Aggregated status indicators and JUnit XML document logs generated automatically post execution run.</p>
+        
+        <!-- Filter Controls -->
+        <div class="section-card" style="margin-bottom: 24px;">
+          <h3 style="margin-bottom: 16px; font-size: 1.1rem; color: var(--text-primary);">Filter Reports</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 16px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="filter-us-number" style="font-size: 0.85rem; margin-bottom: 6px; color: var(--text-secondary);">User Story (US)</label>
+              <select id="filter-us-number" class="form-control" style="padding: 10px; font-size: 0.9rem;">
+                <option value="">All User Stories</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="filter-tc-number" style="font-size: 0.85rem; margin-bottom: 6px; color: var(--text-secondary);">Test Case (TC)</label>
+              <select id="filter-tc-number" class="form-control" style="padding: 10px; font-size: 0.9rem;">
+                <option value="">All Test Cases</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="filter-status" style="font-size: 0.85rem; margin-bottom: 6px; color: var(--text-secondary);">Status</label>
+              <select id="filter-status" class="form-control" style="padding: 10px; font-size: 0.9rem;">
+                <option value="">All Statuses</option>
+                <option value="passed">Passed</option>
+                <option value="failed">Failed</option>
+                <option value="error">Error</option>
+                <option value="skipped">Skipped</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary" onclick="app.applyReportFilters()" style="padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;">Apply Filters</button>
+              <button class="btn btn-secondary" onclick="app.clearReportFilters()" style="padding: 10px 20px; font-size: 0.9rem; white-space: nowrap;">Clear</button>
+            </div>
+          </div>
+          <div id="filter-results-summary" style="margin-top: 12px; font-size: 0.85rem; color: var(--text-secondary);"></div>
+        </div>
+        
         <div id="reports-workspace-container">
           <!-- Loaded dynamically -->
-        </div>
-      </div>
-
-      <!-- VIEW: Knowledge Base -->
-      <div class="view-panel" id="knowledgebase-view">
-        <div class="page-header">
-          <h1>Knowledge Base</h1>
-        </div>
-        <p class="page-description">RAG parsing pipeline files database. Upload files to process context references.</p>
-        
-        <div class="form-group" style="margin-bottom: 32px;">
-          <label>Drag & Drop Document Upload</label>
-          <div id="kb-dropzone" style="border: 2px dashed var(--border-color); padding: 40px; border-radius: var(--border-radius-lg); text-align: center; color: var(--text-muted); cursor: pointer; transition: all var(--transition-fast);">
-            Drag and drop target files here to parse (PDF, DOCX, XLSX, CSV, TXT)
-            <div style="margin-top: 8px; font-size: 0.75rem; background-color: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid var(--border-color);">RAG Extraction Active</div>
-          </div>
-        </div>
-
-        <div id="documents-list-container">
-          <!-- Document metadata table -->
         </div>
       </div>
 
@@ -575,10 +621,12 @@
         
         <div class="settings-tabs" style="display: flex; gap: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
           <button class="tab-btn active" onclick="switchSettingsTab('general')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">General Settings</button>
+          <button class="tab-btn" onclick="switchSettingsTab('external-tools')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">External Tools</button>
           <button class="tab-btn" onclick="switchSettingsTab('project')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Project Settings</button>
           <button class="tab-btn" onclick="switchSettingsTab('rbac')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Access Rights (RBAC)</button>
           <button class="tab-btn" onclick="switchSettingsTab('users')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">User Management</button>
           <button class="tab-btn" onclick="switchSettingsTab('audit')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Audit Logs</button>
+          <button class="tab-btn" onclick="switchSettingsTab('admin')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 16px; font-weight: 500; font-size: 0.9rem; position: relative; bottom: -9px; border-bottom: 2px solid transparent;">Admin Controls</button>
         </div>
 
         <!-- Tab 1: General Settings Form -->
@@ -748,6 +796,70 @@
           </form>
         </div>
 
+        <!-- Tab: External Tools Integration -->
+        <div id="settings-tab-external-tools" class="settings-tab-content">
+          <p class="page-description">Integrate external tools and services by providing API keys and configuration. Settings are saved to .env file.</p>
+          
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 24px; max-width: 800px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <h2 style="font-size: 1.1rem; font-weight: 600;">External Tools Integration</h2>
+            </div>
+            
+            <div id="external-tools-container">
+              <!-- Tool Selection -->
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label for="external-tool-select" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">Select Tool to Configure</label>
+                <select id="external-tool-select" class="form-control" onchange="window.loadExternalToolForm()" style="width: 100%;">
+                  <option value="">-- Choose a tool --</option>
+                  <option value="adio">Adio</option>
+                  <option value="langsmith">LangSmith</option>
+                  <option value="ragflow">RAGFlow</option>
+                  <option value="jira">JIRA</option>
+                  <option value="custom">Custom Tool</option>
+                </select>
+              </div>
+
+              <!-- Dynamic Tool Configuration Form -->
+              <div id="external-tool-form-container" style="display: block;">
+                <form id="external-tool-form" onsubmit="window.saveExternalToolConfig(event)">
+                  <div class="form-group" style="margin-bottom: 16px;">
+                    <label for="tool-name" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">Tool Name</label>
+                    <input type="text" id="tool-name" class="form-control" placeholder="e.g., My Adio Instance" style="width: 100%;" required />
+                  </div>
+                  
+                  <div class="form-group" style="margin-bottom: 16px;">
+                    <label for="tool-api-key" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">API Key</label>
+                    <input type="password" id="tool-api-key" class="form-control" placeholder="••••••••" style="width: 100%;" required />
+                  </div>
+                  
+                  <div class="form-group" style="margin-bottom: 16px;">
+                    <label for="tool-api-url" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">API URL</label>
+                    <input type="text" id="tool-api-url" class="form-control" placeholder="https://api.example.com" style="width: 100%;" required />
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 24px;">
+                    <label for="tool-description" style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 500;">Description (Optional)</label>
+                    <textarea id="tool-description" class="form-control" placeholder="Brief description of this tool integration..." style="width: 100%; min-height: 80px;"></textarea>
+                  </div>
+
+                  <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="window.cancelExternalToolConfig()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Configured Tools List -->
+              <div id="configured-tools-list" style="margin-top: 24px;">
+                <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 12px;">Configured Tools</h3>
+                <div id="configured-tools-container" style="display: flex; flex-direction: column; gap: 12px;">
+                  <!-- Dynamically populated -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Tab 5: Project Settings (Target Application Credentials) -->
         <div id="settings-tab-project" class="settings-tab-content">
           <p class="page-description">Configure target URL and automation credentials for the currently selected project workspace.</p>
@@ -859,7 +971,22 @@
                   <!-- Dynamically populated -->
                 </tbody>
               </table>
-            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: Admin Actions -->
+        <div id="settings-tab-admin" class="settings-tab-content">
+          <p class="page-description">Administrative operations and workspace maintenance utilities.</p>
+          <div style="background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: var(--border-radius-lg); padding: 24px; max-width: 600px;">
+            <h3 style="color: #ef4444; margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+              <span>⚠️</span> Danger Zone
+            </h3>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6; margin-bottom: 16px;">
+              Resetting demo data will delete all sample projects (BANK, BANKsdcx, Vehicle Insurance, etc.) and clean up orphaned executions, reports, and screenshots from the system. Users, roles, settings, and audit logs will remain intact.
+            </p>
+            <button class="btn btn-danger" id="btn-reset-demo-data" style="background-color: #ef4444; border-color: #ef4444; color: white; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" onclick="resetDemoData()">
+              Reset Demo Data
+            </button>
           </div>
         </div>
 
@@ -1070,7 +1197,7 @@
         </div>
         <div class="form-group">
           <label for="new-user-email">Email Address</label>
-          <input type="email" id="new-user-email" class="form-control" placeholder="e.g. alice@platform.ai" required />
+          <input type="email" id="new-user-email" class="form-control" placeholder="e.g. alice@agenticai.com" required />
         </div>
         <div class="form-group">
           <label for="new-user-password">Initial Password</label>
@@ -1079,7 +1206,7 @@
         <div class="form-group">
           <label for="new-user-role">Global Role</label>
           <select id="new-user-role" class="form-control">
-            <option value="Super Admin">Super Admin</option>
+            <option value="Superadmin">Superadmin</option>
             <option value="Admin">Admin</option>
             <option value="Project Manager" selected>Project Manager</option>
             <option value="Tester">Tester</option>
@@ -1121,6 +1248,35 @@
     </div>
   </div>
 
-  <script type="module" src="/js/app.js?v=3"></script>
+  <script type="module" src="/js/app.js?v=12"></script>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      if (window.handleLoginSubmit) {
+        window.handleLoginSubmit(e);
+        return;
+      }
+      var email = document.getElementById('login-email').value.trim();
+      var password = document.getElementById('login-password').value;
+      var errorEl = document.getElementById('login-error-msg');
+      errorEl.style.display = 'none';
+      try {
+        var res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, password: password })
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
+        sessionStorage.setItem('access_token', data.access_token);
+        sessionStorage.setItem('refresh_token', data.refresh_token);
+        sessionStorage.setItem('user', JSON.stringify(data.user));
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+    });
+  </script>
 </body>
 </html>

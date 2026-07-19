@@ -29,6 +29,7 @@ _PROVIDER_PREFIXES: dict[str, str] = {
     "openai": "",
     "ollama": "ollama/",
     "groq": "groq/",
+    "nvidia": "openai/",
 }
 
 # How each provider is told "respond with JSON". These are NOT
@@ -41,6 +42,7 @@ _PROVIDER_PREFIXES: dict[str, str] = {
 # don't assume the OpenAI-style kwarg works everywhere.
 _JSON_MODE_KWARGS: dict[str, dict] = {
     "ollama": {"format": "json"},
+    "nvidia": {"response_format": {"type": "json_object"}},
 }
 _DEFAULT_JSON_MODE_KWARGS = {"response_format": {"type": "json_object"}}
 
@@ -116,6 +118,8 @@ class LLMService:
             response = completion(
                 model=self._model_string(),
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                api_base=self.config.api_base,
+                api_key=self.config.api_key,
                 **kwargs,
             )
         except Exception as exc:
@@ -129,6 +133,7 @@ class LLMService:
         user: str,
         response_model: type[T],
         system: str = DEFAULT_STRUCTURED_SYSTEM_PROMPT,
+        max_retries: int = 3,
         **kwargs,
     ) -> T:
         """Completion constrained to JSON, validated into response_model.
@@ -137,20 +142,93 @@ class LLMService:
         OpenAI's json_object mode rejects a bare top-level array. Wrap
         list output in a small model with one field, e.g. {"items": [...]}.
         """
-        try:
-            response = completion(
-                model=self._model_string(),
-                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                **self._json_mode_kwargs(),
-                **kwargs,
-            )
-        except Exception as exc:
-            raise LLMServiceError(f"LLM call failed ({self.config.provider}/{self.config.model}): {exc}") from exc
+        import json
+        import time
+        
+        last_exception = None
+        last_content = ""
+        
+        for attempt in range(max_retries):
+            try:
+                try:
+                    schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+                    user_prompt = f"{user}\n\nYou MUST respond with a JSON object that adheres strictly to this JSON Schema:\n{schema_json}\n\nDo not include any extra keys, markdown tags, or explanations outside the JSON object."
+                    
+                    response = completion(
+                        model=self._model_string(),
+                        messages=[{"role": "system", "content": system}, {"role": "user", "content": user_prompt}],
+                        api_base=self.config.api_base,
+                        api_key=self.config.api_key,
+                        **self._json_mode_kwargs(),
+                        **kwargs,
+                    )
+                except Exception as exc:
+                    raise LLMServiceError(f"LLM call failed ({self.config.provider}/{self.config.model}): {exc}") from exc
 
-        content = response.choices[0].message.content
-        try:
-            return response_model.model_validate_json(content)
-        except Exception as exc:
-            raise LLMServiceError(
-                f"LLM response did not match {response_model.__name__}: {exc}\nRaw content: {content}"
-            ) from exc
+                content = response.choices[0].message.content.strip()
+                last_content = content
+                # Strip markdown fences if present
+                if content.startswith("```"):
+                    lines = content.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    content = "\n".join(lines).strip()
+                # Strip any non-JSON prefix before the first '{' or '['
+                brace_pos = content.find("{")
+                bracket_pos = content.find("[")
+                first_pos = brace_pos if brace_pos >= 0 else bracket_pos
+                if first_pos is not None and first_pos >= 0:
+                    content = content[first_pos:]
+                if content and content[-1] not in ("}", "]"):
+                    # Trim trailing non-JSON characters
+                    last_brace = content.rfind("}")
+                    last_bracket = content.rfind("]")
+                    last_pos = last_brace if last_brace >= last_bracket else last_bracket
+                    if last_pos >= 0:
+                        content = content[:last_pos + 1]
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError:
+                    pass  # let model_validate_json handle the error
+                else:
+                    if "test_cases" in parsed and isinstance(parsed["test_cases"], list):
+                        for tc in parsed["test_cases"]:
+                            if isinstance(tc.get("steps"), str):
+                                tc["steps"] = [tc["steps"]]
+                            elif "steps" not in tc:
+                                tc["steps"] = ["Execute test case"]
+                            if "expected_result" not in tc:
+                                tc["expected_result"] = "Test completed as expected"
+                            if "preconditions" not in tc:
+                                tc["preconditions"] = []
+                            if "test_data" not in tc:
+                                tc["test_data"] = {}
+                    if "scenarios" in parsed and isinstance(parsed["scenarios"], list):
+                        priority_map = {"critical": "high", "crit": "high", "critical high": "high", "highest": "high",
+                                        "lowest": "low", "lowest priority": "low"}
+                        for sc in parsed["scenarios"]:
+                            p = sc.get("priority")
+                            if isinstance(p, str) and p.lower().strip() in priority_map:
+                                sc["priority"] = priority_map[p.lower().strip()]
+                            if "tags" not in sc:
+                                sc["tags"] = []
+                    content = json.dumps(parsed)
+
+                return response_model.model_validate_json(content)
+            except Exception as exc:
+                last_exception = exc
+                logger.warning(
+                    f"structured_generate attempt {attempt + 1} failed: {exc}. Retrying..."
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+        
+        # If we reach here, all attempts failed
+        logger.warning(
+            "structured_generate raw output (first 2000 chars): %s", last_content[:2000]
+        )
+        raise LLMServiceError(
+            f"LLM response did not match {response_model.__name__} after {max_retries} attempts: {last_exception}\nRaw content: {last_content}"
+        )

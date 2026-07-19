@@ -3,13 +3,30 @@ from backend.database.db_models import UserDB, RoleDB, PermissionDB, RolePermiss
 from backend.services.auth_service import hash_password
 from backend.config.settings import get_settings
 
-DEFAULT_ROLES = ["Super Admin", "Admin", "Project Manager", "Tester", "Stakeholder"]
+DEFAULT_ROLES = ["Superadmin", "Admin", "Project Manager", "Tester", "Stakeholder"]
 
-MODULES = ["Dashboard", "Requirements", "Scenarios", "TestCases", "Playwright", "Executions", "Reports", "Settings", "Users"]
+MODULES = ["Dashboard", "Requirements", "Scenarios", "TestCases", "Playwright", "Executions", "Reports", "Settings", "Users", "Roles", "Permissions"]
 ACTIONS = ["view", "create", "edit", "delete", "approve"]
 
 def seed_database(db: Session) -> None:
     settings = get_settings()
+
+    # 0. Migrate renamed roles using raw SQL to avoid ORM conflicts
+    from sqlalchemy import text
+    old_to_new = {"Super Admin": "Superadmin"}
+    for old_name, new_name in old_to_new.items():
+        old_role = db.query(RoleDB).filter(RoleDB.name == old_name).first()
+        new_role = db.query(RoleDB).filter(RoleDB.name == new_name).first()
+        if old_role and new_role:
+            db.execute(text("UPDATE role_permissions SET role_id = :new_id WHERE role_id = :old_id AND permission_id NOT IN (SELECT permission_id FROM role_permissions WHERE role_id = :new_id)"), {"new_id": new_role.id, "old_id": old_role.id})
+            db.execute(text("DELETE FROM role_permissions WHERE role_id = :old_id"), {"old_id": old_role.id})
+            db.execute(text("UPDATE users SET role = :new_name WHERE role = :old_name"), {"new_name": new_name, "old_name": old_name})
+            db.execute(text("DELETE FROM roles WHERE id = :old_id"), {"old_id": old_role.id})
+            db.commit()
+        elif old_role and not new_role:
+            db.execute(text("UPDATE roles SET name = :new_name WHERE name = :old_name"), {"new_name": new_name, "old_name": old_name})
+            db.execute(text("UPDATE users SET role = :new_name WHERE role = :old_name"), {"new_name": new_name, "old_name": old_name})
+            db.commit()
     
     # 1. Seed Roles
     existing_roles = {r.name for r in db.query(RoleDB).all()}
@@ -39,7 +56,6 @@ def seed_database(db: Session) -> None:
     db.commit()
 
     # 3. Seed Role-Permissions Mapping
-    # Fetch all permissions to ensure cache is hot
     all_perms = db.query(PermissionDB).all()
     perm_lookup = {(p.module, p.action): p.id for p in all_perms}
 
@@ -55,10 +71,10 @@ def seed_database(db: Session) -> None:
                 rp = RolePermissionDB(role_id=role_id, permission_id=perm_id)
                 db.add(rp)
 
-    # Super Admin gets all permissions
+    # Superadmin gets all permissions
     for module in MODULES:
         for action in ACTIONS:
-            assign_perm("Super Admin", module, action)
+            assign_perm("Superadmin", module, action)
 
     # Admin gets everything except Settings and Users modification
     for module in MODULES:
@@ -88,14 +104,13 @@ def seed_database(db: Session) -> None:
     db.commit()
 
     # 4. Seed Development Users
-    # Seed if app environment is development or testing
     if settings.app_env in ["development", "testing"]:
         dev_users = [
-            {"email": "dev@platform.ai", "name": "Super Admin User", "pass": "devpassword", "role": "Super Admin"},
-            {"email": "admin@platform.ai", "name": "Admin User", "pass": "adminpassword", "role": "Admin"},
-            {"email": "pm@platform.ai", "name": "Project Manager User", "pass": "pmpassword", "role": "Project Manager"},
-            {"email": "tester@platform.ai", "name": "Tester User", "pass": "testerpassword", "role": "Tester"},
-            {"email": "stakeholder@platform.ai", "name": "Stakeholder User", "pass": "stakeholderpassword", "role": "Stakeholder"}
+            {"email": "dev@agenticai.com", "name": "Admin", "pass": "devpassword", "role": "Admin"},
+            {"email": "admin@agenticai.com", "name": "Superadmin", "pass": "adminpassword", "role": "Superadmin"},
+            {"email": "pm@agenticai.com", "name": "Project Manager User", "pass": "pmpassword", "role": "Project Manager"},
+            {"email": "tester@agenticai.com", "name": "Tester User", "pass": "testerpassword", "role": "Tester"},
+            {"email": "stakeholder@agenticai.com", "name": "Stakeholder User", "pass": "stakeholderpassword", "role": "Stakeholder"}
         ]
         for du in dev_users:
             exists = db.query(UserDB).filter(UserDB.email == du["email"]).first()
@@ -108,4 +123,7 @@ def seed_database(db: Session) -> None:
                     is_active=True
                 )
                 db.add(user)
+            else:
+                exists.role = du["role"]
+                exists.full_name = du["name"]
         db.commit()

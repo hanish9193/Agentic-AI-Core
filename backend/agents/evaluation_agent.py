@@ -1,39 +1,61 @@
 """
-EvaluationAgent - the QA layer for the AI's own output. Before this agent,
-ScenarioAgent and TestCaseAgent's output was trusted unconditionally. This
-agent scores it, catches duplicates, and decides what proceeds
-automatically versus what needs a human to look at it versus what gets
-rejected outright.
+EvaluationAgent
 
-Two kinds of logic here, deliberately not mixed:
-- Duplicate detection and coverage checking are DETERMINISTIC - no LLM
-  call, same input always gives the same output. These are comparisons,
-  not judgment calls, so they don't need a model.
-- Relevance and completeness scoring genuinely need judgment ("does this
-  test case actually relate to the requirement" isn't answerable by
-  string comparison) - that's the one LLM call this agent makes.
+Purpose:
+    Quality assurance layer for AI-generated test cases. Scores relevance and completeness,
+    detects duplicates, and routes test cases to auto-approval, human review, or rejection.
 
-Duplicate detection compares title + expected_result together, not title
-alone. Title-only word-overlap can't distinguish "verify login with
-correct password" from "...incorrect password" (near-identical text,
-opposite meaning, Jaccard ~0.67) - adding expected_result text separates
-them cleanly (~0.90 for real duplicates vs ~0.16 for that negation case),
-since the two outcomes described actually differ. Calibrated against
-real examples, not guessed.
+Responsibilities:
+    - Detect duplicate test cases using Jaccard similarity
+    - Score test case relevance and completeness via LLM
+    - Mark irrelevant test cases as REJECTED
+    - Route non-duplicate, relevant test cases to NEEDS_REVIEW
+    - Verify scenario coverage (all scenarios have at least one test case)
+    - Log evaluation summary to workflow state
 
-LLM correlation is by test_case_number (a 1-based index assigned just for
-this prompt). Index-based is stricter than echoing text back: we can
-validate we got back exactly {1..N} with no gaps or duplicates, rather
-than fuzzy-matching text a model might paraphrase. TestCaseAgent
-originally used name-echoing instead of this pattern, and it broke in a
-real live run (a model paraphrased a scenario name); it was retrofitted
-to match this approach afterward.
+Workflow Position:
+    TestCaseAgent
+        ↓
+    EvaluationAgent
+        ↓
+    HumanApprovalAgent (test case review)
+        ↓
+    PlaywrightAgent
 
-Three possible outcomes per test case, not two:
-- REJECTED - a duplicate, or relevance below relevance_rejection_threshold
-  (this isn't a borderline case, it's just wrong)
-- APPROVED - confidence >= workflow.evaluation_threshold
-- NEEDS_REVIEW - everything else (plausible but not confident enough)
+Inputs:
+    - state.requirement: Requirement context for relevance scoring
+    - state.generated_test_cases: Test cases from TestCaseAgent
+    - state.generated_scenarios: Scenarios for coverage verification
+
+Outputs:
+    - test_case.evaluation_status: APPROVED, NEEDS_REVIEW, or REJECTED
+    - test_case.confidence: Average of relevance and completeness scores (0.0-1.0)
+    - test_case.evaluation_reason: Human-readable explanation
+    - state.logs: Coverage summary and rejection counts
+
+Duplicate Detection:
+    Uses Jaccard similarity on combined title + expected_result text.
+    Title-only comparison cannot distinguish:
+        - "Login with valid password" vs "Login with invalid password"
+    Adding expected_result separates them cleanly:
+        - Real duplicates: ~0.90 similarity
+        - Negation pairs: ~0.16 similarity
+    
+    Calibrated against real production data, not guessed.
+    Threshold: settings.evaluation.duplicate_similarity_threshold (default 0.85)
+
+Evaluation Outcomes:
+    - REJECTED: Duplicate or relevance < relevance_rejection_threshold (0.3)
+    - NEEDS_REVIEW: Relevant but confidence < evaluation_threshold
+    - APPROVED: Currently unused - all non-rejected cases need human review
+
+LLM Correlation:
+    Uses test_case_number (1-based index) instead of title echo-back.
+    Validates LLM returned exactly {1, 2, ..., N} with no gaps or extras.
+
+Historical Context:
+    This agent was added after production issues with auto-approved irrelevant test cases.
+    Provides critical quality gate before expensive Playwright script generation.
 """
 
 from pydantic import BaseModel, Field, field_validator
@@ -193,4 +215,4 @@ class EvaluationAgent(BaseAgent):
             f"{duplicate_count + irrelevant_count} rejected ({duplicate_count} duplicates, {irrelevant_count} irrelevant)"
         )
         return state
-
+

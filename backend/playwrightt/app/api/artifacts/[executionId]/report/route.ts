@@ -4,11 +4,12 @@ import * as path from 'path';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ executionId: string }> }
+  { params }: { params: Promise<{ executionId: string }> }
 ) {
+  console.log("--- GET REPORT ROUTE HIT ---");
   try {
-    const params = await context.params;
-    const { executionId } = params;
+    const { executionId } = await params;
+    console.log("GET REPORT executionId:", executionId);
     const reportPath = path.join(
       process.cwd(),
       'public',

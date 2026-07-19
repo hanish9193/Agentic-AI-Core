@@ -139,11 +139,37 @@ class BatchQueueManager:
                 am.collect_logs(f"Step status: {raw_result.status}")
                 if raw_result.error_message:
                     am.collect_logs(f"Error details: {raw_result.error_message}")
-                am.collect_timeline(
-                    f"Execution {item.task_id} {raw_result.status.capitalize()}",
-                    event_type="success" if raw_result.status == "passed" else "error",
-                    details=raw_result.error_message
-                )
+                
+                # Extract timeline events from runner's captured stdout logs
+                # The runner captures console.log('[Timeline] ...') messages in stdout
+                if hasattr(raw_result, 'stdout_lines'):
+                    for line in raw_result.stdout_lines:
+                        if '[Timeline]' in line:
+                            # Extract the timeline message
+                            timeline_msg = line.split('[Timeline]', 1)[1].strip()
+                            
+                            # Determine event type based on content
+                            event_type = "info"
+                            if "error" in timeline_msg.lower() or "fail" in timeline_msg.lower():
+                                event_type = "error"
+                            elif "screenshot" in timeline_msg.lower():
+                                event_type = "screenshot"
+                            elif raw_result.status == "passed":
+                                event_type = "success"
+                            
+                            am.collect_timeline(
+                                timeline_msg,
+                                event_type=event_type,
+                                details=timeline_msg
+                            )
+                
+                # If no timeline events were captured, add a fallback
+                if not am.timeline:
+                    am.collect_timeline(
+                        f"Execution {item.task_id} {raw_result.status.capitalize()}",
+                        event_type="success" if raw_result.status == "passed" else "error",
+                        details=raw_result.error_message
+                    )
 
                 if raw_result.status == "passed":
                     item.status = "passed"
@@ -191,16 +217,16 @@ class BatchQueueManager:
 
     def _make_login_conditional(self, script: str) -> str:
         import re
-        # Look for typical adactin login sequence
-        pattern = r"(await\s+page\.goto\([^)]+\);?\s*await\s+page\.fill\(\s*['\"]#username['\"].*?await\s+page\.click\(\s*['\"]#login['\"]\);?)"
+        # Look for typical adactin login sequence matching both page.fill and page.locator().fill
+        pattern = r"((?:console\.log\([^)]+\);\s*)?await\s+page\.(?:locator\([^)]+\)\.)?fill\(\s*['\"](?:input)?#username['\"].*?await\s+page\.(?:locator\([^)]+\)\.)?click\(\s*['\"](?:input)?#login['\"]\);?)"
         
         replacement = """\
-  const is_logged_in = page.url().includes('SearchHotel.aspx') || (await page.$('#username').catch(() => null)) === null;
+  const is_logged_in = page.url().includes('SearchHotel.php') || (await page.$('#username').catch(() => null)) === null;
   if (!is_logged_in) {
     \\1
   } else {
     console.log('[Session Reuse] Already logged in. Bypassing login steps.');
   }"""
         
-        modified = re.sub(pattern, replacement, script, flags=re.DOTALL)
+        modified = re.sub(pattern, replacement, script, flags=re.DOTALL | re.IGNORECASE)
         return modified

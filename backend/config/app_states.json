@@ -10,7 +10,7 @@
       "name": "SEARCH",
       "url_contains": "SearchHotel.aspx",
       "title_contains": "Search",
-      "required_elements": ["#location", "#room_type", "#Submit"]
+      "required_elements": ["#location", "#hotels", "#Submit"]
     },
     {
       "name": "RESULTS",

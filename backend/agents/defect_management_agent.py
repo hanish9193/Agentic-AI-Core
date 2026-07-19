@@ -1,3 +1,81 @@
+"""
+DefectManagementAgent
+
+Purpose:
+    Manages JIRA bug ticket lifecycle for verified Product Bug failures.
+    Detects duplicate bugs using LLM-generated JQL queries.
+    Creates new bug tickets or links to existing ones.
+
+Responsibilities:
+    - Filter for Product Bug failures (from ExecutionAnalysisAgent)
+    - Generate smart JQL search queries via LLM to detect duplicate bugs
+    - Search JIRA for existing open bugs matching failure pattern
+    - Link execution to existing bug via comments if duplicate found
+    - Create new JIRA bug ticket if no duplicate exists
+    - Upload execution artifacts (screenshots) to JIRA attachments
+    - Update test case with JIRA issue linkage
+    - Log defect management actions
+
+Workflow Position:
+    ExecutionAgent
+        ↓
+    ExecutionAnalysisAgent (triages failure_category)
+        ↓
+    DefectManagementAgent (only processes Product Bugs)
+        ↓
+    ReportAgent
+
+Inputs:
+    - state.execution_results: Latest execution result with failure_category
+    - state.generated_test_cases: Test case details for bug description
+
+Outputs:
+    - execution_result.jira_bug_id: JIRA Bug issue key
+    - execution_result.jira_bug_url: Full JIRA issue URL
+    - test_case.jira_issue_key: JIRA Bug key
+    - test_case.jira_issue_url: Full JIRA issue URL
+    - test_case.jira_sync_status: "created" or "linked"
+    - test_case.jira_last_synced_at: Timestamp
+
+LLM-Powered Duplicate Detection:
+    Instead of label-based matching (like JiraSyncAgent), this agent uses LLM
+    to generate semantic JQL queries based on:
+    - Test case title
+    - Failure error message
+    - Trace log patterns
+    
+    Example LQL generated:
+    "project = 'QA' AND issuetype = Bug AND status != Closed AND 
+     (summary ~ 'login' OR description ~ 'authentication failed')"
+
+Duplicate Handling:
+    If duplicate bug found:
+    1. Retrieve existing issue
+    2. Add comment with new execution timestamp and error message
+    3. Link execution_result to existing bug
+    4. Update test_case with JIRA linkage
+    5. Log "duplicate defect detected"
+
+New Bug Creation:
+    If no duplicate found:
+    1. Generate bug title via LLM
+    2. Generate bug description via LLM (includes test steps, expected result, error logs)
+    3. Create JIRA issue with type=Bug
+    4. Apply labels: ["platform_sync", "test_{id}", "bug"]
+    5. Upload screenshot artifact if available
+    6. Link execution_result and test_case to new bug
+    7. Log "created JIRA Bug"
+
+Dependencies:
+    - JiraService: JIRA API client for search, create, comment, attach
+    - LLMService: For JQL generation and bug description formatting
+
+Design Philosophy:
+    Only verified Product Bugs get JIRA tickets.
+    Environment issues and flaky tests are filtered out by ExecutionAnalysisAgent.
+    Semantic duplicate detection reduces JIRA spam better than rigid label matching.
+"""
+
 import os
 import logging
 from datetime import datetime, timezone
@@ -12,7 +90,12 @@ from backend.utils.prompts import load_prompt
 logger = logging.getLogger("backend.agents.defect_management_agent")
 
 
+# ==========================================================
+# LLM Output Schema
+# ==========================================================
+
 class _DefectSearchResponse(BaseModel):
+    """LLM-generated defect search query and bug metadata."""
     jira_search_query: str = Field(description="JQL search term to look up duplicate bugs")
     is_duplicate_candidate: bool = Field(description="True if we suspect a duplicate bug exists")
     bug_title: str = Field(description="Proposed title for the JIRA Bug if not a duplicate")
@@ -20,13 +103,50 @@ class _DefectSearchResponse(BaseModel):
 
 
 class DefectManagementAgent(BaseAgent):
+    """
+    JIRA defect lifecycle management agent with semantic duplicate detection.
+    
+    Uses LLM-generated JQL queries to find existing bugs before creating new ones.
+    """
+    
     name = "Defect Management Agent"
 
     def __init__(self, llm_service: LLMService | None = None, jira_service: JiraService | None = None):
+        """
+        Initialize defect management agent.
+        
+        Args:
+            llm_service: LLM service instance (injected for testing)
+            jira_service: JIRA service instance (injected for testing)
+        """
         self.llm_service = llm_service or LLMService()
         self.jira_service = jira_service or JiraService()
 
     def run(self, state: WorkflowState) -> WorkflowState:
+        """
+        Manage JIRA bug lifecycle for Product Bug failures.
+        
+        Args:
+            state: Workflow state with execution results and test cases
+            
+        Returns:
+            Updated state with JIRA bug linkage populated
+            
+        Process:
+            1. Skip if no execution results exist
+            2. Get latest execution result
+            3. Skip if status is PASSED or failure_category is not "Product Bug"
+            4. Find corresponding test case
+            5. Generate JQL search query via LLM
+            6. Search JIRA for duplicate bugs
+            7. If duplicate found:
+                - Add comment with new execution details
+                - Link execution and test case to existing bug
+            8. If no duplicate:
+                - Create new JIRA Bug issue
+                - Upload screenshot artifact
+                - Link execution and test case to new bug
+        """
         if not state.execution_results:
             state.add_log(f"{self.name}: no execution results found.")
             return state

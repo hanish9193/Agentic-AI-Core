@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="11" failures="1" errors="0" time="24.545"><testcase name="TestCase_f92389c3-531f-4446-bffe-ca1b0342aa5d" classname="PlaywrightTests" time="24.545"><failure message="Assertion Failed">page.fill: Error: Element is not an &lt;input&gt;, &lt;textarea&gt; or [contenteditable] element
-Call log:
-[2m  - waiting for locator('#make')[22m
-[2m    - locator resolved to &lt;select id="make" name="Make"&gt;…&lt;/select&gt;[22m
-[2m    - fill("Toyota")[22m
-[2m  - attempting fill action[22m
-[2m    - waiting for element to be visible, enabled and editable[22m
-</failure></testcase></testsuite></testsuites>

@@ -3,14 +3,18 @@ from uuid import UUID, uuid4
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 import os
+import logging
 
 from backend.models.execution_result import ExecutionResult
 from backend.repository.project_repository import ProjectRepository
+from backend.config.report_config import ReportConfig
+
+logger = logging.getLogger(__name__)
 
 def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, execution_id: UUID, test_case=None) -> dict:
     """
     Parses a single raw timeline event from the Playwright runner and wraps it
-    in a structured step dictionary containing Action, Observation, and Result fields.
+    in a structured step dictionary containing Action, Expected, Actual, and Status fields.
     """
     event_name = event_data.get("event", "")
     time_val = event_data.get("time", 0.0)
@@ -19,6 +23,8 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
 
     # Locate screenshot path
     screenshot_filename = details if details.endswith(".png") else None
+    if screenshot_filename and "screenshot:" in screenshot_filename.lower():
+        screenshot_filename = screenshot_filename.split(":", 1)[1].strip()
     if not screenshot_filename and "screenshot" in event_name.lower():
         screenshot_filename = f"screenshot-{index}.png"
 
@@ -42,104 +48,132 @@ def map_timeline_event_to_step(event_data: dict, index: int, project_id: UUID, e
         if workspace_dir.exists():
             screenshot_url = str(workspace_dir.absolute())
 
-    # Context-specific event mapping logic
+    # Determine step status from event type and overall execution status
+    # Only mark as failed if this specific event was an error
+    if evt_type == "error":
+        status = "❌ Failed"
+    elif "error" in event_name.lower() and "no error" not in event_name.lower():
+        status = "❌ Failed"  
+    else:
+        status = "✅ Passed"
+    
+    time_str = f"{time_val:.2f}s"
+    
+    # Strip prefix if it exists, e.g. "Click: Clicking the login button" -> "Clicking the login button"
+    event_prefix = ""
+    event_detail = event_name
+    if ":" in event_name:
+        parts = event_name.split(":", 1)
+        event_prefix = parts[0].strip()
+        event_detail = parts[1].strip()
+
     title = event_name
-    action = f"Execute test step: '{event_name}'."
-    observation = f"Timeline logged event of type '{evt_type}'."
-    result = "Step executed successfully."
+    action_text = f"Action not yet performed"
+    expected = f"Expected behavior not yet assessed"
+    actual = "No Observation Yet"
 
     if evt_type == "error" or "error" in event_name.lower():
-        title = "Execution Failure"
-        details_lower = details.lower()
-        if "strict mode violation" in details_lower:
-            action = "Select unique target element on screen"
-            observation = "Playwright strict mode violation: The test code attempted to click or interact with an element, but the browser found multiple elements matching that description."
-            result = "The selector is ambiguous. To resolve this, update the test script locator to be more specific, such as using the exact button/link text (e.g. 'Enter Vehicle Data') or targeting its unique ID/attributes (e.g. '#entervehicledata')."
-        elif "element is not an <input>" in details_lower or "locator resolved to <select" in details_lower or "selectOption" in details or "select option" in details_lower:
-            action = "Select dropdown option value"
-            observation = "Playwright tried to type or fill text into a dropdown selection element (<select>) instead of choosing one of its options."
-            result = "A dropdown (<select>) element cannot be filled with text. The automation script must be corrected to use 'selectOption' (e.g. page.selectOption('#make', 'Toyota') or page.locator('#make').selectOption('Toyota')) instead of 'fill'."
-        elif "timeout" in details_lower or "waiting for locator" in details_lower or "waiting for selector" in details_lower:
-            action = "Wait for target element to become visible / interactive on page"
-            observation = "Playwright timed out waiting for the target element to load or appear on the page (the element remained hidden or was not rendered within the timeout period)."
-            result = "Verify if the preceding test steps executed successfully, check if the website response was slow, or confirm if the element's selector is correct."
-        elif "is hidden" in details_lower or "is not visible" in details_lower or "intercepts pointer events" in details_lower or "disabled" in details_lower:
-            action = "Interact with target element"
-            observation = "The target element was found on the page, but it was hidden, disabled, or blocked/intercepted by another page element (like a modal popup, overlay, or loading spinner)."
-            result = "Ensure the target element is fully active and visible, and close any blocking modals or overlays before interacting with it."
-        elif "net::err" in details_lower or "navigation failed" in details_lower or "page.goto" in details_lower:
-            action = "Load application landing page"
-            observation = "The browser failed to navigate to the target URL. The application server might be down, the hostname might be invalid, or the server is refusing connections."
-            result = "Verify that the target application is running locally or online, and that your local network connection / proxy settings are active."
-        elif "expect" in details_lower or "assertionerror" in details_lower or "assertion" in details_lower:
-            action = "Verify expected test condition (Assertion)"
-            observation = "The test run successfully completed its actions, but the final validation check failed. The page content or page state did not match the expected assertion criteria."
-            result = "Verify if the application behaved unexpectedly, or if the test assertion value needs to be updated."
-        else:
-            action = "Interact with target page controls / elements."
-            observation = f"Playwright runner logged error: {details}"
-            result = f"Error details: {details or 'Timeout/Assertion failure'}"
+        title = f"Error: {event_name}"
+        action_text = "Executing the current test step"
+        expected = "The website should respond as expected"
+        actual = f"{status}: {details or 'Timeout or assertion error occurred'}"
+    else:
+        # Build meaningful descriptions from the event prefix and detail
+        pfx_lower = event_prefix.lower()
+        if pfx_lower == "navigate" or event_detail.startswith("http"):
+            site_name = event_detail.replace("https://", "").replace("http://", "").split("/")[0]
+            title = f"Navigate to {site_name}"
+            action_text = f"The browser navigates to '{event_detail}'"
+            expected = f"Application home page should load successfully"
+            actual = f"Page loaded: {site_name}"
 
-    # If it is a screenshot event, let's provide dynamic context mapping
+
+        elif pfx_lower == "click" or pfx_lower == "clicking":
+            elem_desc = event_detail.strip()
+            title = f"Click {elem_desc}"
+            action_text = f"The user clicks on the {elem_desc}"
+            expected = f"The click should be accepted and trigger the next page action"
+            actual = f"Clicked {elem_desc} successfully"
+
+        elif pfx_lower in ("type text", "type", "fill"):
+            elem_desc = event_detail.strip().rstrip(".")
+            title = f"Type into {elem_desc}"
+            action_text = f"The user types text into the {elem_desc} field"
+            expected = f"Text should be entered correctly in the field"
+            actual = f"Text entered in {elem_desc}"
+
+        elif pfx_lower in ("select option", "select"):
+            elem_desc = event_detail.strip().rstrip(".")
+
+            title = f"Select from {elem_desc}"
+            action_text = f"The user selects an option from the {elem_desc} dropdown"
+            expected = f"A valid option should be selected from the dropdown"
+            actual = f"Option selected from {elem_desc}"
+
+        elif "assert" in event_name.lower() or "expect" in event_name.lower():
+            title = f"Verify: {event_detail}"
+            action_text = f"Verify the condition: {event_detail}"
+            expected = f"The assertion should pass"
+            actual = f"Verification passed"
+
+        elif pfx_lower in ("running", "step"):
+            title = event_detail or event_name
+            action_text = f"Proceeding: {title}"
+            expected = f"Step executes without error"
+            actual = f"{title} completed"
+
+        elif pfx_lower == "session restored" or "session" in pfx_lower:
+            title = "Initialize Session"
+            action_text = "Session is restored from storage"
+            expected = "Application restores the previous session"
+            actual = "Session restored"
+
+        elif "browser opened" in event_name.lower() or "browser" in pfx_lower:
+            title = "Initialize Browser"
+            action_text = "Browser is opened with a clean context"
+            expected = "Browser context should be ready for testing"
+            actual = "Browser ready"
+
+        elif pfx_lower == "screenshot":
+            title = "Screenshot Captured"
+            action_text = "A screenshot is taken to record the UI state"
+            expected = "Screenshot file should be saved"
+            actual = "Screenshot image saved on disk"
+
+
+    # If this event has a screenshot, try to tie it to a test case step
     if screenshot_filename:
         import re
         fn_lower = screenshot_filename.lower()
-        
-        # Extract step number from filename prefix, e.g. "03-insurant-data" -> 3
         step_num = None
-        match = re.match(r"^(\d+)", fn_lower)
+        
+        # Match standard step format: step-01, step-1
+        match = re.match(r"^step-(\d+)", fn_lower)
+        if not match:
+            match = re.match(r"^(\d+)", fn_lower)
         if match:
             step_num = int(match.group(1))
-        
-        if not step_num:
-            if "initial" in fn_lower or "01-" in fn_lower:
-                step_num = 1
-            elif "form-filled" in fn_lower or "02-" in fn_lower:
-                step_num = 2
-            elif "insurant-data" in fn_lower or "03-" in fn_lower:
-                step_num = 3
-
+            
         if test_case and step_num is not None and 1 <= step_num <= len(test_case.steps):
             step_desc = test_case.steps[step_num - 1]
             title = f"Step {step_num}: {step_desc}"
-            action = f"Execute step {step_num}: {step_desc}"
-            observation = "Browser successfully navigated / interacted. Verified visual state layout."
-            
-            # If it is the last step in the test case, use expected result
+            action_text = f"Execute step {step_num}: {step_desc}"
+            expected = f"Executing: {step_desc}."
             if step_num == len(test_case.steps):
-                result = f"Verified expected result: {test_case.expected_result}"
+                actual = f"Verified expected result: {test_case.expected_result}"
             else:
-                result = f"Step {step_num} verification passed."
-        else:
-            # Fallback mapping
-            is_demo = not test_case or any(k in str(getattr(test_case, attr, "")).lower() for attr in ["title", "expected_result"] for k in ["tricentis", "adactin", "hotel", "vehicle"])
-            if is_demo and ("initial" in fn_lower or fn_lower.startswith("01-") or "login" in fn_lower):
-                title = "Portal Session Initialization"
-                action = "Navigate to the target application URL and initialize the test session."
-                observation = "The application landing page loaded successfully. Login form fields filled and submitted."
-                result = "Session initialized and authenticated successfully."
-            elif is_demo and ("form-filled" in fn_lower or fn_lower.startswith("02-") or "search" in fn_lower):
-                title = "Workflow Data Input completion"
-                action = "Fill out form input specifications and search filters on the target page."
-                observation = "All input fields and selection dropdowns populated with correct test data parameters."
-                result = "Input parameters validated."
-            elif is_demo and ("insurant-data" in fn_lower or fn_lower.startswith("03-") or "select" in fn_lower or "next" in fn_lower):
-                title = "Transition to Next Page"
-                action = "Click the next action button to submit form data and navigate to the next page."
-                observation = "Form submitted successfully. Browser page navigated to the next step."
-                result = "Navigation to the next page successful."
-            else:
-                title = "Visual State Capture"
-                action = "Capture screenshot to record browser visual state."
-                observation = f"Visual state captured in file '{screenshot_filename}'."
-                result = "Screenshot image saved on disk."
+                actual = f"Step {step_num} completed successfully"
 
     return {
-        "title": title,
-        "time": f"{time_val:.2f}s",
-        "action": action,
-        "observation": observation,
-        "result": result,
+        "step_name": title,
+        "title": title, # support old key
+        "time": time_str,
+        "action": action_text,
+        "expected": expected,
+        "observation": expected, # support old key
+        "actual": actual,
+        "result": actual, # support old key
+        "status": status,
         "screenshot_url": screenshot_url,
         "screenshot_name": screenshot_filename
     }
@@ -152,10 +186,16 @@ class ReportService:
         else:
             self.repo = repo
 
-    def enrich_steps_with_llm(self, mapped_steps: list[dict], test_case) -> list[dict]:
+    def enrich_steps_with_llm(self, mapped_steps: list[dict], test_case, execution_status: str) -> list[dict]:
         """
-        Enriches the mapped steps with realistic, context-specific Action, Observation,
-        and Result descriptions using the Ollama-backed LLMService.
+        AI enhancement of execution steps - KEEPS ALL STEPS, only improves descriptions.
+        
+        Rules:
+        1. NEVER remove or filter steps - keep every single step
+        2. NEVER change the status - preserve original pass/fail from execution
+        3. ENHANCE descriptions to be clear, concise, and business-focused
+        4. Use test case context to make step names meaningful
+        5. Preserve all metadata (time, screenshots, status)
         """
         if not mapped_steps:
             return mapped_steps
@@ -165,69 +205,116 @@ class ReportService:
             from backend.services.llm import LLMService
             from pydantic import BaseModel, Field
 
-            class EnrichedStep(BaseModel):
-                step_index: int = Field(description="The index of the step in the list (0-based)")
-                action: str = Field(description="The interaction action description, active voice, specific to elements.")
-                observation: str = Field(description="Visual observation of the page (e.g. 'the user is on the ... page, all required fields seem to be filled based on previous actions and current visibility')")
-                result: str = Field(description="Detailed verification outcome (e.g. 'Success - the page was scrolled and the next button is not visible')")
+            class EnhancedStep(BaseModel):
+                """AI-enhanced step description - preserves structure, improves clarity"""
+                step_index: int = Field(description="The 0-based index matching the input step")
+                step_name: str = Field(description="Clear, concise step title using business terminology")
+                action: str = Field(description="What action was performed - clear and specific")
+                expected: str = Field(description="Expected outcome in business terms")
+                actual: str = Field(description="Actual result - specific about what happened")
 
-            class EnrichedStepsList(BaseModel):
-                steps: list[EnrichedStep]
+            class EnhancedStepsList(BaseModel):
+                steps: list[EnhancedStep]
 
             llm = LLMService()
 
-            tc_title = test_case.title if test_case else "Playwright Automation Check"
+            tc_title = test_case.title if test_case else "Playwright Automation Test"
             tc_expected = getattr(test_case, "expected_result", "") if test_case else ""
             tc_steps = getattr(test_case, "steps", []) if test_case else []
 
+            # Build input for AI - include ALL steps with their current descriptions
             steps_input = []
             for i, step in enumerate(mapped_steps):
                 steps_input.append({
                     "index": i,
-                    "title": step.get("title", ""),
+                    "step_name": step.get("step_name", ""),
                     "action": step.get("action", ""),
-                    "observation": step.get("observation", ""),
-                    "result": step.get("result", "")
+                    "expected": step.get("expected", ""),
+                    "actual": step.get("actual", ""),
+                    "status": step.get("status", ""),
+                    "time": step.get("time", "")
                 })
 
             user_prompt = f"""
-Test Case Title: {tc_title}
-Expected Result: {tc_expected}
-Test Case Steps: {chr(10).join(tc_steps)}
+You are enhancing an automated test execution report. Your goal: make step descriptions CLEAR, CONCISE, and BUSINESS-FOCUSED while KEEPING ALL STEPS.
 
-Current execution steps:
+Test Case: {tc_title}
+Expected Result: {tc_expected}
+Test Case Steps:
+{chr(10).join([f"{i+1}. {s}" for i, s in enumerate(tc_steps)])}
+
+Overall Execution Status: {execution_status}
+
+Current execution steps (ALL {len(steps_input)} steps must be returned with improved descriptions):
 {json.dumps(steps_input, indent=2)}
 
-Please enrich the 'action', 'observation', and 'result' fields for each step to make them highly detailed, realistic, and specific to the website elements and flow.
-- The 'observation' field MUST describe what the user sees on the screen at this point (e.g. "the user is on the 'Enter Insurance Data' tab of the website, all required fields seem to be filled based on previous actions and current visibility").
-- The 'result' field MUST describe the verification result/status (e.g. "Success - the page was scrolled and the next button is not visible").
+CRITICAL RULES:
+1. Return EXACTLY {len(steps_input)} steps - one for each input step at the same index
+2. NEVER skip or remove steps
+3. IMPROVE descriptions to be clear and business-focused:
+   - Use terminology from the test case
+   - Make actions specific (what button, what field, what value)
+   - Make expected/actual meaningful (not generic "step executes")
+   - Focus on business outcomes, not technical implementation
+4. If a step references a test case step number, use that step's description
+5. Keep step names concise but informative
 
-Return the list of enriched steps matching the EnrichedStepsList schema.
+Example transformations:
+- "Step executes" → "User selects location from dropdown"
+- "Completed" → "Sydney location selected successfully"
+- "Action not yet performed" → "Navigate to hotel search page"
 """
 
             res = llm.structured_generate(
                 user=user_prompt,
-                response_model=EnrichedStepsList,
-                system="You are an expert QA automation reporting agent. You enrich step execution logs with professional, context-specific Action, Observation, and Result fields based on the test case design."
+                response_model=EnhancedStepsList,
+                system="You are an expert QA report writer. You enhance step descriptions to be clear, concise, and business-focused. You NEVER remove steps - you only improve their descriptions. Every input step gets an enhanced output step."
             )
 
-            for enriched in res.steps:
-                idx = enriched.step_index
-                if 0 <= idx < len(mapped_steps):
-                    mapped_steps[idx]["action"] = enriched.action
-                    mapped_steps[idx]["observation"] = enriched.observation
-                    mapped_steps[idx]["result"] = enriched.result
+            # Verify we got all steps back
+            if len(res.steps) != len(mapped_steps):
+                print(f"[AI Enhancement Warning]: Expected {len(mapped_steps)} steps, got {len(res.steps)}. Using original steps.")
+                return mapped_steps
+
+            # Build enhanced steps, preserving ALL original metadata
+            enhanced_steps = []
+            for i, (original, enhanced) in enumerate(zip(mapped_steps, res.steps)):
+                if enhanced.step_index != i:
+                    print(f"[AI Enhancement Warning]: Index mismatch at {i}. Using original steps.")
+                    return mapped_steps
+                
+                enhanced_steps.append({
+                    "step_name": enhanced.step_name,
+                    "title": enhanced.step_name,
+                    "time": original.get("time", "0.00s"),
+                    "action": enhanced.action,
+                    "expected": enhanced.expected,
+                    "observation": enhanced.expected,
+                    "actual": enhanced.actual,
+                    "result": enhanced.actual,
+                    "status": original.get("status", "✅ Passed"),  # PRESERVE original status
+                    "screenshot_url": original.get("screenshot_url"),
+                    "screenshot_name": original.get("screenshot_name")
+                })
+
+            print(f"[AI Report Enhancement]: Enhanced {len(enhanced_steps)} step descriptions")
+            return enhanced_steps
 
         except Exception as e:
-            print(f"[LLM Report Enrichment Error]: {e}")
-            
-        return mapped_steps
+            print(f"[LLM Report Enhancement Error]: {e}")
+            # Fallback: return original steps unchanged
+            import traceback
+            traceback.print_exc()
+            return mapped_steps
 
     def compile_reports(self, project_id: UUID, execution_result: ExecutionResult) -> dict:
         """
         Compiles HTML, PDF, and JUnit reports based on the Playwright execution results
         and persists them to the repository.
         """
+        print(f"[Report Engine] Legacy engine selected via configuration. Invoking compile_reports().")
+        logger.info(f"Using legacy report engine for execution {execution_result.id}")
+        
         reports_dir = Path("data/reports")
         reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -298,15 +385,45 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
                 except Exception as copy_err:
                     print(f"[ReportService] Failed to copy failure screenshot: {copy_err}")
 
+        # Copy all step screenshots from the testcase execution run directory
+        import shutil
+        run_dir = Path("backend/playwrightt/artifacts") / str(execution_result.test_case_id)
+        src_screenshots_dir = run_dir / "screenshots"
+        if src_screenshots_dir.exists():
+            for png in src_screenshots_dir.glob("*.png"):
+                try:
+                    shutil.copy2(png, next_screenshots_dir / png.name)
+                except Exception as copy_err:
+                    print(f"[ReportService] Failed to copy step screenshot {png.name}: {copy_err}")
+
         mapped_steps = []
         for idx, evt in enumerate(raw_timeline):
             step_mapped = map_timeline_event_to_step(evt, idx, project_id, execution_result.id, test_case=test_case)
-            if step_mapped["title"] == "Execution Failure" and failure_screenshot_name:
-                step_mapped["screenshot_name"] = failure_screenshot_name
-                step_mapped["screenshot_url"] = str((next_screenshots_dir / failure_screenshot_name).absolute())
             mapped_steps.append(step_mapped)
 
-        mapped_steps = self.enrich_steps_with_llm(mapped_steps, test_case)
+        # Merge separate screenshot / Visual State Capture events into preceding action steps
+        merged_steps = []
+        for step in mapped_steps:
+            title_lower = step["step_name"].lower()
+            skip_phrases = ("screenshot", "visual state", "initialize session", "initialize browser")
+            is_meta = any(p in title_lower for p in skip_phrases)
+            if is_meta:
+                if step["screenshot_name"] and merged_steps:
+                    merged_steps[-1]["screenshot_name"] = step["screenshot_name"]
+                    merged_steps[-1]["screenshot_url"] = step["screenshot_url"]
+                continue
+            merged_steps.append(step)
+        mapped_steps = merged_steps
+
+        # Add failure screenshot to the last step if execution failed and it doesn't have one
+        if execution_result.status.value in ("failed", "error") and failure_screenshot_name and mapped_steps:
+            if not mapped_steps[-1]["screenshot_name"]:
+                mapped_steps[-1]["screenshot_name"] = failure_screenshot_name
+                mapped_steps[-1]["screenshot_url"] = str((next_screenshots_dir / failure_screenshot_name).absolute())
+
+        # Apply AI-driven enhancement to make descriptions clear and business-focused
+        # KEEPS ALL STEPS - only improves descriptions
+        mapped_steps = self.enrich_steps_with_llm(mapped_steps, test_case, execution_result.status.value)
 
         # Determine target web URL
         from backend.config.settings import get_settings
@@ -346,8 +463,9 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
         steps_html = []
         for idx, step in enumerate(mapped_steps):
             screenshot_tag = ""
-            if step["screenshot_url"]:
-                img_src = f"screenshots/{step['screenshot_name']}"
+            if step["screenshot_name"]:
+                # Use API route to serve screenshots
+                img_src = f"/api/artifacts/{execution_id_str}/screenshot/{step['screenshot_name']}"
                 screenshot_tag = f"""
                 <div class="step-image">
                     <img src="{img_src}" alt="Screenshot {idx + 1}" />
@@ -364,22 +482,22 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
             <div class="step-card">
                 <div class="step-left">
                     <div class="step-header">
-                        <span class="step-num">Step {idx + 1}</span>
-                        <span class="step-title">{step['title']}</span>
-                        <span class="step-time">+{step['time']}</span>
+                        <span class="step-num">{step['step_name']}</span>
+                        <span class="step-time">Time: {step['time']}</span>
+                        <span class="step-status" style="margin-left: auto; font-weight: bold; color: {'#10b981' if '✅' in step['status'] else '#ef4444'};">{step['status']}</span>
                     </div>
                     <div class="step-details">
                         <div class="detail-row">
-                            <span class="detail-label">Actions Taken</span>
-                            {step['action']}
+                            <span class="detail-label">Action</span>
+                            <div style="padding-left: 8px; border-left: 2px solid #3b82f6; font-size: 0.95rem; line-height: 1.5;">{step['action']}</div>
                         </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Observation</span>
-                            {step['observation']}
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">Expected</span>
+                            <div style="padding-left: 8px; border-left: 2px solid #f59e0b; font-size: 0.95rem; color: #94a3b8; line-height: 1.5;">{step['expected']}</div>
                         </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Result</span>
-                            {step['result']}
+                        <div class="detail-row" style="margin-top: 8px;">
+                            <span class="detail-label">Actual</span>
+                            <div style="padding-left: 8px; border-left: 2px solid #10b981; font-size: 0.95rem; color: #cbd5e1; line-height: 1.5;">{step['actual']}</div>
                         </div>
                     </div>
                 </div>
@@ -956,6 +1074,305 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
 
         return report_payload
 
+    def compile_reports_with_engine_selection(
+        self,
+        project_id: UUID,
+        execution_result: ExecutionResult
+    ) -> dict:
+        """
+        Compile reports using the configured report engine (legacy or professional).
+        
+        This method implements the safe migration strategy:
+        - Checks feature flag to determine which engine to use
+        - Tries professional engine first if enabled
+        - Falls back to legacy engine if professional fails (when fallback is enabled)
+        - Always ensures a report is generated
+        
+        Args:
+            project_id: Project UUID
+            execution_result: ExecutionResult with execution data
+            
+        Returns:
+            Dictionary with report paths (html_path, pdf_path, junit_path)
+        """
+        print(f"[Report Engine] compile_reports_with_engine_selection() called for execution {execution_result.id}")
+        logger.info(f"Compiling reports for execution {execution_result.id} with engine selection")
+        
+        # Print runtime configuration
+        print(f"[Report Engine] REPORT_ENGINE value: {ReportConfig.REPORT_ENGINE}")
+        print(f"[Report Engine] is_professional_enabled(): {ReportConfig.is_professional_enabled()}")
+        print(f"[Report Engine] should_fallback_on_error(): {ReportConfig.should_fallback_on_error()}")
+        
+        # Check if professional report engine is enabled
+        if ReportConfig.is_professional_enabled():
+            print(f"[Report Engine] Selected: PROFESSIONAL")
+            logger.info("Professional report engine enabled, attempting generation")
+            
+            try:
+                return self._compile_professional_reports(project_id, execution_result)
+            except Exception as e:
+                import traceback
+                full_traceback = traceback.format_exc()
+                logger.error(f"Professional report generation failed: {e}\n{full_traceback}")
+                print(f"[Report Engine] Professional generation failed: {e}")
+                print(f"[Report Engine] Full traceback:\n{full_traceback}")
+                
+                # Fallback to legacy if configured
+                if ReportConfig.should_fallback_on_error():
+                    print(f"[Report Engine] Fallback: Activated (to LEGACY)")
+                    logger.warning("Falling back to legacy report engine")
+                    return self.compile_reports(project_id, execution_result)
+                else:
+                    # Re-raise if fallback is disabled
+                    print(f"[Report Engine] Fallback: Disabled (re-raising error)")
+                    raise
+        else:
+            print(f"[Report Engine] Selected: LEGACY")
+            logger.info("Using legacy report engine")
+            return self.compile_reports(project_id, execution_result)
+    
+    def _compile_professional_reports(
+        self,
+        project_id: UUID,
+        execution_result: ExecutionResult
+    ) -> dict:
+        """
+        Compile reports using the Professional Report Engine.
+        
+        This is the new professional report generation pipeline that:
+        - Uses ExecutionAnalyzer to generate structured validations
+        - Uses ProfessionalReportGenerator to render HTML/PDF
+        - Generates business rule validation and confidence scores
+        
+        Args:
+            project_id: Project UUID
+            execution_result: ExecutionResult with execution data
+            
+        Returns:
+            Dictionary with report paths (html_path, pdf_path, junit_path)
+        """
+        try:
+            print("[ReportService] Step 1 - _compile_professional_reports() entered")
+            print(f"[ExecutionAnalyzer] Starting initialization...")
+            from backend.services.execution_analyzer import ExecutionAnalyzer
+            from backend.services.professional_report_generator import ProfessionalReportGenerator
+            from backend.services.llm import LLMService
+            
+            logger.info(f"Compiling professional reports for execution {execution_result.id}")
+            
+            # Print object summaries
+            print("[ReportService] Step 2 - Printing object summaries")
+            print(f"[ReportService] execution_result type: {type(execution_result)}")
+            print(f"[ReportService] execution_result.id: {execution_result.id}")
+            print(f"[ReportService] timeline length: {len(execution_result.timeline or [])}")
+            print(f"[ReportService] screenshots length: {len(execution_result.screenshots or [])}")
+            
+            # Load test case for context
+            print("[ReportService] Step 3 - Loading test case")
+            test_case = None
+            try:
+                test_case = self.repo.get_test_case(execution_result.test_case_id)
+                print(f"[ExecutionAnalyzer] test_case loaded: {type(test_case)}")
+                if test_case:
+                    print(f"[ReportService] test_case type: {type(test_case)}")
+                    print(f"[ReportService] test_case.steps type: {type(test_case.steps)}")
+                    print(f"[ReportService] test_case.steps contents: {test_case.steps}")
+                    print(f"[ReportService] test_case.expected_result: {getattr(test_case, 'expected_result', 'N/A')}")
+                    print(f"[ReportService] test_case.title: {getattr(test_case, 'title', getattr(test_case, 'scenario_name', 'N/A'))}")
+                    print(f"[ExecutionAnalyzer] test_case.steps: {test_case.steps}")
+                    print(f"[ExecutionAnalyzer] test_case.steps type: {type(test_case.steps)}")
+                    if test_case.steps and len(test_case.steps) > 0:
+                        print(f"[ExecutionAnalyzer] first step type: {type(test_case.steps[0])}")
+                        print(f"[ExecutionAnalyzer] first step repr: {repr(test_case.steps[0])}")
+            except Exception as e:
+                import traceback
+                print(f"[ReportService] Failed to load test case: {e}")
+                traceback.print_exc()
+                logger.error(f"Failed to load test case {execution_result.test_case_id}: {e}")
+                # Continue with minimal context
+            
+            # Extract test case steps
+            print("[ReportService] Step 4 - Extracting test case steps")
+            test_case_steps = []
+            if test_case and test_case.steps:
+                # Handle both string steps and object steps with .description attribute
+                for step in test_case.steps:
+                    if isinstance(step, str):
+                        test_case_steps.append(step)
+                    elif hasattr(step, 'description'):
+                        test_case_steps.append(step.description)
+                    else:
+                        # Fallback: convert to string
+                        test_case_steps.append(str(step))
+            
+            # Extract website URL from settings or test case
+            print("[ReportService] Step 5 - Extracting website URL")
+            website_url = "https://example.com"  # Default fallback
+            try:
+                project = self.repo.get_project(project_id)
+                if project:
+                    # Try to get target_url from project first
+                    if hasattr(project, 'target_url') and project.target_url:
+                        website_url = project.target_url
+                    # Fallback to settings
+                    elif hasattr(project, 'settings') and project.settings:
+                        website_url = project.settings.get('playwright', {}).get('base_url', website_url)
+                    print(f"[ReportService] Extracted website URL: {website_url}")
+            except Exception as e:
+                import traceback
+                print(f"[ReportService] Failed to extract website URL: {e}")
+                traceback.print_exc()
+                pass
+            
+            # Initialize Execution Analyzer
+            print("[ReportService] Step 6 - Creating ExecutionAnalyzer")
+            print(f"[ExecutionAnalyzer] Instantiating LLMService...")
+            llm_service = LLMService()
+            print("[ReportService] Step 7 - LLMService created")
+            print(f"[ExecutionAnalyzer] Instantiating ExecutionAnalyzer...")
+            analyzer = ExecutionAnalyzer(llm_service=llm_service)
+            print("[ReportService] Step 8 - ExecutionAnalyzer created")
+            print(f"[ExecutionAnalyzer] Started")
+            
+            # Analyze execution and generate structured validations
+            print("[ReportService] Step 9 - Calling analyze_execution()")
+            print(f"[ExecutionAnalyzer] Analyzing execution...")
+            
+            # Extract test case attributes defensively
+            print("[ReportService] Step 10 - Extracting test case attributes")
+            test_case_title = "Unknown Test Case"
+            test_case_description = ""
+            expected_result = ""
+            
+            if test_case:
+                if hasattr(test_case, 'title'):
+                    test_case_title = test_case.title
+                elif hasattr(test_case, 'scenario_name'):
+                    test_case_title = test_case.scenario_name
+                else:
+                    test_case_title = str(test_case)
+                
+                if hasattr(test_case, 'description'):
+                    test_case_description = test_case.description
+                else:
+                    test_case_description = ""
+                
+                if hasattr(test_case, 'expected_result'):
+                    expected_result = test_case.expected_result
+                else:
+                    expected_result = ""
+            
+            print(f"[ExecutionAnalyzer] test_case_title: {test_case_title}")
+            print(f"[ExecutionAnalyzer] test_case_description: {test_case_description}")
+            print(f"[ExecutionAnalyzer] expected_result: {expected_result}")
+            print(f"[ExecutionAnalyzer] test_case_steps: {test_case_steps}")
+            
+            context = analyzer.analyze_execution(
+                execution_result=execution_result,
+                test_case_title=test_case_title,
+                test_case_description=test_case_description,
+                expected_result=expected_result,
+                test_case_steps=test_case_steps,
+                website_url=website_url,
+                project_id=str(project_id),
+                business_rules=[]  # Could be extracted from requirements in future
+            )
+            print("[ReportService] Step 11 - analyze_execution() completed")
+            print(f"[ExecutionAnalyzer] Analysis complete")
+        
+            # Initialize Professional Report Generator
+            print("[ReportService] Step 12 - Creating ProfessionalReportGenerator")
+            print(f"[ProfessionalReportGenerator] Starting initialization...")
+            template_dir = Path(ReportConfig.PROFESSIONAL_TEMPLATE_DIR)
+            output_dir = Path(ReportConfig.PROFESSIONAL_REPORT_DIR)
+            generator = ProfessionalReportGenerator(template_dir=template_dir)
+            print("[ReportService] Step 13 - ProfessionalReportGenerator created")
+            print(f"[ProfessionalReportGenerator] Started")
+            
+            # Generate professional reports
+            print("[ReportService] Step 14 - Calling generate_reports()")
+            print(f"[ProfessionalReportGenerator] Generating reports...")
+            report_paths = generator.generate_reports(
+                context=context,
+                output_dir=output_dir,
+                execution_id=str(execution_result.id)
+            )
+            print("[ReportService] Step 15 - generate_reports() completed")
+            print(f"[Professional Report Generated] HTML: {report_paths['html_path']}")
+            print(f"[Professional Report Generated] PDF: {report_paths.get('pdf_path', 'N/A')}")
+            
+            # Generate JUnit XML (reuse existing logic)
+            print("[ReportService] Step 16 - Generating JUnit XML")
+            junit_path = self._generate_junit_xml(execution_result, output_dir)
+            print("[ReportService] Step 17 - JUnit XML generated")
+            
+            # Save report paths to repository
+            print("[ReportService] Step 18 - Saving report to repository")
+            report_payload = {
+                "html_path": report_paths["html_path"],
+                "pdf_path": report_paths.get("pdf_path"),  # May be None if PDF generation failed
+                "junit_path": str(junit_path),
+                "engine": "professional"
+            }
+            
+            print(f"[Report Engine] Saving professional report to repository:")
+            print(f"[Report Engine]   html_path: {report_payload['html_path']}")
+            print(f"[Report Engine]   pdf_path: {report_payload.get('pdf_path')}")
+            print(f"[Report Engine]   engine: {report_payload['engine']}")
+            
+            report_payload = self.repo.save_report(
+                project_id, 
+                execution_result.id, 
+                report_payload
+            )
+            
+            print("[ReportService] Step 19 - Repository updated")
+            print(f"[Report Engine] Repository save result: {report_payload}")
+            print("[ReportService] Step 20 - Professional pipeline completed")
+            logger.info(f"Successfully compiled professional reports: {report_payload}")
+            return report_payload
+            
+        except Exception as e:
+            import traceback
+            print("[ReportService] FULL TRACEBACK - _compile_professional_reports() failed")
+            print(f"[ReportService] Exception type: {type(e).__name__}")
+            print(f"[ReportService] Exception message: {e}")
+            traceback.print_exc()
+            raise
+    
+    def _generate_junit_xml(
+        self,
+        execution_result: ExecutionResult,
+        output_dir: Path
+    ) -> Path:
+        """
+        Generate JUnit XML report (shared between legacy and professional engines).
+        """
+        execution_id_str = str(execution_result.id)
+        junit_path = output_dir / f"junit_{execution_id_str}.xml"
+        
+        testsuite = ET.Element("testsuite")
+        testsuite.set("name", "Playwright Testcase")
+        testsuite.set("tests", "1")
+        testsuite.set("failures", "1" if execution_result.status.value == "failed" else "0")
+        testsuite.set("errors", "1" if execution_result.status.value == "error" else "0")
+        testsuite.set("time", str(execution_result.duration_seconds))
+        
+        testcase = ET.SubElement(testsuite, "testcase")
+        testcase.set("name", f"TestCase_{execution_result.test_case_id}")
+        testcase.set("classname", "PlaywrightTests")
+        testcase.set("time", str(execution_result.duration_seconds))
+        
+        if execution_result.status.value in ["failed", "error"]:
+            failure = ET.SubElement(testcase, "failure" if execution_result.status.value == "failed" else "error")
+            failure.set("message", execution_result.error_message or "Test failed")
+            failure.text = execution_result.error_message or "Test failed"
+        
+        tree = ET.ElementTree(testsuite)
+        tree.write(str(junit_path), encoding="utf-8", xml_declaration=True)
+        
+        return junit_path
+
     def compile_batch_report(self, project_id: UUID, context) -> dict:
         reports_dir = Path("data/reports")
         reports_dir.mkdir(parents=True, exist_ok=True)
@@ -1201,7 +1618,7 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
                 step_mapped = map_timeline_event_to_step(evt, step_idx, project_id, ex.id, test_case=tc)
                 mapped_steps.append(step_mapped)
                 
-            mapped_steps = self.enrich_steps_with_llm(mapped_steps, tc)
+            # mapped_steps = self.enrich_steps_with_llm(mapped_steps, tc)
 
             import urllib.parse
             video_tag = ""
@@ -1218,8 +1635,8 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
             for idx, step in enumerate(mapped_steps):
                 screenshot_tag = ""
                 if step["screenshot_url"]:
-                    # Serve screenshot relative to the execution
-                    img_src = f"/api/v1/projects/{project_id}/executions/{ex.id}/screenshots/{step['screenshot_name']}"
+                    # Serve screenshot relative to the execution using unified route
+                    img_src = f"/api/artifacts/{ex.id}/screenshot/{step['screenshot_name']}"
                     screenshot_tag = f"""
                     <div class="step-image">
                         <img src="{img_src}" alt="Screenshot {idx + 1}" style="max-width: 100%; border-radius: 8px; border: 1px solid #334155;" />
@@ -1375,7 +1792,18 @@ Return the list of enriched steps matching the EnrichedStepsList schema.
 from backend.services.execution_service import register_execution_completed_listener
 
 def _on_execution_completed(project_id, execution_result):
+    print(f"[Report Engine] _on_execution_completed() called for execution {execution_result.id}")
+    print(f"[Report Engine] Stack trace:")
+    import traceback
+    traceback.print_stack()
+    
+    # Print current configuration
+    from backend.config.report_config import ReportConfig
+    ReportConfig.print_config()
+    
     service = ReportService()
-    service.compile_reports(project_id, execution_result)
+    # Use engine selection method to respect feature flag
+    print(f"[Report Engine] Calling compile_reports_with_engine_selection()...")
+    service.compile_reports_with_engine_selection(project_id, execution_result)
 
 register_execution_completed_listener(_on_execution_completed)

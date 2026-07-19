@@ -1,8 +1,7 @@
 """
 ExecutionReport - a plain-data summary of everything the pipeline
-produced. No LLM, no judgment calls here or in the agent that builds
-this - purely arithmetic over what's already in WorkflowState by the
-time this runs.
+produced. Now enhanced with AI-driven executive summaries for
+stakeholder-friendly, content-oriented reporting.
 """
 
 from datetime import datetime, timezone
@@ -48,3 +47,9 @@ class ExecutionReport(BaseModel):
     jira_stories_synced: list[str] = Field(default_factory=list)
     jira_bugs_raised: list[str] = Field(default_factory=list)
     jira_retests_required: int = 0
+    
+    # AI-generated executive summary (NEW)
+    executive_summary: str = Field(
+        default="",
+        description="AI-generated concise summary with key insights, achievements, issues, and recommendations"
+    )

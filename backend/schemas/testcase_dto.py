@@ -20,6 +20,7 @@ class TestCaseUpdate(BaseModel):
 class TestCaseResponse(BaseModel):
     id: UUID
     scenario_id: UUID
+    test_case_ref_id: str | None = None  # US01-TC01, US01-TC02...
     title: str
     preconditions: list[str]
     steps: list[str]

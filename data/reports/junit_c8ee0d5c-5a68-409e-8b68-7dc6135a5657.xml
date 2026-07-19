@@ -1,2 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuites><testsuite name="Playwright Testcase" tests="18" failures="1" errors="0" time="14.829"><testcase name="TestCase_feebefe1-12b6-4be3-8887-aa2affc02ae9" classname="PlaywrightTests" time="14.829"><failure message="Assertion Failed">loginLink.exists is not a function</failure></testcase></testsuite></testsuites>

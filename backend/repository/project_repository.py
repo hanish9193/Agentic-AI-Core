@@ -112,6 +112,14 @@ class ProjectRepository(ABC):
         pass
 
     @abstractmethod
+    def delete_execution(self, execution_id: UUID, deleted_by: UUID | None = None) -> bool:
+        pass
+
+    @abstractmethod
+    def delete_failed_executions(self, project_id: UUID, deleted_by: UUID | None = None) -> int:
+        pass
+
+    @abstractmethod
     def get_documents(self, project_id: UUID) -> list[Document]:
         pass
 
@@ -220,6 +228,10 @@ class ProjectRepository(ABC):
         for s in scs:
             tcs.extend(self.get_test_cases(s.id))
         return tcs
+
+    @abstractmethod
+    def reset_demo_data(self) -> None:
+        pass
 
 
 class JSONProjectRepository(ProjectRepository):
@@ -439,26 +451,58 @@ class JSONProjectRepository(ProjectRepository):
         if project_idx == -1:
             raise ValueError(f"Project {project_id} not found")
 
-        req_id = uuid4()
-        req = Requirement(
-            id=req_id,
-            title=title,
-            description=description,
-            source=RequirementSource.MANUAL,
-            uploaded_at=datetime.now(timezone.utc),
-            original_filename=original_filename,
-            requirement_id=requirement_id,
-            requirement_title=requirement_title,
-            release_id=release_id
-        )
-        
-        req_dump = req.model_dump(mode="json")
-        req_dump["priority"] = priority
-        req_dump["business_domain"] = business_domain
-        req_dump["attachments"] = attachments or []
+        reqs_raw = raw.setdefault("requirements", {})
+        existing_req_id = None
+        if requirement_id:
+            proj_reqs = projects[project_idx].get("requirements", [])
+            for r_id_str in proj_reqs:
+                r_data = reqs_raw.get(r_id_str)
+                if r_data and r_data.get("requirement_id") == requirement_id:
+                    existing_req_id = UUID(r_id_str)
+                    break
 
-        raw.setdefault("requirements", {})[str(req_id)] = req_dump
-        projects[project_idx].setdefault("requirements", []).append(str(req_id))
+        if existing_req_id:
+            req_id = existing_req_id
+            req = Requirement(
+                id=req_id,
+                title=title,
+                description=description,
+                source=RequirementSource.MANUAL,
+                uploaded_at=datetime.now(timezone.utc),
+                original_filename=original_filename,
+                requirement_id=requirement_id,
+                requirement_title=requirement_title,
+                release_id=release_id
+            )
+            req_dump = req.model_dump(mode="json")
+            req_dump["priority"] = priority
+            req_dump["business_domain"] = business_domain
+            req_dump["attachments"] = attachments or []
+            req_dump["is_deleted"] = False
+            req_dump["deleted_at"] = None
+            req_dump["deleted_by"] = None
+            reqs_raw[str(req_id)] = req_dump
+        else:
+            req_id = uuid4()
+            req = Requirement(
+                id=req_id,
+                title=title,
+                description=description,
+                source=RequirementSource.MANUAL,
+                uploaded_at=datetime.now(timezone.utc),
+                original_filename=original_filename,
+                requirement_id=requirement_id,
+                requirement_title=requirement_title,
+                release_id=release_id
+            )
+            
+            req_dump = req.model_dump(mode="json")
+            req_dump["priority"] = priority
+            req_dump["business_domain"] = business_domain
+            req_dump["attachments"] = attachments or []
+            
+            reqs_raw[str(req_id)] = req_dump
+            projects[project_idx].setdefault("requirements", []).append(str(req_id))
         
         self._write_raw(raw)
         return req
@@ -811,6 +855,109 @@ class JSONProjectRepository(ProjectRepository):
         if c_data:
             return TestCycle.model_validate(c_data)
         return None
+
+    def reset_demo_data(self) -> None:
+        raw = self._read_raw()
+        
+        # 1. Find projects to delete matching sample names
+        project_ids_to_delete = []
+        remaining_projects = []
+        for p in raw.get("projects", []):
+            name_lower = p.get("name", "").lower()
+            if any(k in name_lower for k in ["bank", "vehicle", "tricentis", "adactin"]):
+                project_ids_to_delete.append(str(p.get("id")))
+            else:
+                remaining_projects.append(p)
+        raw["projects"] = remaining_projects
+
+        proj_ids_str = set(project_ids_to_delete)
+
+        # 2. Filter requirements
+        remaining_reqs = {}
+        for req_id, req in raw.get("requirements", {}).items():
+            if str(req.get("project_id")) not in proj_ids_str:
+                remaining_reqs[req_id] = req
+        raw["requirements"] = remaining_reqs
+
+        req_ids_set = set(remaining_reqs.keys())
+
+        # 3. Filter scenarios
+        remaining_scenarios = {}
+        for sc_id, sc in raw.get("scenarios", {}).items():
+            if str(sc.get("requirement_id")) in req_ids_set:
+                remaining_scenarios[sc_id] = sc
+        raw["scenarios"] = remaining_scenarios
+
+        scenario_ids_set = set(remaining_scenarios.keys())
+
+        # 4. Filter test cases
+        remaining_tcs = {}
+        for tc_id, tc in raw.get("test_cases", {}).items():
+            if str(tc.get("scenario_id")) in scenario_ids_set:
+                remaining_tcs[tc_id] = tc
+        raw["test_cases"] = remaining_tcs
+
+        tc_ids_set = set(remaining_tcs.keys())
+
+        # 5. Filter execution results
+        remaining_execs = {}
+        for exec_id, ex in raw.get("execution_results", {}).items():
+            if str(ex.get("test_case_id")) in tc_ids_set:
+                remaining_execs[exec_id] = ex
+        raw["execution_results"] = remaining_execs
+
+        # 6. Filter releases
+        remaining_releases = {}
+        for rel_id, rel in raw.get("releases", {}).items():
+            if str(rel.get("project_id")) not in proj_ids_str:
+                remaining_releases[rel_id] = rel
+        raw["releases"] = remaining_releases
+
+        release_ids_set = set(remaining_releases.keys())
+
+        # 7. Filter test cycles
+        remaining_cycles = {}
+        for cyc_id, cyc in raw.get("test_cycles", {}).items():
+            if str(cyc.get("release_id")) in release_ids_set:
+                remaining_cycles[cyc_id] = cyc
+        raw["test_cycles"] = remaining_cycles
+
+        # 8. Filter documents
+        remaining_docs = {}
+        for doc_id, doc in raw.get("documents", {}).items():
+            if str(doc.get("project_id")) not in proj_ids_str:
+                remaining_docs[doc_id] = doc
+        raw["documents"] = remaining_docs
+
+        # 9. Scenario notes
+        remaining_sc_notes = {}
+        for sc_id, notes in raw.get("scenario_notes", {}).items():
+            if sc_id in scenario_ids_set:
+                remaining_sc_notes[sc_id] = notes
+        raw["scenario_notes"] = remaining_sc_notes
+
+        # 10. Test case notes
+        remaining_tc_notes = {}
+        for tc_id, notes in raw.get("test_case_notes", {}).items():
+            if tc_id in tc_ids_set:
+                remaining_tc_notes[tc_id] = notes
+        raw["test_case_notes"] = remaining_tc_notes
+
+        self._write_raw(raw)
+
+        # Update vault.json
+        vault_path = Path(__file__).parent.parent / "database" / "vault.json"
+        if vault_path.exists():
+            try:
+                with open(vault_path, "r", encoding="utf-8") as vf:
+                    vault_data = json.load(vf)
+                for pid in proj_ids_str:
+                    if pid in vault_data:
+                        del vault_data[pid]
+                with open(vault_path, "w", encoding="utf-8") as vf:
+                    json.dump(vault_data, vf, indent=2)
+            except Exception as ve:
+                print(f"[ERROR] Failed to clean vault.json: {ve}")
 
 
 class RepositoryProvider:
