@@ -92,6 +92,24 @@ from backend.models.requirement import Requirement
 from backend.models.state import WorkflowState
 
 try:
+    # Configure LangSmith environment variables before importing
+    import os
+    from backend.config.settings import get_settings
+    
+    settings = get_settings()
+    if settings.langsmith.tracing_enabled:
+        os.environ['LANGSMITH_TRACING'] = 'true'
+        os.environ['LANGCHAIN_TRACING_V2'] = 'true'  # Alternative variable name used by LangChain
+        if settings.langsmith.api_key:
+            os.environ['LANGSMITH_API_KEY'] = settings.langsmith.api_key
+            os.environ['LANGCHAIN_API_KEY'] = settings.langsmith.api_key  # Alternative variable name
+        if settings.langsmith.endpoint:
+            os.environ['LANGSMITH_ENDPOINT'] = settings.langsmith.endpoint
+            os.environ['LANGCHAIN_ENDPOINT'] = settings.langsmith.endpoint  # Alternative variable name
+        if settings.langsmith.project_name:
+            os.environ['LANGSMITH_PROJECT'] = settings.langsmith.project_name
+            os.environ['LANGCHAIN_PROJECT'] = settings.langsmith.project_name  # Alternative variable name
+    
     from langsmith import traceable
 except ImportError:
     # Graceful degradation if langsmith is not installed

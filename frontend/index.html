@@ -1248,6 +1248,46 @@
     </div>
   </div>
 
+  <!-- MODAL: Defect Triage Details -->
+  <div class="modal-overlay" id="triage-modal">
+    <div class="modal-container" style="width: 600px; max-width: 95%;">
+      <div class="modal-header">
+        <h3>Defect Triage Details</h3>
+        <button class="modal-close" onclick="closeModal('triage-modal')">✕</button>
+      </div>
+      <div style="padding: 20px;">
+        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; margin-bottom: 16px;">
+          <div style="font-weight: 600; color: var(--text-muted);">Execution ID:</div>
+          <div id="triage-execution-id" style="font-family: monospace; font-size: 0.85rem;"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">Failure Category:</div>
+          <div id="triage-failure-category"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">Root Cause:</div>
+          <div id="triage-root-cause" style="font-size: 0.9rem;"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">Trace Analysis:</div>
+          <div id="triage-trace-analysis" style="font-size: 0.85rem; color: var(--text-secondary);"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">Screenshot Findings:</div>
+          <div id="triage-screenshot-findings" style="font-size: 0.85rem; color: var(--text-secondary);"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">Suggest Retry:</div>
+          <div id="triage-suggest-retry"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">Bug Candidate:</div>
+          <div id="triage-bug-candidate"></div>
+          
+          <div style="font-weight: 600; color: var(--text-muted);">JIRA Bug:</div>
+          <div id="triage-jira-bug"></div>
+        </div>
+        <div style="text-align: right; margin-top: 20px;">
+          <button class="btn btn-secondary" onclick="closeModal('triage-modal')">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/js/app.js?v=12"></script>
   <script>
     document.getElementById('login-form').addEventListener('submit', async function(e) {

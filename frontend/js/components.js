@@ -683,14 +683,35 @@ export const Components = {
       // Use test_case_ref_id if available, otherwise show truncated UUID
       const tcRefId = testCase?.test_case_ref_id || testCase?.ref_id || `TC-${String(ex.test_case_id).substring(0, 4).toUpperCase()}`;
 
+      // Defect triage information
+      let failureCategoryBadge = '';
+      let jiraBugLink = '';
+      
+      if (ex.status === 'failed' || ex.status === 'error') {
+        if (ex.failure_category) {
+          let badgeClass = 'badge-pending';
+          if (ex.failure_category === 'Product Bug') badgeClass = 'badge-rejected';
+          if (ex.failure_category === 'Test Environment Issue') badgeClass = 'badge-review';
+          if (ex.failure_category === 'Flaky Test / Automation Issue') badgeClass = 'badge-pending';
+          failureCategoryBadge = `<span class="badge ${badgeClass}" style="font-size: 0.7rem;">${escapeHTML(ex.failure_category)}</span>`;
+        }
+        
+        if (ex.jira_bug_id && ex.jira_bug_url) {
+          jiraBugLink = `<a href="${escapeHTML(ex.jira_bug_url)}" target="_blank" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.7rem; text-decoration: none;">${escapeHTML(ex.jira_bug_id)}</a>`;
+        }
+      }
+
       return `
         <tr>
           <td style="font-family: monospace; font-weight: 600; font-size: 0.85rem;">${escapeHTML(tcRefId)}: ${escapeHTML(tcTitle)}</td>
           <td>${statusBadge}</td>
+          <td>${failureCategoryBadge || '-'}</td>
+          <td>${jiraBugLink || '-'}</td>
           <td>${escapeHTML(String(ex.duration_seconds))} sec</td>
           <td style="color: var(--text-muted);">${escapeHTML(date)}</td>
           <td style="text-align: right;">
             <div style="display: flex; gap: 4px; justify-content: flex-end;">
+              ${(ex.status === 'failed' || ex.status === 'error') ? `<button class="btn btn-secondary" onclick="window.viewTriageDetails('${ex.id}')" style="padding: 4px 8px; font-size: 0.75rem;" title="View Triage Details">Triage</button>` : ''}
               <a href="#/execution/${ex.id}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;">View Report</a>
               <button class="btn btn-icon-danger" onclick="window.deleteExecution('${ex.id}')" style="padding: 4px 8px; font-size: 0.75rem;" title="Delete Execution">
                 Delete
@@ -713,6 +734,8 @@ export const Components = {
             <tr>
               <th>TEST CASE</th>
               <th>STATUS</th>
+              <th>FAILURE CATEGORY</th>
+              <th>JIRA BUG</th>
               <th>DURATION</th>
               <th>TIME</th>
               <th style="text-align: right;">ACTION</th>

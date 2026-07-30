@@ -30,56 +30,55 @@ class GoldenDatasetService:
             print(f"[GoldenDatasetService] Error parsing PDF: {e}")
     
     def _extract_test_cases(self, text: str):
-        """Extract test cases from PDF text"""
-        # Split by test case IDs (e.g., US01-TC01, US02-TC01)
-        pattern = r'(US\d+-TC\d+)'
-        parts = re.split(pattern, text)
+        """Extract test cases from PDF text - handles table-based format"""
+        # Clean up text
+        text = text.replace('\n', ' ')
+        text = re.sub(r'\s+', ' ', text)
         
-        current_ref_id = None
-        for i, part in enumerate(parts):
-            if re.match(pattern, part):
-                current_ref_id = part
-            elif current_ref_id and part.strip():
-                # Extract title, steps, and expected result
-                lines = [line.strip() for line in part.split('\n') if line.strip()]
-                
-                if len(lines) > 0:
-                    title = lines[0] if lines else ""
-                    
-                    # Find steps section
-                    steps = []
-                    expected_result = ""
-                    
-                    in_steps = False
-                    in_expected = False
-                    
-                    for line in lines[1:]:
-                        if 'step' in line.lower() and ':' in line:
-                            in_steps = True
-                            in_expected = False
-                            # Extract step content after the colon
-                            step_content = line.split(':', 1)[1].strip() if ':' in line else line
-                            if step_content:
-                                steps.append(step_content)
-                        elif 'expected' in line.lower() or 'result' in line.lower():
-                            in_expected = True
-                            in_steps = False
-                            # Try to extract expected result from same line
-                            if ':' in line:
-                                expected_result = line.split(':', 1)[1].strip()
-                        elif in_steps and line and not line.startswith(('US', 'TC')):
-                            steps.append(line)
-                        elif in_expected and line and not line.startswith(('US', 'TC')):
-                            expected_result += " " + line
-                    
-                    self.golden_test_cases.append({
-                        'ref_id': current_ref_id,
-                        'title': title,
-                        'steps': steps,
-                        'expected_result': expected_result.strip()
-                    })
-                
-                current_ref_id = None
+        # Find test cases by TC-### pattern
+        tc_pattern = r'TC-\s*(\d+)\s+(.*?)(?=TC-\s*\d+|$)'
+        matches = re.finditer(tc_pattern, text, re.DOTALL)
+        
+        for match in matches:
+            tc_id = f"TC-{match.group(1)}"
+            content = match.group(2).strip()
+            
+            # Extract sections using keywords
+            title = ""
+            steps = []
+            expected_result = ""
+            
+            # Try to extract objective/title (usually the first meaningful text)
+            title_match = re.search(r'(To\s+verify\s+[^.]+|To\s+check\s+[^.]+|Test\s+[^.]+)', content, re.IGNORECASE)
+            if title_match:
+                title = title_match.group(1).strip()
+            
+            # Extract steps (numbered list 1., 2., 3., etc.)
+            step_matches = re.finditer(r'(\d+\.\s*[^.]+\.)', content)
+            for step_match in step_matches:
+                step_text = step_match.group(1).strip()
+                # Clean up step text
+                step_text = re.sub(r'\s+', ' ', step_text)
+                if len(step_text) > 10 and not 'URL:' in step_text:  # Filter out test data
+                    steps.append(step_text)
+            
+            # Extract expected result (look for keywords)
+            expected_keywords = ['should', 'must', 'expected', 'successfully', 'display', 'shown', 'page', 'message']
+            for keyword in expected_keywords:
+                pattern = f'({keyword}[^.]+\\.)'
+                expected_match = re.search(pattern, content, re.IGNORECASE)
+                if expected_match:
+                    expected_result = expected_match.group(1).strip()
+                    break
+            
+            # Only add if we have meaningful content
+            if title or steps or expected_result:
+                self.golden_test_cases.append({
+                    'ref_id': tc_id,
+                    'title': title if title else f"Test case {tc_id}",
+                    'steps': steps[:10],  # Limit to reasonable number of steps
+                    'expected_result': expected_result if expected_result else "Expected behavior defined in test case"
+                })
         
         print(f"[GoldenDatasetService] Parsed {len(self.golden_test_cases)} golden test cases from PDF")
     
@@ -94,11 +93,35 @@ class GoldenDatasetService:
         ref_id = test_case.get('test_case_ref_id') or test_case.get('ref_id') or test_case.get('scenario_ref_id', '')
         
         # Find matching golden test case by ref_id
+        # Try exact match first
         golden_tc = None
         for gtc in self.golden_test_cases:
             if gtc['ref_id'] == ref_id:
                 golden_tc = gtc
                 break
+        
+        # If no exact match and ref_id is in US##-TC## format, try fuzzy match by comparing test content
+        if not golden_tc and ref_id:
+            best_match = None
+            best_similarity = 0.4  # Minimum threshold for fuzzy match
+            
+            test_title = test_case.get('title', '').lower()
+            test_steps_text = ' '.join(test_case.get('steps', [])).lower()
+            
+            for gtc in self.golden_test_cases:
+                # Calculate similarity based on title and steps
+                title_sim = self.calculate_similarity(test_title, gtc['title'].lower())
+                steps_text = ' '.join(gtc['steps']).lower()
+                steps_sim = self.calculate_similarity(test_steps_text, steps_text)
+                
+                overall_sim = (title_sim * 0.3 + steps_sim * 0.7)
+                
+                if overall_sim > best_similarity:
+                    best_similarity = overall_sim
+                    best_match = gtc
+            
+            if best_match:
+                golden_tc = best_match
         
         if not golden_tc:
             return {
@@ -147,7 +170,10 @@ class GoldenDatasetService:
             'title_similarity': round(title_similarity * 100, 1),
             'steps_similarity': round(avg_step_similarity * 100, 1),
             'expected_result_similarity': round(expected_similarity * 100, 1),
-            'golden_test_case': golden_tc
+            'golden_test_case': {
+                'ref_id': golden_tc['ref_id'],
+                'title': golden_tc['title']
+            }
         }
     
     def get_golden_test_cases(self) -> List[Dict]:
@@ -163,5 +189,13 @@ def get_golden_dataset_service() -> GoldenDatasetService:
     """Get or create singleton instance"""
     global _golden_dataset_service
     if _golden_dataset_service is None:
-        _golden_dataset_service = GoldenDatasetService()
+        try:
+            _golden_dataset_service = GoldenDatasetService()
+        except Exception as e:
+            print(f"[GoldenDatasetService] Error creating service: {e}")
+            import traceback
+            traceback.print_exc()
+            # Create a minimal service even if PDF parsing fails
+            _golden_dataset_service = GoldenDatasetService.__new__(GoldenDatasetService)
+            _golden_dataset_service.golden_test_cases = []
     return _golden_dataset_service

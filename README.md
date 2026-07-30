@@ -311,10 +311,78 @@ The test suite covers agents (with mock LLM responses via `mock_response=` param
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Agents](docs/agents.md)
-- [Workflow](docs/workflow.md)
-- [API Reference](docs/api.md)
+### Core Documentation
+- [**Architecture**](docs/architecture.md) - Complete system architecture and design patterns
+- [**Agents**](docs/agents.md) - Multi-agent pipeline and responsibilities
+- [**Workflow**](docs/workflow.md) - LangGraph state machine and routing
+- [**API Reference**](docs/api.md) - REST API endpoints and schemas
+
+### Feature Documentation
+- [**LangSmith Tracing**](docs/features/langsmith-tracing.md) - Unified observability and monitoring
+- [**Professional Reporting**](docs/features/professional-reporting.md) - Enhanced HTML reports
+- [**Naming Convention**](docs/features/naming-convention.md) - User Story and Test Case IDs
+- [**Locator Fallback**](docs/features/locator-fallback.md) - Hierarchical locator resolution
+
+### Guides
+- [**Adactin Reference**](docs/guides/adactin-reference.md) - Test application guide
+- [**Report Debugging**](docs/guides/report-debugging.md) - Troubleshooting reports
+- [**Navigation Verification**](docs/guides/navigation-verification.md) - UI testing guide
+
+### Implementation Reports
+- [**Implementation Summary**](docs/implementation-reports/implementation-summary.md) - Overall status
+- [**Professional Report Implementation**](docs/implementation-reports/professional-report-implementation.md) - Report engine details
+
+**Full documentation index**: [docs/README.md](docs/README.md)
+
+---
+
+## Recent Updates (v1.3.0)
+
+### LangSmith Tracing Integration ✨
+- **Unified Observability**: All agents, LLM calls, and state transitions traced in one hierarchical view
+- **Environment Configuration**: Automated setup in `backend/graph/workflow.py`
+- **Dashboard Access**: View complete execution traces at https://smith.langchain.com
+- **Captured Metrics**: Agent duration, LLM prompts/completions, token usage, errors
+- **Documentation**: [LangSmith Tracing Guide](docs/features/langsmith-tracing.md)
+
+### Jira HTML Report Attachments 🐛
+- **Enhanced Traceability**: HTML execution reports automatically attached to JIRA bug tickets
+- **Complete Context**: Screenshots + full HTML report provide comprehensive failure analysis
+- **Seamless Integration**: Works alongside existing JIRA defect management workflow
+- **Graceful Degradation**: Continues workflow if report file unavailable
+- **Implementation**: Modified `backend/agents/jira_sync_agent.py` (lines 314-323)
+
+---
+
+## Testing
+
+### Run Tests
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=backend
+
+# Run specific test file
+pytest backend/tests/test_scenario_agent.py -v
+
+# Run LangSmith tracing test
+python test_all_agents_trace.py
+```
+
+### Verify LangSmith Tracing
+```bash
+# Generate complete agent hierarchy trace
+python test_all_agents_trace.py
+
+# View trace in LangSmith dashboard:
+# 1. Open https://smith.langchain.com
+# 2. Select project "My Project"
+# 3. Look for trace "Complete_Workflow_Test"
+```
+
+The test suite covers agents (with mock LLM responses), services, API endpoints, workflows, and integration scenarios.
 
 ---
 

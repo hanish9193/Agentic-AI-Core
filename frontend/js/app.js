@@ -1660,18 +1660,41 @@ class App {
     const container = document.getElementById('workflow-timeline-vertical');
     if (!container) return;
 
-    // Sequential workflow status calculation - each step depends on previous
-    // Work backwards from the latest evidence: if a later stage is done, all earlier stages must be too
+    // Sequential workflow status calculation - strict dependencies
+    // Each step can only be completed if all previous steps are completed
     const hasExecutions = this.executions.length > 0;
     const hasApproved = this.scenarios.some(s => s.approved);
-    const hasScript = hasExecutions || this.testCases.some(tc => tc.playwright_code || tc.script || tc.code || tc.has_script);
+    const hasScript = this.testCases.some(tc => tc.playwright_code || tc.script || tc.code || tc.has_script || tc.playwright_script);
 
+    // Step 1: Requirement Analysis
     const reqStatus = this.requirements.length > 0 ? 'completed' : 'pending';
-    const scStatus = this.scenarios.length > 0 ? 'completed' : (reqStatus === 'completed' ? 'active' : 'pending');
-    const appStatus = hasApproved ? 'completed' : (scStatus === 'completed' ? 'active' : 'pending');
-    const tcStatus = this.testCases.length > 0 ? 'completed' : (appStatus === 'completed' ? 'active' : 'pending');
-    const pwStatus = hasScript ? 'completed' : (tcStatus === 'completed' ? 'active' : 'pending');
-    const execStatus = hasExecutions ? 'completed' : (pwStatus === 'completed' ? 'active' : 'pending');
+    
+    // Step 2: Scenario Drafting (depends on requirements)
+    const scStatus = reqStatus === 'completed' 
+      ? (this.scenarios.length > 0 ? 'completed' : 'active')
+      : 'pending';
+    
+    // Step 3: Human Scenario Approval (depends on scenarios)
+    const appStatus = scStatus === 'completed'
+      ? (hasApproved ? 'completed' : 'active')
+      : 'pending';
+    
+    // Step 4: TestCase Generation (depends on approval)
+    const tcStatus = appStatus === 'completed'
+      ? (this.testCases.length > 0 ? 'completed' : 'active')
+      : 'pending';
+    
+    // Step 5: Playwright Scripting (depends on test cases)
+    const pwStatus = tcStatus === 'completed'
+      ? (hasScript ? 'completed' : 'active')
+      : 'pending';
+    
+    // Step 6: Automated Execution (depends on scripts)
+    const execStatus = pwStatus === 'completed'
+      ? (hasExecutions ? 'completed' : 'active')
+      : 'pending';
+    
+    // Step 7: Execution Reporting (depends on executions)
     const repStatus = execStatus === 'completed' ? 'completed' : 'pending';
 
     const getStepHtml = (label, status) => {
@@ -3657,6 +3680,7 @@ class App {
     window.deleteExternalToolConfig = this.deleteExternalToolConfig.bind(this);
     window.deleteExecution = this.deleteExecution.bind(this);
     window.deleteAllFailedExecutions = this.deleteAllFailedExecutions.bind(this);
+    window.viewTriageDetails = this.viewTriageDetails.bind(this);
 
     const token = sessionStorage.getItem('access_token');
     const userJson = sessionStorage.getItem('user');
@@ -4028,6 +4052,39 @@ class App {
     } catch (err) {
       alert(`Failed to delete failed executions: ${err.message}`);
     }
+  }
+
+  viewTriageDetails(executionId) {
+    const execution = this.executions.find(ex => ex.id === executionId);
+    if (!execution) {
+      alert('Execution not found');
+      return;
+    }
+
+    const modal = document.getElementById('triage-modal');
+    if (!modal) {
+      alert('Triage modal not found in DOM');
+      return;
+    }
+
+    // Populate modal with triage data
+    document.getElementById('triage-execution-id').textContent = executionId;
+    document.getElementById('triage-failure-category').textContent = execution.failure_category || 'N/A';
+    document.getElementById('triage-root-cause').textContent = execution.root_cause_summary || 'N/A';
+    document.getElementById('triage-trace-analysis').textContent = execution.trace_analysis || 'N/A';
+    document.getElementById('triage-screenshot-findings').textContent = execution.screenshot_findings || 'N/A';
+    document.getElementById('triage-suggest-retry').textContent = execution.suggest_retry ? 'Yes' : 'No';
+    document.getElementById('triage-bug-candidate').textContent = execution.retest_pending_candidate ? 'Yes' : 'No';
+    
+    const jiraBugElement = document.getElementById('triage-jira-bug');
+    if (execution.jira_bug_id && execution.jira_bug_url) {
+      jiraBugElement.innerHTML = `<a href="${execution.jira_bug_url}" target="_blank">${execution.jira_bug_id}</a>`;
+    } else {
+      jiraBugElement.textContent = 'N/A';
+    }
+
+    // Show modal
+    modal.style.display = 'flex';
   }
 
   renderConfiguredTools(tools) {

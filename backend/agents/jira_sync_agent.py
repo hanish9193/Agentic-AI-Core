@@ -310,6 +310,18 @@ class JiraSyncAgent(BaseAgent):
                     except Exception as e:
                         logger.error(f"Failed to upload screenshot to Jira: {e}")
                 
+                # Attach HTML execution report if available
+                # Reports are stored in backend/playwrightt/public/artifacts/{execution_id}/report.html
+                from pathlib import Path
+                report_path = Path("backend/playwrightt/public/artifacts") / str(res.id) / "report.html"
+                if report_path.exists():
+                    try:
+                        with open(report_path, "rb") as f:
+                            self.jira_service.upload_attachment(key, f"execution_report_{res.id}.html", f.read(), "text/html")
+                        logger.info(f"Uploaded execution report to Jira {key}")
+                    except Exception as e:
+                        logger.error(f"Failed to upload execution report to Jira: {e}")
+                
                 state.add_log(f"Created JIRA Bug {key} for failing test run.")
                 
                 if db_session:
