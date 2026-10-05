@@ -9,9 +9,13 @@ __pycache__/
 venv/
 .venv/
 env/
+.env
 .env.local
 .env.production
 .env.staging
+
+# Excluded Core Files
+backend/config/settings.py
 
 # Node.js
 node_modules/
